@@ -1,3 +1,14 @@
-2026/08/04-10:37:56.656 109d8 Reusing MANIFEST /var/www/html/fut/.wwebjs_auth/session/Default/IndexedDB/https_web.whatsapp.com_0.indexeddb.leveldb/MANIFEST-000001
-2026/08/04-10:37:56.657 109d8 Recovering log #53
-2026/08/04-10:37:56.664 109d8 Reusing old log /var/www/html/fut/.wwebjs_auth/session/Default/IndexedDB/https_web.whatsapp.com_0.indexeddb.leveldb/000053.log 
+2026/08/04-14:05:33.684 8513f Reusing MANIFEST /var/www/html/fut/.wwebjs_auth/session/Default/IndexedDB/https_web.whatsapp.com_0.indexeddb.leveldb/MANIFEST-000001
+2026/08/04-14:05:33.684 8513f Recovering log #53
+2026/08/04-14:05:33.694 8513f Reusing old log /var/www/html/fut/.wwebjs_auth/session/Default/IndexedDB/https_web.whatsapp.com_0.indexeddb.leveldb/000053.log 
+2026/08/04-14:05:48.980 85138 Level-0 table #59: started
+2026/08/04-14:05:48.998 85138 Level-0 table #59: 1160968 bytes OK
+2026/08/04-14:05:49.008 85138 Delete type=0 #53
+2026/08/04-14:06:01.142 85138 Compacting 1@1 + 2@2 files
+2026/08/04-14:06:01.177 85138 Generated table #60@1: 50175 keys, 2223879 bytes
+2026/08/04-14:06:01.192 85138 Generated table #61@1: 12714 keys, 938360 bytes
+2026/08/04-14:06:01.192 85138 Compacted 1@1 + 2@2 files => 3162239 bytes
+2026/08/04-14:06:01.197 85138 compacted to: files[ 0 0 2 0 0 0 0 ]
+2026/08/04-14:06:01.197 85138 Delete type=2 #55
+2026/08/04-14:06:01.197 85138 Delete type=2 #59
+2026/08/04-14:06:01.197 85138 Delete type=2 #56
