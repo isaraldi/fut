@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+    <meta charset="utf-8">
+    <title>Painel do Fut - Login</title>
+    <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+    <div class="login-wrap">
+        <div class="card login-card">
+            <h1>⚽ Painel do Fut</h1>
+            <% if (erro) { %>
+                <p class="erro"><%= erro %></p>
+            <% } %>
+            <form method="post" action="/login">
+                <label>Usuário</label>
+                <input type="text" name="usuario" autofocus required>
+                <label>Senha</label>
+                <input type="password" name="senha" required>
+                <input type="submit" value="Entrar">
+            </form>
+        </div>
+    </div>
+</body>
+</html>

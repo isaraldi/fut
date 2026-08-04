@@ -1,3 +1,27 @@
+diff --git a/node_modules/whatsapp-web.js/src/Client.js b/node_modules/whatsapp-web.js/src/Client.js
+index 800109e..709de7c 100644
+--- a/node_modules/whatsapp-web.js/src/Client.js
++++ b/node_modules/whatsapp-web.js/src/Client.js
+@@ -1207,12 +1207,14 @@ class Client extends EventEmitter {
+                             const sender = vote.author ?? vote.from;
+                             const senderUserJid = sender._serialized;
+ 
+-                            let parentMessage = Msg.get(
+-                                parentMsgKey._serialized,
+-                            );
+-                            if (!parentMessage) {
++                            const parentMsgKeyId =
++                                window.WWebJS.getMsgKeyId(parentMsgKey);
++                            let parentMessage = parentMsgKeyId
++                                ? Msg.get(parentMsgKeyId)
++                                : null;
++                            if (!parentMessage && parentMsgKeyId) {
+                                 const fetched = await Msg.getMessagesById([
+-                                    parentMsgKey._serialized,
++                                    parentMsgKeyId,
+                                 ]);
+                                 parentMessage = fetched?.messages?.[0] || null;
+                             }
 diff --git a/node_modules/whatsapp-web.js/src/util/Injected/Utils.js b/node_modules/whatsapp-web.js/src/util/Injected/Utils.js
 index 540078a..049d724 100644
 --- a/node_modules/whatsapp-web.js/src/util/Injected/Utils.js

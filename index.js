@@ -1,5 +1,6 @@
-const { Client, LocalAuth } = require('whatsapp-web.js');
+const { Client, LocalAuth, Poll } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
+const { db, upsertJogador } = require('./db');
 
 const client = new Client({
   authStrategy: new LocalAuth()
@@ -58,14 +59,52 @@ function isConfirmation(text) {
   return ['!vou'].includes(text);
 }
 
+// 📅 próxima quarta-feira (ou hoje, se hoje já for quarta)
+function proximaQuarta() {
+  const hoje = new Date();
+  const diaSemana = hoje.getDay(); // 0=domingo ... 3=quarta
+  const diff = (3 - diaSemana + 7) % 7;
+  const alvo = new Date(hoje);
+  alvo.setDate(hoje.getDate() + diff);
+  const dd = String(alvo.getDate()).padStart(2, '0');
+  const mm = String(alvo.getMonth() + 1).padStart(2, '0');
+  return `${dd}/${mm}`;
+}
+
+// 🗳️ ENQUETE NATIVA + registro no banco pro painel
+async function abrirEnquete(msg) {
+  const data = proximaQuarta();
+  const titulo = `JOGO DE QUARTA - ${data}`;
+
+  const poll = new Poll(
+    titulo,
+    ['Eu vou (MENSALISTAS)', 'Não vou (MENSALISTAS)', 'Eu quero (AVULSAS)'],
+    { allowMultipleAnswers: false }
+  );
+
+  const sent = await client.sendMessage(msg.from, poll);
+
+  db.prepare(
+    'INSERT INTO enquetes (message_id, group_id, titulo) VALUES (?, ?, ?)'
+  ).run(sent.id._serialized, msg.from, titulo);
+
+  console.log(`🗳️ Enquete criada: ${titulo}`);
+}
+
 client.on('message', async msg => {
   console.log('msg from:', msg.from);
 
+  const text = msg.body.toLowerCase().trim();
+
+  // funciona em qualquer grupo, independente do groupConfigs legado
+  if (msg.from.endsWith('@g.us') && text === '!enquete') {
+    return abrirEnquete(msg);
+  }
+
   const config = groupConfigs[msg.from];
 
-  if (!config) return;  
+  if (!config) return;
 
-  const text = msg.body.toLowerCase().trim();
   const userId = getUserId(msg);
   const name = getUserName(msg);
 
@@ -175,6 +214,56 @@ client.on('message_reaction', async reaction => {
 
   } catch (err) {
     console.error('Erro ao processar reação:', err);
+  }
+});
+
+// 🗳️ CAPTURA VOTO DA ENQUETE NATIVA
+client.on('vote_update', async vote => {
+  try {
+    // WhatsApp renomeou a chave interna _serialized para $1; aceita os dois formatos
+    const msgId =
+      vote.parentMessage?.id?._serialized ||
+      vote.parentMessage?.id?.$1 ||
+      vote.parentMsgKey?._serialized ||
+      vote.parentMsgKey?.$1;
+    if (!msgId) return;
+
+    const enquete = db
+      .prepare('SELECT id FROM enquetes WHERE message_id = ?')
+      .get(msgId);
+    if (!enquete) return; // enquete de outra origem, ignora
+
+    const contact = await client.getContactById(vote.voter);
+    const nome = contact.pushname || contact.name || 'Jogador';
+
+    if (vote.selectedOptions.length === 0) {
+      const jogador = db
+        .prepare('SELECT id FROM jogadores WHERE whatsapp_id = ?')
+        .get(vote.voter);
+      if (jogador) {
+        db.prepare(
+          'DELETE FROM votos WHERE enquete_id = ? AND jogador_id = ?'
+        ).run(enquete.id, jogador.id);
+      }
+      console.log(`🗳️ ${nome} removeu o voto`);
+      return;
+    }
+
+    const opcao = vote.selectedOptions.map(o => o.name).join(', ');
+    const papel = opcao.includes('MENSALISTAS') ? 'mensalista' : 'avulso';
+    const jogadorId = upsertJogador(vote.voter, nome, papel);
+
+    db.prepare(`
+      INSERT INTO votos (enquete_id, jogador_id, opcao)
+      VALUES (?, ?, ?)
+      ON CONFLICT(enquete_id, jogador_id) DO UPDATE SET
+        opcao = excluded.opcao,
+        votado_em = datetime('now')
+    `).run(enquete.id, jogadorId, opcao);
+
+    console.log(`🗳️ ${nome} votou: ${opcao}`);
+  } catch (err) {
+    console.error('Erro ao processar voto:', err);
   }
 });
 

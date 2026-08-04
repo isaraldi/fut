@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+    <meta charset="utf-8">
+    <title>Painel do Fut - Elenco</title>
+    <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+    <div class="topbar">
+        <nav>
+            <a href="/">Confirmados</a>
+            <a href="/pagamentos">Pagamentos</a>
+            <a href="/elenco">Elenco</a>
+        </nav>
+        <form method="post" action="/logout">
+            <span style="margin-right:10px;color:var(--muted)"><%= usuario %></span>
+            <button class="secondary" type="submit">Sair</button>
+        </form>
+    </div>
+
+    <div class="container">
+        <div class="card">
+            <h1>Adicionar jogador</h1>
+            <form method="post" action="/elenco">
+                <div class="form-row">
+                    <div>
+                        <label>Nome</label>
+                        <input type="text" name="nome" required>
+                    </div>
+                    <div>
+                        <label>Telefone (opcional)</label>
+                        <input type="text" name="telefone">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div>
+                        <label>Nível (1-5)</label>
+                        <input type="number" name="nivel" min="1" max="5" value="3">
+                    </div>
+                    <div>
+                        <label>Papel</label>
+                        <select name="papel">
+                            <option value="mensalista">Mensalista</option>
+                            <option value="avulso" selected>Avulso</option>
+                        </select>
+                    </div>
+                </div>
+                <input type="submit" value="Adicionar">
+            </form>
+        </div>
+
+        <div class="card">
+            <h1>Elenco (<%= jogadores.length %>)</h1>
+            <% if (jogadores.length === 0) { %>
+                <p class="empty">Ninguém cadastrado ainda — vote em uma enquete no WhatsApp ou adicione manualmente acima.</p>
+            <% } else { %>
+                <table>
+                    <thead>
+                        <tr><th>Nome</th><th>Telefone</th><th>Nível</th><th>Papel</th><th></th></tr>
+                    </thead>
+                    <tbody>
+                        <% jogadores.forEach(j => { %>
+                            <tr>
+                                <td><input type="text" name="nome" form="edit-<%= j.id %>" value="<%= j.nome %>" required></td>
+                                <td><input type="text" name="telefone" form="edit-<%= j.id %>" value="<%= j.telefone || '' %>"></td>
+                                <td><input type="number" name="nivel" form="edit-<%= j.id %>" min="1" max="5" value="<%= j.nivel %>"></td>
+                                <td>
+                                    <select name="papel" form="edit-<%= j.id %>">
+                                        <option value="mensalista" <%= j.papel === 'mensalista' ? 'selected' : '' %>>Mensalista</option>
+                                        <option value="avulso" <%= j.papel === 'avulso' ? 'selected' : '' %>>Avulso</option>
+                                    </select>
+                                </td>
+                                <td style="white-space:nowrap">
+                                    <form id="edit-<%= j.id %>" method="post" action="/elenco/<%= j.id %>" style="display:inline">
+                                        <button type="submit">Salvar</button>
+                                    </form>
+                                    <form method="post" action="/elenco/<%= j.id %>/excluir" style="display:inline" onsubmit="return confirm('Remover <%= j.nome %>?')">
+                                        <button class="danger" type="submit">Excluir</button>
+                                    </form>
+                                </td>
+                            </tr>
+                        <% }) %>
+                    </tbody>
+                </table>
+            <% } %>
+        </div>
+    </div>
+</body>
+</html>

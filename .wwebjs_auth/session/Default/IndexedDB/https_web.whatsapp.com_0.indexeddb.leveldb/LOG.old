@@ -1,14 +1,14 @@
-2026/08/04-14:05:33.684 8513f Reusing MANIFEST /var/www/html/fut/.wwebjs_auth/session/Default/IndexedDB/https_web.whatsapp.com_0.indexeddb.leveldb/MANIFEST-000001
-2026/08/04-14:05:33.684 8513f Recovering log #53
-2026/08/04-14:05:33.694 8513f Reusing old log /var/www/html/fut/.wwebjs_auth/session/Default/IndexedDB/https_web.whatsapp.com_0.indexeddb.leveldb/000053.log 
-2026/08/04-14:05:48.980 85138 Level-0 table #59: started
-2026/08/04-14:05:48.998 85138 Level-0 table #59: 1160968 bytes OK
-2026/08/04-14:05:49.008 85138 Delete type=0 #53
-2026/08/04-14:06:01.142 85138 Compacting 1@1 + 2@2 files
-2026/08/04-14:06:01.177 85138 Generated table #60@1: 50175 keys, 2223879 bytes
-2026/08/04-14:06:01.192 85138 Generated table #61@1: 12714 keys, 938360 bytes
-2026/08/04-14:06:01.192 85138 Compacted 1@1 + 2@2 files => 3162239 bytes
-2026/08/04-14:06:01.197 85138 compacted to: files[ 0 0 2 0 0 0 0 ]
-2026/08/04-14:06:01.197 85138 Delete type=2 #55
-2026/08/04-14:06:01.197 85138 Delete type=2 #59
-2026/08/04-14:06:01.197 85138 Delete type=2 #56
+2026/08/04-14:51:54.396 a26d3 Reusing MANIFEST /var/www/html/fut/.wwebjs_auth/session/Default/IndexedDB/https_web.whatsapp.com_0.indexeddb.leveldb/MANIFEST-000001
+2026/08/04-14:51:54.396 a26d3 Recovering log #63
+2026/08/04-14:51:54.434 a26d3 Reusing old log /var/www/html/fut/.wwebjs_auth/session/Default/IndexedDB/https_web.whatsapp.com_0.indexeddb.leveldb/000063.log 
+2026/08/04-14:51:57.767 a26d3 Level-0 table #69: started
+2026/08/04-14:51:57.790 a26d3 Level-0 table #69: 1160928 bytes OK
+2026/08/04-14:51:57.795 a26d3 Delete type=0 #63
+2026/08/04-14:51:58.240 a26d3 Compacting 1@1 + 2@2 files
+2026/08/04-14:51:58.279 a26d3 Generated table #70@1: 59057 keys, 2238496 bytes
+2026/08/04-14:51:58.297 a26d3 Generated table #71@1: 13183 keys, 1260535 bytes
+2026/08/04-14:51:58.297 a26d3 Compacted 1@1 + 2@2 files => 3499031 bytes
+2026/08/04-14:51:58.302 a26d3 compacted to: files[ 0 0 2 0 0 0 0 ]
+2026/08/04-14:51:58.302 a26d3 Delete type=2 #66
+2026/08/04-14:51:58.302 a26d3 Delete type=2 #69
+2026/08/04-14:51:58.302 a26d3 Delete type=2 #65
