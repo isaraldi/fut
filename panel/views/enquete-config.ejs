@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+    <meta charset="utf-8">
+    <title>Painel do Fut - Configurar Enquete</title>
+    <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+    <%- include('_nav') %>
+
+    <div class="container">
+
+        <section class="section">
+            <h1 class="section-title">Configuração do jogo</h1>
+
+            <div class="card">
+                <h1>Dia e horário</h1>
+                <p class="hint">
+                    A data do próximo jogo é calculada automaticamente a partir do dia da semana escolhido
+                    (a próxima ocorrência dele, ou hoje, se hoje já for esse dia).
+                </p>
+                <form method="post" action="/enquete/config/jogo">
+                    <div class="form-row">
+                        <div>
+                            <label>Dia da semana</label>
+                            <select name="diaSemana">
+                                <option value="0" <%= diaSemana === 0 ? 'selected' : '' %>>Domingo</option>
+                                <option value="1" <%= diaSemana === 1 ? 'selected' : '' %>>Segunda-feira</option>
+                                <option value="2" <%= diaSemana === 2 ? 'selected' : '' %>>Terça-feira</option>
+                                <option value="3" <%= diaSemana === 3 ? 'selected' : '' %>>Quarta-feira</option>
+                                <option value="4" <%= diaSemana === 4 ? 'selected' : '' %>>Quinta-feira</option>
+                                <option value="5" <%= diaSemana === 5 ? 'selected' : '' %>>Sexta-feira</option>
+                                <option value="6" <%= diaSemana === 6 ? 'selected' : '' %>>Sábado</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label>Horário</label>
+                            <div class="time-select">
+                                <select name="horaH">
+                                    <% for (let h = 0; h < 24; h++) { %>
+                                        <% const hh = String(h).padStart(2, '0'); %>
+                                        <option value="<%= hh %>" <%= hora.split(':')[0] === hh ? 'selected' : '' %>><%= hh %></option>
+                                    <% } %>
+                                </select>
+                                <span>:</span>
+                                <select name="horaM">
+                                    <% ['00','15','30','45'].forEach(mm => { %>
+                                        <option value="<%= mm %>" <%= hora.split(':')[1] === mm ? 'selected' : '' %>><%= mm %></option>
+                                    <% }) %>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    <input type="submit" value="Salvar">
+                </form>
+            </div>
+        </section>
+
+        <section class="section">
+            <h1 class="section-title">Configuração da enquete</h1>
+
+            <div class="card">
+                <h1>Título da enquete</h1>
+                <p class="hint">
+                    Tokens disponíveis: <code>{data}</code> (ex: 05/08), <code>{dia}</code> (ex: quarta-feira)
+                    e <code>{hora}</code> (ex: 20:00) — vêm da configuração do jogo acima.
+                </p>
+                <form method="post" action="/enquete/config/titulo">
+                    <input type="text" name="titulo" value="<%= titulo %>" required>
+                    <input type="submit" value="Salvar título">
+                </form>
+            </div>
+
+            <div class="card">
+                <h1>Adicionar opção</h1>
+                <form method="post" action="/enquete/config/opcoes">
+                    <div class="form-row">
+                        <div>
+                            <label>Texto da opção</label>
+                            <input type="text" name="texto" required>
+                        </div>
+                        <div>
+                            <label>Conta como</label>
+                            <select name="papel">
+                                <option value="">Não conta como confirmado (ex: "não vou")</option>
+                                <option value="mensalista">Mensalista</option>
+                                <option value="avulso">Avulso</option>
+                            </select>
+                        </div>
+                    </div>
+                    <input type="submit" value="Adicionar opção">
+                </form>
+            </div>
+
+            <div class="card">
+                <h1>Opções atuais (<%= opcoes.length %>)</h1>
+                <p class="hint">Valem pra próxima enquete que você abrir com <code>!enquete</code>. Enquetes já enviadas não mudam.</p>
+                <% if (opcoes.length === 0) { %>
+                    <p class="empty">Nenhuma opção configurada — adicione pelo menos 2 acima.</p>
+                <% } else { %>
+                    <table>
+                        <thead>
+                            <tr><th>Texto</th><th>Conta como</th><th></th></tr>
+                        </thead>
+                        <tbody>
+                            <% opcoes.forEach(o => { %>
+                                <tr>
+                                    <td><input type="text" name="texto" form="opcao-<%= o.id %>" value="<%= o.texto %>" required></td>
+                                    <td>
+                                        <select name="papel" form="opcao-<%= o.id %>">
+                                            <option value="" <%= !o.papel ? 'selected' : '' %>>Não conta</option>
+                                            <option value="mensalista" <%= o.papel === 'mensalista' ? 'selected' : '' %>>Mensalista</option>
+                                            <option value="avulso" <%= o.papel === 'avulso' ? 'selected' : '' %>>Avulso</option>
+                                        </select>
+                                    </td>
+                                    <td style="white-space:nowrap">
+                                        <form id="opcao-<%= o.id %>" method="post" action="/enquete/config/opcoes/<%= o.id %>" style="display:inline">
+                                            <button type="submit">Salvar</button>
+                                        </form>
+                                        <form method="post" action="/enquete/config/opcoes/<%= o.id %>/excluir" style="display:inline" onsubmit="return confirm('Remover essa opção?')">
+                                            <button class="danger" type="submit">Excluir</button>
+                                        </form>
+                                    </td>
+                                </tr>
+                            <% }) %>
+                        </tbody>
+                    </table>
+                <% } %>
+            </div>
+        </section>
+
+    </div>
+</body>
+</html>

@@ -6,17 +6,7 @@
     <link rel="stylesheet" href="/style.css">
 </head>
 <body>
-    <div class="topbar">
-        <nav>
-            <a href="/">Confirmados</a>
-            <a href="/pagamentos">Pagamentos</a>
-            <a href="/elenco">Elenco</a>
-        </nav>
-        <form method="post" action="/logout">
-            <span style="margin-right:10px;color:var(--muted)"><%= usuario %></span>
-            <button class="secondary" type="submit">Sair</button>
-        </form>
-    </div>
+<%- include('_nav') %>
 
     <div class="container">
         <% if (!enquete) { %>
@@ -29,29 +19,7 @@
                 <h2><%= totalVotos %> resposta<%= totalVotos === 1 ? '' : 's' %></h2>
             </div>
 
-            <% Object.entries(grupos).forEach(([opcao, votos]) => { %>
-                <div class="card">
-                    <h2><%= opcao %> (<%= votos.length %>)</h2>
-                    <% if (votos.length === 0) { %>
-                        <p class="empty">Ninguém ainda.</p>
-                    <% } else { %>
-                        <table>
-                            <thead>
-                                <tr><th>Nome</th><th>Papel</th><th>Nível</th></tr>
-                            </thead>
-                            <tbody>
-                                <% votos.forEach(v => { %>
-                                    <tr>
-                                        <td><%= v.nome %></td>
-                                        <td><span class="badge <%= v.papel %>"><%= v.papel %></span></td>
-                                        <td><%= v.nivel %></td>
-                                    </tr>
-                                <% }) %>
-                            </tbody>
-                        </table>
-                    <% } %>
-                </div>
-            <% }) %>
+            <%- include('_votos-por-opcao', { grupos }) %>
         <% } %>
     </div>
 </body>

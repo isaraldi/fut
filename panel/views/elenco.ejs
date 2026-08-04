@@ -6,17 +6,7 @@
     <link rel="stylesheet" href="/style.css">
 </head>
 <body>
-    <div class="topbar">
-        <nav>
-            <a href="/">Confirmados</a>
-            <a href="/pagamentos">Pagamentos</a>
-            <a href="/elenco">Elenco</a>
-        </nav>
-        <form method="post" action="/logout">
-            <span style="margin-right:10px;color:var(--muted)"><%= usuario %></span>
-            <button class="secondary" type="submit">Sair</button>
-        </form>
-    </div>
+<%- include('_nav') %>
 
     <div class="container">
         <div class="card">
@@ -74,6 +64,7 @@
                                     <form id="edit-<%= j.id %>" method="post" action="/elenco/<%= j.id %>" style="display:inline">
                                         <button type="submit">Salvar</button>
                                     </form>
+                                    <a href="/elenco/<%= j.id %>/historico" class="secondary" style="display:inline-block;padding:8px 10px;border:1px solid var(--border);border-radius:6px;text-decoration:none;color:var(--text)">Histórico</a>
                                     <form method="post" action="/elenco/<%= j.id %>/excluir" style="display:inline" onsubmit="return confirm('Remover <%= j.nome %>?')">
                                         <button class="danger" type="submit">Excluir</button>
                                     </form>

@@ -1,3 +1,3 @@
-2026/08/04-14:54:07.788 a353f Reusing MANIFEST /var/www/html/fut/.wwebjs_auth/session/Default/Sync Data/LevelDB/MANIFEST-000001
-2026/08/04-14:54:07.789 a353f Recovering log #3
-2026/08/04-14:54:07.789 a353f Reusing old log /var/www/html/fut/.wwebjs_auth/session/Default/Sync Data/LevelDB/000003.log 
+2026/08/04-16:40:53.007 f1027 Reusing MANIFEST /var/www/html/fut/.wwebjs_auth/session/Default/Sync Data/LevelDB/MANIFEST-000001
+2026/08/04-16:40:53.008 f1027 Recovering log #3
+2026/08/04-16:40:53.008 f1027 Reusing old log /var/www/html/fut/.wwebjs_auth/session/Default/Sync Data/LevelDB/000003.log 
