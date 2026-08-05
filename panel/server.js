@@ -1,9 +1,12 @@
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
 
 const express = require('express');
+const expressLayouts = require('express-ejs-layouts');
 const session = require('express-session');
 const bcrypt = require('bcryptjs');
 const path = require('path');
+const fs = require('fs');
+const multer = require('multer');
 const {
     db,
     getConfig,
@@ -39,6 +42,8 @@ bootstrapAdmin();
 const app = express();
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
+app.set('layout', 'layout');
+app.use(expressLayouts);
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.urlencoded({ extended: false }));
 app.use(
@@ -50,17 +55,46 @@ app.use(
     }),
 );
 
+// disponíveis em toda view/layout sem precisar passar em cada res.render
+app.use((req, res, next) => {
+    res.locals.usuario = req.session ? req.session.usuario : null;
+    res.locals.caminhoAtual = req.path;
+    res.locals.logoUrlSidebar = getConfig('logo_url');
+    next();
+});
+
 function requireLogin(req, res, next) {
     if (req.session && req.session.userId) return next();
     return res.redirect('/login');
 }
 
+// redireciona com uma mensagem de sucesso na query, pra dar feedback visual
+// mesmo quando a página recarrega rápido demais pra "sentir" que salvou
+function redirectOk(res, caminho, mensagem) {
+    const separador = caminho.includes('?') ? '&' : '?';
+    res.redirect(caminho + separador + 'ok=' + encodeURIComponent(mensagem));
+}
+
 const mesAtual = () => new Date().toISOString().slice(0, 7); // YYYY-MM
+
+// ---------- UPLOAD DA LOGO ----------
+
+const uploadsDir = path.join(__dirname, 'public', 'uploads');
+const EXTENSOES_PERMITIDAS = { 'image/png': '.png', 'image/jpeg': '.jpg', 'image/svg+xml': '.svg', 'image/webp': '.webp' };
+
+const uploadLogo = multer({
+    storage: multer.diskStorage({
+        destination: uploadsDir,
+        filename: (req, file, cb) => cb(null, 'logo' + EXTENSOES_PERMITIDAS[file.mimetype]),
+    }),
+    limits: { fileSize: 2 * 1024 * 1024 },
+    fileFilter: (req, file, cb) => cb(null, !!EXTENSOES_PERMITIDAS[file.mimetype]),
+});
 
 // ---------- LOGIN ----------
 
 app.get('/login', (req, res) => {
-    res.render('login', { erro: null });
+    res.render('login', { erro: null, logoUrl: getConfig('logo_url'), layout: 'layout-auth' });
 });
 
 app.post('/login', (req, res) => {
@@ -70,7 +104,11 @@ app.post('/login', (req, res) => {
         .get(usuario);
 
     if (!user || !bcrypt.compareSync(senha || '', user.senha_hash)) {
-        return res.render('login', { erro: 'Usuário ou senha inválidos.' });
+        return res.render('login', {
+            erro: 'Usuário ou senha inválidos.',
+            logoUrl: getConfig('logo_url'),
+            layout: 'layout-auth',
+        });
     }
 
     req.session.userId = user.id;
@@ -107,7 +145,7 @@ function carregarVotosAgrupados(enqueteId) {
     return { votos, grupos };
 }
 
-app.get('/', requireLogin, (req, res) => {
+app.get('/confirmados', requireLogin, (req, res) => {
     const enquete = db
         .prepare('SELECT * FROM enquetes ORDER BY id DESC LIMIT 1')
         .get();
@@ -116,11 +154,65 @@ app.get('/', requireLogin, (req, res) => {
         ? carregarVotosAgrupados(enquete.id)
         : { votos: [], grupos: {} };
 
-    res.render('dashboard', {
-        usuario: req.session.usuario,
+    res.render('confirmados', {
         enquete,
         grupos,
         totalVotos: votos.length,
+    });
+});
+
+// ---------- HOME (resumo geral) ----------
+
+app.get('/', requireLogin, (req, res) => {
+    const mes = mesAtual();
+
+    const proximoJogo = db
+        .prepare('SELECT * FROM enquetes ORDER BY id DESC LIMIT 1')
+        .get();
+
+    const confirmadosProximoJogo = proximoJogo
+        ? db
+              .prepare(
+                  'SELECT COUNT(*) AS c FROM votos WHERE enquete_id = ? AND papel IS NOT NULL',
+              )
+              .get(proximoJogo.id).c
+        : 0;
+
+    const totalJogadores = db.prepare('SELECT COUNT(*) AS c FROM jogadores').get().c;
+    const totalMensalistas = db
+        .prepare("SELECT COUNT(*) AS c FROM jogadores WHERE papel = 'mensalista'")
+        .get().c;
+    const totalAvulsos = totalJogadores - totalMensalistas;
+
+    const pagamentosMes = db
+        .prepare(
+            `SELECT
+                (SELECT COUNT(*) FROM jogadores WHERE papel = 'mensalista') AS devem,
+                (SELECT COUNT(*) FROM pagamentos WHERE mes_referencia = ? AND pago = 1) AS pagos`,
+        )
+        .get(mes);
+    const pendentes = Math.max(0, pagamentosMes.devem - pagamentosMes.pagos);
+
+    const ultimosJogos = db
+        .prepare(
+            `SELECT e.*,
+                    (SELECT COUNT(*) FROM votos v WHERE v.enquete_id = e.id AND v.papel IS NOT NULL) AS confirmados
+             FROM enquetes e
+             ORDER BY e.id DESC
+             LIMIT 5`,
+        )
+        .all();
+
+    res.render('home', {
+        proximoJogo,
+        confirmadosProximoJogo,
+        totalJogadores,
+        totalMensalistas,
+        totalAvulsos,
+        pagamentosMes,
+        pendentes,
+        mes,
+        ultimosJogos,
     });
 });
 
@@ -172,7 +264,7 @@ app.get('/pagamentos', requireLogin, (req, res) => {
         )
         .all(mes);
 
-    res.render('pagamentos', { usuario: req.session.usuario, jogadores, mes });
+    res.render('pagamentos', { usuario: req.session.usuario, jogadores, mes, ok: req.query.ok });
 });
 
 app.post('/pagamentos/:jogadorId/toggle', requireLogin, (req, res) => {
@@ -195,7 +287,7 @@ app.post('/pagamentos/:jogadorId/toggle', requireLogin, (req, res) => {
         ).run(jogadorId, mes);
     }
 
-    res.redirect('/pagamentos?mes=' + encodeURIComponent(mes));
+    redirectOk(res, '/pagamentos?mes=' + encodeURIComponent(mes), 'Pagamento atualizado!');
 });
 
 // ---------- ELENCO ----------
@@ -204,7 +296,7 @@ app.get('/elenco', requireLogin, (req, res) => {
     const jogadores = db
         .prepare('SELECT * FROM jogadores ORDER BY papel DESC, nivel DESC, nome ASC')
         .all();
-    res.render('elenco', { usuario: req.session.usuario, jogadores });
+    res.render('elenco', { usuario: req.session.usuario, jogadores, ok: req.query.ok });
 });
 
 app.post('/elenco', requireLogin, (req, res) => {
@@ -220,7 +312,7 @@ app.post('/elenco', requireLogin, (req, res) => {
         papel === 'mensalista' ? 'mensalista' : 'avulso',
     );
 
-    res.redirect('/elenco');
+    redirectOk(res, '/elenco', `${nome.trim()} adicionado!`);
 });
 
 // ---------- CONFIGURAÇÃO DO ELENCO (precisa vir antes de /elenco/:id) ----------
@@ -229,12 +321,13 @@ app.get('/elenco/config', requireLogin, (req, res) => {
     res.render('elenco-config', {
         usuario: req.session.usuario,
         autoIncluir: getConfig('elenco_auto_incluir_grupo') === '1',
+        ok: req.query.ok,
     });
 });
 
 app.post('/elenco/config', requireLogin, (req, res) => {
     setConfig('elenco_auto_incluir_grupo', req.body.autoIncluir === 'on' ? '1' : '0');
-    res.redirect('/elenco/config');
+    redirectOk(res, '/elenco/config', 'Configuração salva!');
 });
 
 app.post('/elenco/:id', requireLogin, (req, res) => {
@@ -252,14 +345,14 @@ app.post('/elenco/:id', requireLogin, (req, res) => {
         registrarMudancaPapel(id, atual.papel, papelNovo);
     }
 
-    res.redirect('/elenco');
+    redirectOk(res, '/elenco', `${nome.trim()} salvo!`);
 });
 
 app.post('/elenco/:id/excluir', requireLogin, (req, res) => {
     db.prepare('DELETE FROM jogadores WHERE id = ?').run(
         Number(req.params.id),
     );
-    res.redirect('/elenco');
+    redirectOk(res, '/elenco', 'Jogador removido.');
 });
 
 app.get('/elenco/:id/historico', requireLogin, (req, res) => {
@@ -283,6 +376,7 @@ app.get('/enquete/config', requireLogin, (req, res) => {
         diaSemana: Number(getConfig('enquete_dia_semana')),
         hora: getConfig('enquete_hora'),
         opcoes: getEnqueteOpcoes(),
+        ok: req.query.ok,
     });
 });
 
@@ -294,13 +388,13 @@ app.post('/enquete/config/jogo', requireLogin, (req, res) => {
     if (diaSemana >= 0 && diaSemana <= 6) setConfig('enquete_dia_semana', String(diaSemana));
     setConfig('enquete_hora', `${horaH}:${horaM}`);
 
-    res.redirect('/enquete/config');
+    redirectOk(res, '/enquete/config', 'Dia e horário salvos!');
 });
 
 app.post('/enquete/config/titulo', requireLogin, (req, res) => {
     const titulo = (req.body.titulo || '').trim();
     if (titulo) setConfig('enquete_titulo_template', titulo);
-    res.redirect('/enquete/config');
+    redirectOk(res, '/enquete/config', 'Título salvo!');
 });
 
 app.post('/enquete/config/opcoes', requireLogin, (req, res) => {
@@ -319,7 +413,7 @@ app.post('/enquete/config/opcoes', requireLogin, (req, res) => {
         proximaOrdem,
     );
 
-    res.redirect('/enquete/config');
+    redirectOk(res, '/enquete/config', 'Opção adicionada!');
 });
 
 app.post('/enquete/config/opcoes/:id', requireLogin, (req, res) => {
@@ -335,14 +429,14 @@ app.post('/enquete/config/opcoes/:id', requireLogin, (req, res) => {
         id,
     );
 
-    res.redirect('/enquete/config');
+    redirectOk(res, '/enquete/config', 'Opção salva!');
 });
 
 app.post('/enquete/config/opcoes/:id/excluir', requireLogin, (req, res) => {
     db.prepare('DELETE FROM enquete_opcoes WHERE id = ?').run(
         Number(req.params.id),
     );
-    res.redirect('/enquete/config');
+    redirectOk(res, '/enquete/config', 'Opção removida.');
 });
 
 // ---------- SORTEIO INTELIGENTE DE TIMES ----------
@@ -405,6 +499,50 @@ app.get('/times', requireLogin, (req, res) => {
         confirmados,
         times,
     });
+});
+
+// ---------- APARÊNCIA (logo) ----------
+
+app.get('/configuracoes/aparencia', requireLogin, (req, res) => {
+    res.render('aparencia', {
+        usuario: req.session.usuario,
+        logoUrl: getConfig('logo_url'),
+        ok: req.query.ok,
+    });
+});
+
+app.post('/configuracoes/aparencia/logo', requireLogin, (req, res) => {
+    uploadLogo.single('logo')(req, res, (err) => {
+        if (err || !req.file) {
+            return res.render('aparencia', {
+                usuario: req.session.usuario,
+                logoUrl: getConfig('logo_url'),
+                erro: 'Não foi possível enviar a imagem. Use PNG, JPG, WEBP ou SVG, até 2MB.',
+            });
+        }
+
+        // remove logo antiga se tinha extensão diferente da nova, pra não acumular lixo
+        const antiga = getConfig('logo_url');
+        if (antiga) {
+            const caminhoAntigo = path.join(__dirname, 'public', antiga.replace(/^\//, ''));
+            if (caminhoAntigo !== req.file.path && fs.existsSync(caminhoAntigo)) {
+                fs.unlinkSync(caminhoAntigo);
+            }
+        }
+
+        setConfig('logo_url', '/uploads/' + req.file.filename + '?v=' + Date.now());
+        redirectOk(res, '/configuracoes/aparencia', 'Logo atualizada!');
+    });
+});
+
+app.post('/configuracoes/aparencia/logo/remover', requireLogin, (req, res) => {
+    const atual = getConfig('logo_url');
+    if (atual) {
+        const caminho = path.join(__dirname, 'public', atual.split('?')[0].replace(/^\//, ''));
+        if (fs.existsSync(caminho)) fs.unlinkSync(caminho);
+    }
+    setConfig('logo_url', '');
+    redirectOk(res, '/configuracoes/aparencia', 'Logo removida.');
 });
 
 app.listen(PORT, () => {

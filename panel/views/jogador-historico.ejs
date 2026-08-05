@@ -1,41 +1,32 @@
-<!doctype html>
-<html lang="pt-br">
-<head>
-    <meta charset="utf-8">
-    <title>Painel do Fut - Histórico de <%= jogador.nome %></title>
-    <link rel="stylesheet" href="/style.css">
-</head>
-<body>
-    <%- include('_nav') %>
-
-    <div class="container">
-        <div class="card">
-            <p><a href="/elenco">&larr; Voltar pro elenco</a></p>
-            <h1><%= jogador.nome %></h1>
-            <h2>Papel atual: <span class="badge <%= jogador.papel %>"><%= jogador.papel %></span></h2>
-        </div>
-
-        <div class="card">
-            <h1>Histórico de papel</h1>
-            <% if (historico.length === 0) { %>
-                <p class="empty">Sem histórico registrado (jogador cadastrado antes desse recurso existir, ou nunca mudou de papel).</p>
-            <% } else { %>
-                <table>
-                    <thead>
-                        <tr><th>De</th><th>Para</th><th>Quando</th></tr>
-                    </thead>
-                    <tbody>
-                        <% historico.forEach(h => { %>
-                            <tr>
-                                <td><%= h.papel_anterior ? h.papel_anterior : '(criado)' %></td>
-                                <td><span class="badge <%= h.papel_novo %>"><%= h.papel_novo %></span></td>
-                                <td><%= h.alterado_em %></td>
-                            </tr>
-                        <% }) %>
-                    </tbody>
-                </table>
-            <% } %>
-        </div>
+<div class="page-header">
+    <div>
+        <h1><%= jogador.nome %></h1>
+        <p><a href="/elenco">&larr; Voltar pra jogadores</a></p>
     </div>
-</body>
-</html>
+</div>
+
+<div class="card">
+    <h2>Papel atual: <span class="badge <%= jogador.papel %>"><%= jogador.papel %></span></h2>
+</div>
+
+<div class="card">
+    <h1>Histórico de papel</h1>
+    <% if (historico.length === 0) { %>
+        <p class="empty">Sem histórico registrado (jogador cadastrado antes desse recurso existir, ou nunca mudou de papel).</p>
+    <% } else { %>
+        <table>
+            <thead>
+                <tr><th>De</th><th>Para</th><th>Quando</th></tr>
+            </thead>
+            <tbody>
+                <% historico.forEach(h => { %>
+                    <tr>
+                        <td><%= h.papel_anterior ? h.papel_anterior : '(criado)' %></td>
+                        <td><span class="badge <%= h.papel_novo %>"><%= h.papel_novo %></span></td>
+                        <td><%= h.alterado_em %></td>
+                    </tr>
+                <% }) %>
+            </tbody>
+        </table>
+    <% } %>
+</div>

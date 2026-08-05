@@ -1,0 +1,9 @@
+<% if (typeof ok !== 'undefined' && ok) { %>
+    <div class="toast-success" id="toast-flash">✅ <%= ok %></div>
+    <script>
+        setTimeout(() => {
+            const el = document.getElementById('toast-flash');
+            if (el) { el.style.opacity = '0'; setTimeout(() => el.remove(), 300); }
+        }, 2500);
+    </script>
+<% } %>

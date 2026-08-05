@@ -1,0 +1,19 @@
+<div class="page-header">
+    <div>
+        <h1>Confirmados</h1>
+        <p>Respostas da última enquete enviada no grupo</p>
+    </div>
+</div>
+
+<% if (!enquete) { %>
+    <div class="card">
+        <p class="empty">Nenhuma enquete registrada ainda. Mande <code>!enquete</code> no grupo do WhatsApp.</p>
+    </div>
+<% } else { %>
+    <div class="card">
+        <h1><%= enquete.titulo %></h1>
+        <h2><%= totalVotos %> resposta<%= totalVotos === 1 ? '' : 's' %></h2>
+    </div>
+
+    <%- include('_votos-por-opcao', { grupos }) %>
+<% } %>

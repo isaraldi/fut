@@ -1,42 +1,34 @@
-<!doctype html>
-<html lang="pt-br">
-<head>
-    <meta charset="utf-8">
-    <title>Painel do Fut - Configurar Elenco</title>
-    <link rel="stylesheet" href="/style.css">
-</head>
-<body>
-    <%- include('_nav') %>
-
-    <div class="container">
-        <div class="card">
-            <h1>Inclusão automática no elenco</h1>
-            <p class="hint">
-                Quando ativado, toda pessoa adicionada ao grupo do WhatsApp é incluída automaticamente
-                no elenco (nome e telefone preenchidos a partir do contato do WhatsApp).
-            </p>
-            <form method="post" action="/elenco/config">
-                <div class="switch-row">
-                    <input type="checkbox" id="autoIncluir" name="autoIncluir" <%= autoIncluir ? 'checked' : '' %>>
-                    <label for="autoIncluir">Incluir automaticamente novos membros do grupo</label>
-                </div>
-                <input type="submit" value="Salvar">
-            </form>
-        </div>
-
-        <div class="card">
-            <h1>Sincronizar membros já existentes</h1>
-            <p class="hint">
-                Isso só funciona pelo próprio WhatsApp: um admin manda <code>!sincronizar</code> no grupo
-                e o bot adiciona todo mundo que ainda não está no elenco (o painel não tem acesso direto
-                à lista de participantes do grupo, só o bot que já está conectado).
-            </p>
-            <p class="hint">
-                ⚠️ Sobre o telefone: contas com id no formato <code>@lid</code> (cada vez mais comuns por
-                privacidade do WhatsApp) não expõem o número de telefone real — só contas <code>@c.us</code>
-                clássicas. Nesses casos o campo telefone pode ficar em branco mesmo com o autofill ativado.
-            </p>
-        </div>
+<div class="page-header">
+    <div>
+        <h1>Configurações de jogadores</h1>
     </div>
-</body>
-</html>
+</div>
+
+<div class="card">
+    <h1>Inclusão automática</h1>
+    <p class="hint">
+        Quando ativado, toda pessoa adicionada ao grupo do WhatsApp é incluída automaticamente
+        na lista de jogadores (nome e telefone preenchidos a partir do contato do WhatsApp).
+    </p>
+    <form method="post" action="/elenco/config">
+        <div class="switch-row">
+            <input type="checkbox" id="autoIncluir" name="autoIncluir" <%= autoIncluir ? 'checked' : '' %>>
+            <label for="autoIncluir">Incluir automaticamente novos membros do grupo</label>
+        </div>
+        <input type="submit" value="Salvar">
+    </form>
+</div>
+
+<div class="card">
+    <h1>Sincronizar membros já existentes</h1>
+    <p class="hint">
+        Isso só funciona pelo próprio WhatsApp: um admin manda <code>!sincronizar</code> no grupo
+        e o bot adiciona todo mundo que ainda não está na lista (o painel não tem acesso direto
+        à lista de participantes do grupo, só o bot que já está conectado).
+    </p>
+    <p class="hint">
+        ⚠️ Sobre o telefone: contas com id no formato <code>@lid</code> (cada vez mais comuns por
+        privacidade do WhatsApp) não expõem o número de telefone real — só contas <code>@c.us</code>
+        clássicas. Nesses casos o campo telefone pode ficar em branco mesmo com o autofill ativado.
+    </p>
+</div>

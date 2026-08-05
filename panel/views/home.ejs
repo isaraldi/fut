@@ -1,0 +1,75 @@
+<div class="page-header">
+    <div>
+        <h1>Visão geral</h1>
+        <p>Resumo do time — <%= mes %></p>
+    </div>
+</div>
+
+<div class="stat-grid">
+    <div class="stat-tile accent-primary">
+        <div class="stat-label">Próximo jogo</div>
+        <% if (proximoJogo) { %>
+            <div class="stat-value" style="font-size:1.15rem"><%= proximoJogo.titulo %></div>
+            <div class="stat-sub"><%= confirmadosProximoJogo %> confirmado<%= confirmadosProximoJogo === 1 ? '' : 's' %></div>
+        <% } else { %>
+            <div class="stat-value" style="font-size:1rem;color:var(--muted)">Nenhum ainda</div>
+            <div class="stat-sub">Mande <code>!enquete</code> no grupo</div>
+        <% } %>
+    </div>
+
+    <div class="stat-tile accent-blue">
+        <div class="stat-label">Jogadores</div>
+        <div class="stat-value"><%= totalJogadores %></div>
+        <div class="stat-sub"><%= totalMensalistas %> mensalistas &middot; <%= totalAvulsos %> avulsos</div>
+    </div>
+
+    <div class="stat-tile <%= pendentes > 0 ? 'accent-critical' : 'accent-good' %>">
+        <div class="stat-label">Pagamentos do mês</div>
+        <div class="stat-value"><%= pagamentosMes.pagos %>/<%= pagamentosMes.devem %></div>
+        <div class="stat-sub"><%= pendentes %> pendente<%= pendentes === 1 ? '' : 's' %> (mensalistas)</div>
+    </div>
+
+    <div class="stat-tile accent-good">
+        <div class="stat-label">Jogos registrados</div>
+        <div class="stat-value"><%= ultimosJogos.length > 0 ? ultimosJogos.length : 0 %><%= ultimosJogos.length === 5 ? '+' : '' %></div>
+        <div class="stat-sub"><a href="/jogos">ver histórico completo →</a></div>
+    </div>
+</div>
+
+<div class="card">
+    <h1>Últimos jogos</h1>
+    <% if (ultimosJogos.length === 0) { %>
+        <p class="empty">Nenhuma enquete registrada ainda. Mande <code>!enquete</code> no grupo do WhatsApp.</p>
+    <% } else { %>
+        <table>
+            <thead>
+                <tr><th>Jogo</th><th>Criado em</th><th>Confirmados</th><th></th></tr>
+            </thead>
+            <tbody>
+                <% ultimosJogos.forEach(j => { %>
+                    <tr>
+                        <td><%= j.titulo %></td>
+                        <td><%= j.criada_em %></td>
+                        <td><%= j.confirmados %></td>
+                        <td><a href="/jogos/<%= j.id %>">Ver detalhe →</a></td>
+                    </tr>
+                <% }) %>
+            </tbody>
+        </table>
+    <% } %>
+</div>
+
+<div class="stat-grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr))">
+    <a class="card" style="text-decoration:none;display:block" href="/times">
+        <h1>⚽ Sortear times</h1>
+        <p class="hint" style="margin-bottom:0">Monta os times balanceados por nível para o próximo jogo.</p>
+    </a>
+    <a class="card" style="text-decoration:none;display:block" href="/pagamentos">
+        <h1>💰 Ver pagamentos</h1>
+        <p class="hint" style="margin-bottom:0">Marcar quem já pagou a mensalidade do mês.</p>
+    </a>
+    <a class="card" style="text-decoration:none;display:block" href="/elenco">
+        <h1>👥 Gerenciar jogadores</h1>
+        <p class="hint" style="margin-bottom:0">Adicionar, editar nível/papel ou remover jogadores.</p>
+    </a>
+</div>

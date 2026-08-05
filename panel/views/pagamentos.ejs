@@ -1,47 +1,39 @@
-<!doctype html>
-<html lang="pt-br">
-<head>
-    <meta charset="utf-8">
-    <title>Painel do Fut - Pagamentos</title>
-    <link rel="stylesheet" href="/style.css">
-</head>
-<body>
-<%- include('_nav') %>
-
-    <div class="container">
-        <div class="card">
-            <h1>Pagamentos — <%= mes %></h1>
-            <% if (jogadores.length === 0) { %>
-                <p class="empty">Nenhum jogador cadastrado ainda. Cadastre no <a href="/elenco">Elenco</a>.</p>
-            <% } else { %>
-                <table>
-                    <thead>
-                        <tr><th>Nome</th><th>Papel</th><th>Status</th><th></th></tr>
-                    </thead>
-                    <tbody>
-                        <% jogadores.forEach(j => { %>
-                            <tr>
-                                <td><%= j.nome %></td>
-                                <td><span class="badge <%= j.papel %>"><%= j.papel %></span></td>
-                                <td>
-                                    <span class="badge <%= j.pago ? 'pago' : 'pendente' %>">
-                                        <%= j.pago ? 'Pago' : 'Pendente' %>
-                                    </span>
-                                </td>
-                                <td>
-                                    <form method="post" action="/pagamentos/<%= j.id %>/toggle">
-                                        <input type="hidden" name="mes" value="<%= mes %>">
-                                        <button class="secondary" type="submit">
-                                            Marcar <%= j.pago ? 'pendente' : 'pago' %>
-                                        </button>
-                                    </form>
-                                </td>
-                            </tr>
-                        <% }) %>
-                    </tbody>
-                </table>
-            <% } %>
-        </div>
+<div class="page-header">
+    <div>
+        <h1>Pagamentos</h1>
+        <p><%= mes %></p>
     </div>
-</body>
-</html>
+</div>
+
+<div class="card">
+    <% if (jogadores.length === 0) { %>
+        <p class="empty">Nenhum jogador cadastrado ainda. Cadastre em <a href="/elenco">Jogadores</a>.</p>
+    <% } else { %>
+        <table>
+            <thead>
+                <tr><th>Nome</th><th>Papel</th><th>Status</th><th></th></tr>
+            </thead>
+            <tbody>
+                <% jogadores.forEach(j => { %>
+                    <tr>
+                        <td><%= j.nome %></td>
+                        <td><span class="badge <%= j.papel %>"><%= j.papel %></span></td>
+                        <td>
+                            <span class="badge <%= j.pago ? 'pago' : 'pendente' %>">
+                                <%= j.pago ? 'Pago' : 'Pendente' %>
+                            </span>
+                        </td>
+                        <td>
+                            <form method="post" action="/pagamentos/<%= j.id %>/toggle">
+                                <input type="hidden" name="mes" value="<%= mes %>">
+                                <button class="secondary" type="submit">
+                                    Marcar <%= j.pago ? 'pendente' : 'pago' %>
+                                </button>
+                            </form>
+                        </td>
+                    </tr>
+                <% }) %>
+            </tbody>
+        </table>
+    <% } %>
+</div>

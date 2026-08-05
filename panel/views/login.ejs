@@ -1,25 +1,18 @@
-<!doctype html>
-<html lang="pt-br">
-<head>
-    <meta charset="utf-8">
-    <title>Painel do Fut - Login</title>
-    <link rel="stylesheet" href="/style.css">
-</head>
-<body>
-    <div class="login-wrap">
-        <div class="card login-card">
-            <h1>⚽ Painel do Fut</h1>
-            <% if (erro) { %>
-                <p class="erro"><%= erro %></p>
-            <% } %>
-            <form method="post" action="/login">
-                <label>Usuário</label>
-                <input type="text" name="usuario" autofocus required>
-                <label>Senha</label>
-                <input type="password" name="senha" required>
-                <input type="submit" value="Entrar">
-            </form>
-        </div>
+<div class="login-wrap">
+    <div class="card login-card">
+        <% if (typeof logoUrl !== 'undefined' && logoUrl) { %>
+            <img class="login-logo" src="<%= logoUrl %>" alt="Logo do time">
+        <% } %>
+        <h1>⚽ Painel do Fut</h1>
+        <% if (erro) { %>
+            <p class="erro"><%= erro %></p>
+        <% } %>
+        <form method="post" action="/login" autocomplete="on">
+            <label for="usuario">Usuário</label>
+            <input type="text" id="usuario" name="usuario" autocomplete="username" autofocus required>
+            <label for="senha">Senha</label>
+            <input type="password" id="senha" name="senha" autocomplete="current-password" required>
+            <input type="submit" value="Entrar">
+        </form>
     </div>
-</body>
-</html>
+</div>

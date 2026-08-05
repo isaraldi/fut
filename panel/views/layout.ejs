@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Painel do Fut<%= typeof tituloPagina !== 'undefined' && tituloPagina ? ' - ' + tituloPagina : '' %></title>
+    <script>
+        (function () {
+            var t = localStorage.getItem('fut-theme');
+            if (t === 'light' || t === 'dark') {
+                document.documentElement.setAttribute('data-theme', t);
+            }
+        })();
+    </script>
+    <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+    <div class="app">
+        <%- include('_sidebar') %>
+        <main class="content">
+            <%- include('_flash') %>
+            <%- body %>
+        </main>
+    </div>
+    <script>
+        (function () {
+            var buttons = document.querySelectorAll('[data-theme-choice]');
+            var current = localStorage.getItem('fut-theme') || 'auto';
+
+            function aplicar(valor) {
+                if (valor === 'auto') {
+                    document.documentElement.removeAttribute('data-theme');
+                    localStorage.removeItem('fut-theme');
+                } else {
+                    document.documentElement.setAttribute('data-theme', valor);
+                    localStorage.setItem('fut-theme', valor);
+                }
+                buttons.forEach(function (b) {
+                    b.classList.toggle('active', b.dataset.themeChoice === valor);
+                });
+            }
+
+            buttons.forEach(function (b) {
+                b.addEventListener('click', function () { aplicar(b.dataset.themeChoice); });
+            });
+
+            aplicar(current);
+        })();
+    </script>
+</body>
+</html>

@@ -1,37 +1,29 @@
-<!doctype html>
-<html lang="pt-br">
-<head>
-    <meta charset="utf-8">
-    <title>Painel do Fut - Jogos</title>
-    <link rel="stylesheet" href="/style.css">
-</head>
-<body>
-    <%- include('_nav') %>
-
-    <div class="container">
-        <div class="card">
-            <h1>Histórico de jogos (<%= jogos.length %>)</h1>
-            <% if (jogos.length === 0) { %>
-                <p class="empty">Nenhuma enquete registrada ainda. Mande <code>!enquete</code> no grupo do WhatsApp.</p>
-            <% } else { %>
-                <table>
-                    <thead>
-                        <tr><th>Jogo</th><th>Criada em</th><th>Confirmados</th><th>Respostas</th><th></th></tr>
-                    </thead>
-                    <tbody>
-                        <% jogos.forEach(j => { %>
-                            <tr>
-                                <td><%= j.titulo %></td>
-                                <td><%= j.criada_em %></td>
-                                <td><%= j.confirmados %></td>
-                                <td><%= j.total_respostas %></td>
-                                <td><a href="/jogos/<%= j.id %>">Ver detalhe</a></td>
-                            </tr>
-                        <% }) %>
-                    </tbody>
-                </table>
-            <% } %>
-        </div>
+<div class="page-header">
+    <div>
+        <h1>Histórico de jogos</h1>
+        <p><%= jogos.length %> jogo<%= jogos.length === 1 ? '' : 's' %> registrado<%= jogos.length === 1 ? '' : 's' %></p>
     </div>
-</body>
-</html>
+</div>
+
+<div class="card">
+    <% if (jogos.length === 0) { %>
+        <p class="empty">Nenhuma enquete registrada ainda. Mande <code>!enquete</code> no grupo do WhatsApp.</p>
+    <% } else { %>
+        <table>
+            <thead>
+                <tr><th>Jogo</th><th>Criada em</th><th>Confirmados</th><th>Respostas</th><th></th></tr>
+            </thead>
+            <tbody>
+                <% jogos.forEach(j => { %>
+                    <tr>
+                        <td><%= j.titulo %></td>
+                        <td><%= j.criada_em %></td>
+                        <td><%= j.confirmados %></td>
+                        <td><%= j.total_respostas %></td>
+                        <td><a href="/jogos/<%= j.id %>">Ver detalhe →</a></td>
+                    </tr>
+                <% }) %>
+            </tbody>
+        </table>
+    <% } %>
+</div>

@@ -1,0 +1,36 @@
+<div class="page-header">
+    <div>
+        <h1>Aparência</h1>
+        <p>Logo do time e tema visual do painel</p>
+    </div>
+</div>
+
+<div class="card">
+    <h1>Logo do time</h1>
+    <p class="hint">Aparece na tela de login e no topo do menu lateral. PNG, JPG, WEBP ou SVG, até 2MB.</p>
+
+    <% if (typeof erro !== 'undefined' && erro) { %>
+        <p class="erro"><%= erro %></p>
+    <% } %>
+
+    <% if (logoUrl) { %>
+        <div style="margin-bottom:16px">
+            <img src="<%= logoUrl %>" alt="Logo atual" style="max-width:160px;max-height:160px;border-radius:8px;border:1px solid var(--border)">
+        </div>
+        <form method="post" action="/configuracoes/aparencia/logo/remover" onsubmit="return confirm('Remover a logo?')" style="margin-bottom:16px">
+            <button class="danger" type="submit">Remover logo</button>
+        </form>
+    <% } else { %>
+        <p class="empty">Nenhuma logo configurada ainda — mostra só o texto/ícone.</p>
+    <% } %>
+
+    <form method="post" action="/configuracoes/aparencia/logo" enctype="multipart/form-data">
+        <input type="file" name="logo" accept="image/png,image/jpeg,image/webp,image/svg+xml" required>
+        <input type="submit" value="Enviar logo">
+    </form>
+</div>
+
+<div class="card">
+    <h1>Tema</h1>
+    <p class="hint">O botão Claro/Auto/Escuro no rodapé do menu lateral troca o tema — a preferência fica salva neste navegador.</p>
+</div>

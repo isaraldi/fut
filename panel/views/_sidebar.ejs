@@ -1,0 +1,70 @@
+<%
+    const caminho = typeof caminhoAtual !== 'undefined' ? caminhoAtual : '';
+    const ativo = (p) => caminho === p;
+    const grupoAberto = (prefixos) => prefixos.some(p => caminho.startsWith(p));
+%>
+<aside class="sidebar">
+    <div class="sidebar-brand">
+        <% if (typeof logoUrlSidebar !== 'undefined' && logoUrlSidebar) { %>
+            <img src="<%= logoUrlSidebar %>" alt="Logo">
+        <% } else { %>
+            <span style="font-size:1.4rem">⚽</span>
+        <% } %>
+        <span>Painel do Fut</span>
+    </div>
+
+    <nav class="sidebar-nav">
+        <a class="nav-link <%= ativo('/') ? 'active' : '' %>" href="/">
+            <span class="icon">🏠</span> Início
+        </a>
+
+        <details class="nav-group" <%= grupoAberto(['/confirmados', '/jogos', '/times']) ? 'open' : '' %>>
+            <summary><span class="icon">⚽</span> Jogos <span class="chevron">▸</span></summary>
+            <div class="nav-sub">
+                <a class="nav-link <%= ativo('/confirmados') ? 'active' : '' %>" href="/confirmados">Confirmados</a>
+                <a class="nav-link <%= caminho.startsWith('/jogos') ? 'active' : '' %>" href="/jogos">Histórico</a>
+                <a class="nav-link <%= ativo('/times') ? 'active' : '' %>" href="/times">Times</a>
+            </div>
+        </details>
+
+        <details class="nav-group" <%= grupoAberto(['/pagamentos']) ? 'open' : '' %>>
+            <summary><span class="icon">💰</span> Financeiro <span class="chevron">▸</span></summary>
+            <div class="nav-sub">
+                <a class="nav-link <%= ativo('/pagamentos') ? 'active' : '' %>" href="/pagamentos">Pagamentos</a>
+            </div>
+        </details>
+
+        <details class="nav-group" <%= grupoAberto(['/elenco']) ? 'open' : '' %>>
+            <summary><span class="icon">👥</span> Jogadores <span class="chevron">▸</span></summary>
+            <div class="nav-sub">
+                <a class="nav-link <%= ativo('/elenco') ? 'active' : '' %>" href="/elenco">Lista</a>
+                <a class="nav-link <%= ativo('/elenco/config') ? 'active' : '' %>" href="/elenco/config">Configurações</a>
+            </div>
+        </details>
+
+        <details class="nav-group" <%= grupoAberto(['/enquete']) ? 'open' : '' %>>
+            <summary><span class="icon">🗳️</span> Enquete <span class="chevron">▸</span></summary>
+            <div class="nav-sub">
+                <a class="nav-link <%= ativo('/enquete/config') ? 'active' : '' %>" href="/enquete/config">Configurações</a>
+            </div>
+        </details>
+
+        <a class="nav-link <%= ativo('/configuracoes/aparencia') ? 'active' : '' %>" href="/configuracoes/aparencia">
+            <span class="icon">🎨</span> Aparência
+        </a>
+    </nav>
+
+    <div class="sidebar-footer">
+        <div class="theme-toggle">
+            <button type="button" data-theme-choice="light">Claro</button>
+            <button type="button" data-theme-choice="auto">Auto</button>
+            <button type="button" data-theme-choice="dark">Escuro</button>
+        </div>
+        <div class="user-row">
+            <span><%= typeof usuario !== 'undefined' ? usuario : '' %></span>
+            <form method="post" action="/logout" style="margin:0">
+                <button class="secondary" type="submit" style="padding:5px 10px;font-size:0.8rem">Sair</button>
+            </form>
+        </div>
+    </div>
+</aside>
