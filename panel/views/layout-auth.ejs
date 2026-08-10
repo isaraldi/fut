@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Painel do Fut - Login</title>
+    <title>Painel do Fut<%= typeof tituloPagina !== 'undefined' && tituloPagina ? ' - ' + tituloPagina : ' - Login' %></title>
     <script>
         (function () {
             var t = localStorage.getItem('fut-theme');

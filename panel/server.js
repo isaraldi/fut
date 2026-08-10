@@ -14,6 +14,9 @@ const {
     getEnqueteOpcoes,
     registrarMudancaPapel,
     getPapelHistorico,
+    getConfirmadosDaEnquete,
+    getAvaliacoesDaEnquete,
+    registrarAvaliacao,
 } = require('../db');
 
 const PORT = process.env.PORT || 4000;
@@ -39,8 +42,18 @@ function bootstrapAdmin() {
 
 bootstrapAdmin();
 
+// serializa pra embutir num <script> sem risco de fechar a tag com dado de usuário
+// (JSON.stringify por si só não escapa </script>, <, > nem &)
+function jsonParaScript(valor) {
+    return JSON.stringify(valor)
+        .replace(/</g, '\\u003c')
+        .replace(/>/g, '\\u003e')
+        .replace(/&/g, '\\u0026');
+}
+
 const app = express();
 app.set('view engine', 'ejs');
+app.locals.jsonParaScript = jsonParaScript;
 app.set('views', path.join(__dirname, 'views'));
 app.set('layout', 'layout');
 app.use(expressLayouts);
@@ -76,6 +89,9 @@ function redirectOk(res, caminho, mensagem) {
 }
 
 const mesAtual = () => new Date().toISOString().slice(0, 7); // YYYY-MM
+
+const POSICOES_VALIDAS = ['goleira', 'defesa', 'meio', 'ataque', 'indefinida'];
+const posicaoValida = (p) => (POSICOES_VALIDAS.includes(p) ? p : 'indefinida');
 
 // ---------- UPLOAD DA LOGO ----------
 
@@ -125,7 +141,7 @@ app.post('/logout', (req, res) => {
 function carregarVotosAgrupados(enqueteId) {
     const votos = db
         .prepare(
-            `SELECT v.opcao, v.votado_em, j.nome, j.papel, j.nivel
+            `SELECT j.id AS jogador_id, v.opcao, v.votado_em, j.nome, j.papel, j.nivel
              FROM votos v
              JOIN jogadores j ON j.id = v.jogador_id
              WHERE v.enquete_id = ?
@@ -154,10 +170,14 @@ app.get('/confirmados', requireLogin, (req, res) => {
         ? carregarVotosAgrupados(enquete.id)
         : { votos: [], grupos: {} };
 
+    const jogadores = db.prepare('SELECT id, nome, papel FROM jogadores ORDER BY nome ASC').all();
+
     res.render('confirmados', {
         enquete,
         grupos,
         totalVotos: votos.length,
+        jogadores,
+        ok: req.query.ok,
     });
 });
 
@@ -239,13 +259,54 @@ app.get('/jogos/:id', requireLogin, (req, res) => {
     if (!enquete) return res.redirect('/jogos');
 
     const { votos, grupos } = carregarVotosAgrupados(enquete.id);
+    const jogadores = db.prepare('SELECT id, nome, papel FROM jogadores ORDER BY nome ASC').all();
 
     res.render('jogo-detalhe', {
         usuario: req.session.usuario,
         enquete,
         grupos,
         totalVotos: votos.length,
+        jogadores,
+        ok: req.query.ok,
     });
+});
+
+// confirma manualmente uma jogadora que não respondeu (ou respondeu errado) a enquete no WhatsApp;
+// reaproveita o texto da opção configurada pro papel escolhido, pra ficar igual a um voto de verdade
+function textoOpcaoParaPapel(papel) {
+    const opcao = getEnqueteOpcoes().find((o) => o.papel === papel);
+    if (opcao) return opcao.texto;
+    return papel === 'mensalista' ? 'Eu vou (MENSALISTAS)' : 'Eu quero (AVULSAS)';
+}
+
+app.post('/jogos/:id/confirmar', requireLogin, (req, res) => {
+    const enqueteId = Number(req.params.id);
+    const jogadorId = Number(req.body.jogador_id);
+    const papel = req.body.papel === 'mensalista' ? 'mensalista' : 'avulso';
+
+    const enquete = db.prepare('SELECT id FROM enquetes WHERE id = ?').get(enqueteId);
+    const jogador = db.prepare('SELECT id, nome FROM jogadores WHERE id = ?').get(jogadorId);
+    if (!enquete || !jogador) return res.redirect('/jogos/' + enqueteId);
+
+    db.prepare(
+        `INSERT INTO votos (enquete_id, jogador_id, opcao, papel)
+         VALUES (?, ?, ?, ?)
+         ON CONFLICT(enquete_id, jogador_id) DO UPDATE SET
+             opcao = excluded.opcao,
+             papel = excluded.papel,
+             votado_em = datetime('now')`,
+    ).run(enqueteId, jogadorId, textoOpcaoParaPapel(papel), papel);
+
+    redirectOk(res, '/jogos/' + enqueteId, `${jogador.nome} confirmada manualmente!`);
+});
+
+app.post('/jogos/:id/confirmar/:jogadorId/remover', requireLogin, (req, res) => {
+    const enqueteId = Number(req.params.id);
+    const jogadorId = Number(req.params.jogadorId);
+
+    db.prepare('DELETE FROM votos WHERE enquete_id = ? AND jogador_id = ?').run(enqueteId, jogadorId);
+
+    redirectOk(res, '/jogos/' + enqueteId, 'Confirmação removida.');
 });
 
 // ---------- PAGAMENTOS ----------
@@ -300,16 +361,17 @@ app.get('/elenco', requireLogin, (req, res) => {
 });
 
 app.post('/elenco', requireLogin, (req, res) => {
-    const { nome, telefone, nivel, papel } = req.body;
+    const { nome, telefone, nivel, papel, posicao } = req.body;
     if (!nome || !nome.trim()) return res.redirect('/elenco');
 
     db.prepare(
-        'INSERT INTO jogadores (nome, telefone, nivel, papel) VALUES (?, ?, ?, ?)',
+        'INSERT INTO jogadores (nome, telefone, nivel, papel, posicao) VALUES (?, ?, ?, ?, ?)',
     ).run(
         nome.trim(),
         telefone || null,
         Number(nivel) || 3,
         papel === 'mensalista' ? 'mensalista' : 'avulso',
+        posicaoValida(posicao),
     );
 
     redirectOk(res, '/elenco', `${nome.trim()} adicionado!`);
@@ -331,15 +393,15 @@ app.post('/elenco/config', requireLogin, (req, res) => {
 });
 
 app.post('/elenco/:id', requireLogin, (req, res) => {
-    const { nome, telefone, nivel, papel } = req.body;
+    const { nome, telefone, nivel, papel, posicao } = req.body;
     const id = Number(req.params.id);
     const papelNovo = papel === 'mensalista' ? 'mensalista' : 'avulso';
 
     const atual = db.prepare('SELECT papel FROM jogadores WHERE id = ?').get(id);
 
     db.prepare(
-        'UPDATE jogadores SET nome = ?, telefone = ?, nivel = ?, papel = ? WHERE id = ?',
-    ).run(nome.trim(), telefone || null, Number(nivel) || 3, papelNovo, id);
+        'UPDATE jogadores SET nome = ?, telefone = ?, nivel = ?, papel = ?, posicao = ? WHERE id = ?',
+    ).run(nome.trim(), telefone || null, Number(nivel) || 3, papelNovo, posicaoValida(posicao), id);
 
     if (atual && atual.papel !== papelNovo) {
         registrarMudancaPapel(id, atual.papel, papelNovo);
@@ -450,21 +512,55 @@ function embaralhar(lista) {
     return copia;
 }
 
+// posições contam menos que o nível na hora de montar os times (o time ainda não
+// tem posição bem definida pra todo mundo), então o "custo" de posição usa um peso
+// bem menor que 1 ponto de nível — só desempata/ajusta quando um time já acumulou
+// gente demais numa mesma posição, sem nunca sobrepor uma diferença clara de nível
+const PESO_POSICAO = 0.5;
+
 function balancearTimes(jogadores) {
-    const embaralhados = embaralhar(jogadores).sort((a, b) => b.nivel - a.nivel);
+    const embaralhados = embaralhar(jogadores);
 
     const timeA = [];
     const timeB = [];
     let somaA = 0;
     let somaB = 0;
+    const posicoesA = {};
+    const posicoesB = {};
 
-    for (const jogador of embaralhados) {
+    // regra dura: no máximo 1 goleira por time. As duas de maior nível (uma pra cada time)
+    // ficam garantidas; se sobrar uma terceira goleira confirmada, não tem como respeitar
+    // a regra dos dois lados, então ela entra no balanceamento normal como os demais
+    const goleiras = embaralhados.filter((j) => j.posicao === 'goleira').sort((a, b) => b.nivel - a.nivel);
+    const outros = embaralhados.filter((j) => j.posicao !== 'goleira');
+
+    goleiras.slice(0, 2).forEach((jogador) => {
         if (somaA <= somaB) {
             timeA.push(jogador);
             somaA += jogador.nivel;
+            posicoesA.goleira = (posicoesA.goleira || 0) + 1;
         } else {
             timeB.push(jogador);
             somaB += jogador.nivel;
+            posicoesB.goleira = (posicoesB.goleira || 0) + 1;
+        }
+    });
+
+    const restantes = embaralhar([...goleiras.slice(2), ...outros]).sort((a, b) => b.nivel - a.nivel);
+
+    for (const jogador of restantes) {
+        const posicao = jogador.posicao && jogador.posicao !== 'indefinida' ? jogador.posicao : null;
+        const custoA = somaA + (posicao ? (posicoesA[posicao] || 0) * PESO_POSICAO : 0);
+        const custoB = somaB + (posicao ? (posicoesB[posicao] || 0) * PESO_POSICAO : 0);
+
+        if (custoA <= custoB) {
+            timeA.push(jogador);
+            somaA += jogador.nivel;
+            if (posicao) posicoesA[posicao] = (posicoesA[posicao] || 0) + 1;
+        } else {
+            timeB.push(jogador);
+            somaB += jogador.nivel;
+            if (posicao) posicoesB[posicao] = (posicoesB[posicao] || 0) + 1;
         }
     }
 
@@ -476,17 +572,7 @@ app.get('/times', requireLogin, (req, res) => {
         .prepare('SELECT * FROM enquetes ORDER BY id DESC LIMIT 1')
         .get();
 
-    let confirmados = [];
-    if (enquete) {
-        confirmados = db
-            .prepare(
-                `SELECT j.id, j.nome, j.nivel, j.papel
-                 FROM votos v
-                 JOIN jogadores j ON j.id = v.jogador_id
-                 WHERE v.enquete_id = ? AND v.papel IS NOT NULL`,
-            )
-            .all(enquete.id);
-    }
+    const confirmados = enquete ? getConfirmadosDaEnquete(enquete.id) : [];
 
     let times = null;
     if (confirmados.length >= 2) {
@@ -499,6 +585,69 @@ app.get('/times', requireLogin, (req, res) => {
         confirmados,
         times,
     });
+});
+
+// ---------- VOTAÇÃO PÚBLICA (avaliação pós-jogo, sem login administrativo) ----------
+// link pra compartilhar no grupo do WhatsApp depois de cada jogo, pra galera se avaliar
+
+app.get('/votacao', (req, res) => {
+    const enquete = db.prepare('SELECT * FROM enquetes ORDER BY id DESC LIMIT 1').get();
+    if (!enquete) {
+        return res.render('votacao', {
+            layout: 'layout-auth',
+            tituloPagina: 'Avaliar jogo',
+            enquete: null,
+            confirmados: [],
+            avaliacoes: [],
+            ok: null,
+        });
+    }
+    res.redirect('/votacao/' + enquete.id);
+});
+
+app.get('/votacao/:id', (req, res) => {
+    const enqueteId = Number(req.params.id);
+    const enquete = db.prepare('SELECT * FROM enquetes WHERE id = ?').get(enqueteId);
+
+    const confirmados = enquete ? getConfirmadosDaEnquete(enqueteId) : [];
+    const avaliacoes = enquete ? getAvaliacoesDaEnquete(enqueteId) : [];
+
+    res.render('votacao', {
+        layout: 'layout-auth',
+        tituloPagina: 'Avaliar jogo',
+        enquete,
+        confirmados,
+        avaliacoes,
+        ok: req.query.ok,
+    });
+});
+
+app.post('/votacao/:id/avaliar', (req, res) => {
+    const enqueteId = Number(req.params.id);
+    const avaliadorId = Number(req.body.avaliador_id);
+
+    const confirmados = getConfirmadosDaEnquete(enqueteId);
+    const idsValidos = new Set(confirmados.map((j) => j.id));
+
+    if (!avaliadorId || !idsValidos.has(avaliadorId)) {
+        return res.redirect('/votacao/' + enqueteId);
+    }
+
+    for (const [chave, valor] of Object.entries(req.body)) {
+        const match = chave.match(/^nota_(\d+)$/);
+        if (!match) continue;
+
+        const jogadorId = Number(match[1]);
+        if (jogadorId === avaliadorId) continue; // ninguém avalia a si mesma
+        if (!idsValidos.has(jogadorId)) continue;
+
+        const nota = Number(valor);
+        if (!Number.isInteger(nota) || nota < 1 || nota > 5) continue;
+
+        registrarAvaliacao(enqueteId, jogadorId, avaliadorId, nota);
+    }
+
+    redirectOk(res, `/votacao/${enqueteId}?eu=${avaliadorId}`, 'Avaliação registrada!');
 });
 
 // ---------- APARÊNCIA (logo) ----------

@@ -30,7 +30,7 @@
                 <table>
                     <tbody>
                         <% times.timeA.forEach(j => { %>
-                            <tr><td><%= j.nome %></td><td><span class="badge <%= j.papel %>"><%= j.nivel %></span></td></tr>
+                            <tr><td><%= j.nome %></td><td><span class="badge <%= j.posicao %>"><%= j.posicao %></span></td><td><span class="badge <%= j.papel %>"><%= j.nivel %></span></td></tr>
                         <% }) %>
                     </tbody>
                 </table>
@@ -40,7 +40,7 @@
                 <table>
                     <tbody>
                         <% times.timeB.forEach(j => { %>
-                            <tr><td><%= j.nome %></td><td><span class="badge <%= j.papel %>"><%= j.nivel %></span></td></tr>
+                            <tr><td><%= j.nome %></td><td><span class="badge <%= j.posicao %>"><%= j.posicao %></span></td><td><span class="badge <%= j.papel %>"><%= j.nivel %></span></td></tr>
                         <% }) %>
                     </tbody>
                 </table>

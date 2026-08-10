@@ -30,6 +30,16 @@
                     <option value="avulso" selected>Avulso</option>
                 </select>
             </div>
+            <div>
+                <label>Posição</label>
+                <select name="posicao">
+                    <option value="indefinida" selected>Indefinida</option>
+                    <option value="goleira">Goleira</option>
+                    <option value="defesa">Defesa</option>
+                    <option value="meio">Meio</option>
+                    <option value="ataque">Ataque</option>
+                </select>
+            </div>
         </div>
         <input type="submit" value="Adicionar">
     </form>
@@ -42,7 +52,7 @@
     <% } else { %>
         <table>
             <thead>
-                <tr><th>Nome</th><th>Telefone</th><th>Nível</th><th>Papel</th><th></th></tr>
+                <tr><th>Nome</th><th>Telefone</th><th>Nível</th><th>Papel</th><th>Posição</th><th></th></tr>
             </thead>
             <tbody>
                 <% jogadores.forEach(j => { %>
@@ -56,12 +66,21 @@
                                 <option value="avulso" <%= j.papel === 'avulso' ? 'selected' : '' %>>Avulso</option>
                             </select>
                         </td>
+                        <td>
+                            <select name="posicao" form="edit-<%= j.id %>">
+                                <option value="indefinida" <%= j.posicao === 'indefinida' ? 'selected' : '' %>>Indefinida</option>
+                                <option value="goleira" <%= j.posicao === 'goleira' ? 'selected' : '' %>>Goleira</option>
+                                <option value="defesa" <%= j.posicao === 'defesa' ? 'selected' : '' %>>Defesa</option>
+                                <option value="meio" <%= j.posicao === 'meio' ? 'selected' : '' %>>Meio</option>
+                                <option value="ataque" <%= j.posicao === 'ataque' ? 'selected' : '' %>>Ataque</option>
+                            </select>
+                        </td>
                         <td style="white-space:nowrap">
                             <form id="edit-<%= j.id %>" method="post" action="/elenco/<%= j.id %>" style="display:inline">
                                 <button type="submit">Salvar</button>
                             </form>
                             <a href="/elenco/<%= j.id %>/historico" class="secondary" style="display:inline-block;padding:8px 10px;border:1px solid var(--border);border-radius:6px;text-decoration:none;color:var(--text)">Histórico</a>
-                            <form method="post" action="/elenco/<%= j.id %>/excluir" style="display:inline" onsubmit="return confirm('Remover <%= j.nome %>?')">
+                            <form method="post" action="/elenco/<%= j.id %>/excluir" style="display:inline" data-confirm="Remover {nome}?" data-confirm-nome="<%= j.nome %>">
                                 <button class="danger" type="submit">Excluir</button>
                             </form>
                         </td>

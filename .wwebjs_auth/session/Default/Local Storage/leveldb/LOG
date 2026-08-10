@@ -1,6 +1,0 @@
-2026/08/04-16:40:53.059 5 Reusing MANIFEST /var/www/html/fut/.wwebjs_auth/session/Default/Local Storage/leveldb/MANIFEST-000001
-2026/08/04-16:40:53.061 5 Recovering log #4
-2026/08/04-16:40:53.062 5 Reusing old log /var/www/html/fut/.wwebjs_auth/session/Default/Local Storage/leveldb/000004.log 
-2026/08/04-16:41:53.064 7 Level-0 table #8: started
-2026/08/04-16:41:53.073 7 Level-0 table #8: 15810 bytes OK
-2026/08/04-16:41:53.085 7 Delete type=0 #4

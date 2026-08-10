@@ -1,0 +1,140 @@
+<div class="votacao-wrap">
+    <div class="card votacao-card">
+        <%- include('_flash') %>
+
+        <% if (!enquete) { %>
+            <h1>⚽ Avaliar jogo</h1>
+            <p class="empty">Nenhum jogo registrado ainda. Assim que uma enquete for aberta no grupo, o link de avaliação passa a funcionar.</p>
+        <% } else if (confirmados.length === 0) { %>
+            <h1><%= enquete.titulo %></h1>
+            <p class="empty">Ninguém confirmou presença nesse jogo, então não há quem avaliar.</p>
+        <% } else { %>
+            <h1><%= enquete.titulo %></h1>
+            <p class="hint">Dê uma nota de 1 a 5 pra cada jogadora que jogou. Isso ajuda a ajustar o nível de cada uma pros próximos sorteios de time.</p>
+
+            <div id="passo-quem-sou-eu">
+                <label for="select-eu">Quem é você?</label>
+                <select id="select-eu">
+                    <option value="">Selecione seu nome...</option>
+                    <% confirmados.forEach(j => { %>
+                        <option value="<%= j.id %>"><%= j.nome %></option>
+                    <% }) %>
+                </select>
+            </div>
+
+            <form id="form-avaliacao" method="post" action="/votacao/<%= enquete.id %>/avaliar" style="display:none">
+                <input type="hidden" name="avaliador_id" id="input-avaliador-id">
+                <p class="hint">
+                    Avaliando como <strong id="texto-avaliador"></strong> ·
+                    <a href="#" id="link-trocar">não é você?</a>
+                </p>
+                <div id="lista-notas"></div>
+                <input type="submit" value="Salvar avaliações">
+            </form>
+        <% } %>
+    </div>
+</div>
+
+<script>
+(function () {
+    var confirmados = <%- jsonParaScript(confirmados) %>;
+    var avaliacoes = <%- jsonParaScript(avaliacoes) %>;
+    var enqueteId = <%= enquete ? enquete.id : 'null' %>;
+    if (!enqueteId || confirmados.length === 0) return;
+
+    var CHAVE_STORAGE = 'fut-votante-id';
+
+    var passoQuemSouEu = document.getElementById('passo-quem-sou-eu');
+    var selectEu = document.getElementById('select-eu');
+    var form = document.getElementById('form-avaliacao');
+    var inputAvaliadorId = document.getElementById('input-avaliador-id');
+    var textoAvaliador = document.getElementById('texto-avaliador');
+    var listaNotas = document.getElementById('lista-notas');
+    var linkTrocar = document.getElementById('link-trocar');
+
+    function notaExistente(jogadorId, avaliadorId) {
+        for (var i = 0; i < avaliacoes.length; i++) {
+            var a = avaliacoes[i];
+            if (a.jogador_id === jogadorId && a.avaliador_id === avaliadorId) return a.nota;
+        }
+        return null;
+    }
+
+    function montarLista(avaliadorId) {
+        listaNotas.innerHTML = '';
+        confirmados
+            .filter(function (j) { return j.id !== avaliadorId; })
+            .forEach(function (j) {
+                var notaAtual = notaExistente(j.id, avaliadorId);
+
+                var linha = document.createElement('div');
+                linha.className = 'rating-row';
+
+                var nome = document.createElement('span');
+                nome.className = 'rating-nome';
+                nome.textContent = j.nome;
+                linha.appendChild(nome);
+
+                var escala = document.createElement('div');
+                escala.className = 'rating';
+                for (var nota = 1; nota <= 5; nota++) {
+                    var id = 'nota_' + j.id + '_' + nota;
+                    var input = document.createElement('input');
+                    input.type = 'radio';
+                    input.name = 'nota_' + j.id;
+                    input.id = id;
+                    input.value = String(nota);
+                    if (notaAtual === nota) input.checked = true;
+
+                    var label = document.createElement('label');
+                    label.setAttribute('for', id);
+                    label.textContent = String(nota);
+
+                    escala.appendChild(input);
+                    escala.appendChild(label);
+                }
+                linha.appendChild(escala);
+                listaNotas.appendChild(linha);
+            });
+    }
+
+    function selecionar(avaliadorId, jogador) {
+        inputAvaliadorId.value = avaliadorId;
+        textoAvaliador.textContent = jogador.nome;
+        montarLista(avaliadorId);
+        passoQuemSouEu.style.display = 'none';
+        form.style.display = '';
+        try { localStorage.setItem(CHAVE_STORAGE, String(avaliadorId)); } catch (e) {}
+    }
+
+    selectEu.addEventListener('change', function () {
+        var id = Number(selectEu.value);
+        if (!id) return;
+        var jogador = confirmados.find(function (j) { return j.id === id; });
+        if (jogador) selecionar(id, jogador);
+    });
+
+    linkTrocar.addEventListener('click', function (ev) {
+        ev.preventDefault();
+        form.style.display = 'none';
+        passoQuemSouEu.style.display = '';
+        selectEu.value = '';
+        try { localStorage.removeItem(CHAVE_STORAGE); } catch (e) {}
+    });
+
+    var params = new URLSearchParams(window.location.search);
+    var idQuery = Number(params.get('eu'));
+    var idStorage = Number((function () {
+        try { return localStorage.getItem(CHAVE_STORAGE); } catch (e) { return null; }
+    })());
+    var idPreSelecionado = idQuery || idStorage;
+
+    if (idPreSelecionado) {
+        var jogadorPre = confirmados.find(function (j) { return j.id === idPreSelecionado; });
+        if (jogadorPre) {
+            selectEu.value = String(idPreSelecionado);
+            selecionar(idPreSelecionado, jogadorPre);
+        }
+    }
+})();
+</script>

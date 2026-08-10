@@ -9,4 +9,19 @@
     <h2><%= totalVotos %> resposta<%= totalVotos === 1 ? '' : 's' %> &middot; criada em <%= enquete.criada_em %></h2>
 </div>
 
-<%- include('_votos-por-opcao', { grupos }) %>
+<div class="card">
+    <h1>Avaliação pós-jogo</h1>
+    <p class="hint">Compartilhe esse link no grupo depois do jogo pra galera dar nota de 1 a 5 pra cada jogadora que jogou. Não precisa de login.</p>
+    <input type="text" id="link-votacao" value="/votacao/<%= enquete.id %>" readonly onclick="this.select()">
+</div>
+
+<%- include('_confirmar-manual', { enquete, jogadores }) %>
+
+<%- include('_votos-por-opcao', { grupos, enqueteId: enquete.id }) %>
+
+<script>
+    (function () {
+        var input = document.getElementById('link-votacao');
+        if (input) input.value = window.location.origin + '/votacao/<%= enquete.id %>';
+    })();
+</script>

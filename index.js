@@ -3,7 +3,11 @@ const qrcode = require('qrcode-terminal');
 const { db, upsertJogador, getConfig, getEnqueteOpcoes } = require('./db');
 
 const client = new Client({
-  authStrategy: new LocalAuth()
+  authStrategy: new LocalAuth(),
+  puppeteer: {
+    executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
+    args: ['--no-sandbox', '--disable-setuid-sandbox']
+  }
 });
 
 const groupConfigs = {

@@ -1,0 +1,25 @@
+<div class="card">
+    <h1>Confirmar manualmente</h1>
+    <p class="hint">Pra quando alguém joga mas não respondeu (ou respondeu errado) a enquete no WhatsApp.</p>
+    <form method="post" action="/jogos/<%= enquete.id %>/confirmar">
+        <div class="form-row">
+            <div>
+                <label>Jogadora</label>
+                <select name="jogador_id" required>
+                    <option value="">Selecione...</option>
+                    <% jogadores.forEach(j => { %>
+                        <option value="<%= j.id %>"><%= j.nome %></option>
+                    <% }) %>
+                </select>
+            </div>
+            <div>
+                <label>Confirmar como</label>
+                <select name="papel">
+                    <option value="mensalista">Mensalista</option>
+                    <option value="avulso">Avulso</option>
+                </select>
+            </div>
+        </div>
+        <input type="submit" value="Confirmar presença">
+    </form>
+</div>

@@ -13,6 +13,7 @@ db.exec(`
         telefone TEXT,
         nivel INTEGER NOT NULL DEFAULT 3,
         papel TEXT NOT NULL DEFAULT 'avulso' CHECK(papel IN ('mensalista', 'avulso')),
+        posicao TEXT NOT NULL DEFAULT 'indefinida' CHECK(posicao IN ('goleira', 'defesa', 'meio', 'ataque', 'indefinida')),
         criado_em TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
@@ -67,7 +68,25 @@ db.exec(`
         papel_novo TEXT NOT NULL,
         alterado_em TEXT NOT NULL DEFAULT (datetime('now'))
     );
+
+    CREATE TABLE IF NOT EXISTS avaliacoes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        enquete_id INTEGER NOT NULL REFERENCES enquetes(id) ON DELETE CASCADE,
+        jogador_id INTEGER NOT NULL REFERENCES jogadores(id) ON DELETE CASCADE,
+        avaliador_id INTEGER NOT NULL REFERENCES jogadores(id) ON DELETE CASCADE,
+        nota INTEGER NOT NULL CHECK(nota BETWEEN 1 AND 5),
+        criado_em TEXT NOT NULL DEFAULT (datetime('now')),
+        UNIQUE(enquete_id, jogador_id, avaliador_id)
+    );
 `);
+
+// migração leve: jogadores.posicao (times criados antes desse recurso não têm a coluna)
+const colunasJogadores = db.prepare('PRAGMA table_info(jogadores)').all();
+if (!colunasJogadores.some((c) => c.name === 'posicao')) {
+    db.exec(
+        "ALTER TABLE jogadores ADD COLUMN posicao TEXT NOT NULL DEFAULT 'indefinida' CHECK(posicao IN ('goleira', 'defesa', 'meio', 'ataque', 'indefinida'))",
+    );
+}
 
 // migração leve: votos.papel (denormalizado no momento do voto,
 // pra não depender de enquete_opcoes que pode mudar depois)
@@ -129,6 +148,52 @@ function getPapelHistorico(jogadorId) {
         .all(jogadorId);
 }
 
+// jogadoras que confirmaram presença (papel preenchido) num jogo específico,
+// usadas tanto pro sorteio de times quanto pra tela pública de avaliação pós-jogo
+function getConfirmadosDaEnquete(enqueteId) {
+    return db
+        .prepare(
+            `SELECT j.id, j.nome, j.nivel, j.papel, j.posicao
+             FROM votos v
+             JOIN jogadores j ON j.id = v.jogador_id
+             WHERE v.enquete_id = ? AND v.papel IS NOT NULL
+             ORDER BY j.nome ASC`,
+        )
+        .all(enqueteId);
+}
+
+// todas as notas já registradas num jogo, pra pré-preencher o formulário de quem já votou
+function getAvaliacoesDaEnquete(enqueteId) {
+    return db
+        .prepare('SELECT jogador_id, avaliador_id, nota FROM avaliacoes WHERE enquete_id = ?')
+        .all(enqueteId);
+}
+
+// nível = média (arredondada, entre 1 e 5) de todas as notas recebidas pela jogadora até hoje
+function recalcularNivel(jogadorId) {
+    const { media } = db
+        .prepare('SELECT AVG(nota) AS media FROM avaliacoes WHERE jogador_id = ?')
+        .get(jogadorId);
+    if (media == null) return;
+
+    const nivel = Math.min(5, Math.max(1, Math.round(media)));
+    db.prepare('UPDATE jogadores SET nivel = ? WHERE id = ?').run(nivel, jogadorId);
+}
+
+// registra (ou atualiza, se a mesma pessoa já avaliou essa jogadora nesse jogo) uma nota
+// de 1 a 5 e recalcula o nível da jogadora avaliada
+function registrarAvaliacao(enqueteId, jogadorId, avaliadorId, nota) {
+    db.prepare(
+        `INSERT INTO avaliacoes (enquete_id, jogador_id, avaliador_id, nota)
+         VALUES (?, ?, ?, ?)
+         ON CONFLICT(enquete_id, jogador_id, avaliador_id) DO UPDATE SET
+             nota = excluded.nota,
+             criado_em = datetime('now')`,
+    ).run(enqueteId, jogadorId, avaliadorId, nota);
+
+    recalcularNivel(jogadorId);
+}
+
 function upsertJogador(whatsappId, nome, papelSugerido, telefone) {
     const existente = db
         .prepare('SELECT id, telefone FROM jogadores WHERE whatsapp_id = ?')
@@ -167,4 +232,7 @@ module.exports = {
     getEnqueteOpcoes,
     registrarMudancaPapel,
     getPapelHistorico,
+    getConfirmadosDaEnquete,
+    getAvaliacoesDaEnquete,
+    registrarAvaliacao,
 };

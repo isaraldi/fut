@@ -15,5 +15,7 @@
         <h2><%= totalVotos %> resposta<%= totalVotos === 1 ? '' : 's' %></h2>
     </div>
 
-    <%- include('_votos-por-opcao', { grupos }) %>
+    <%- include('_confirmar-manual', { enquete, jogadores }) %>
+
+    <%- include('_votos-por-opcao', { grupos, enqueteId: enquete.id }) %>
 <% } %>
