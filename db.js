@@ -43,6 +43,15 @@ db.exec(`
         UNIQUE(jogador_id, mes_referencia)
     );
 
+    CREATE TABLE IF NOT EXISTS pagamentos_avulsos (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        jogador_id INTEGER NOT NULL REFERENCES jogadores(id) ON DELETE CASCADE,
+        enquete_id INTEGER NOT NULL REFERENCES enquetes(id) ON DELETE CASCADE,
+        pago INTEGER NOT NULL DEFAULT 0,
+        atualizado_em TEXT NOT NULL DEFAULT (datetime('now')),
+        UNIQUE(jogador_id, enquete_id)
+    );
+
     CREATE TABLE IF NOT EXISTS admin_users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         usuario TEXT UNIQUE NOT NULL,

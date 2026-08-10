@@ -19,14 +19,17 @@
         <h1><%= enquete.titulo %></h1>
         <h2><%= confirmados.length %> confirmado<%= confirmados.length === 1 ? '' : 's' %></h2>
         <form method="get" action="/times">
-            <button type="submit">🔀 Sortear de novo</button>
+            <button type="submit" class="btn-icon-label">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 3 21 3 21 8"></polyline><line x1="4" y1="20" x2="21" y2="3"></line><polyline points="21 16 21 21 16 21"></polyline><line x1="15" y1="15" x2="21" y2="21"></line><line x1="4" y1="4" x2="9" y2="9"></line></svg>
+                Sortear de novo
+            </button>
         </form>
     </div>
 
     <div class="card">
         <div class="team-cols">
             <div class="team-col">
-                <h2>🔵 Time A <span class="team-sum">(soma de nível: <%= times.somaA %>)</span></h2>
+                <h2><span class="team-dot" style="background:var(--accent-blue)"></span> Time A <span class="team-sum">(soma de nível: <%= times.somaA %>)</span></h2>
                 <table>
                     <tbody>
                         <% times.timeA.forEach(j => { %>
@@ -36,7 +39,7 @@
                 </table>
             </div>
             <div class="team-col">
-                <h2>🔴 Time B <span class="team-sum">(soma de nível: <%= times.somaB %>)</span></h2>
+                <h2><span class="team-dot" style="background:var(--critical)"></span> Time B <span class="team-sum">(soma de nível: <%= times.somaB %>)</span></h2>
                 <table>
                     <tbody>
                         <% times.timeB.forEach(j => { %>

@@ -51,7 +51,11 @@
                         <td><%= j.titulo %></td>
                         <td><%= j.criada_em %></td>
                         <td><%= j.confirmados %></td>
-                        <td><a href="/jogos/<%= j.id %>">Ver detalhe →</a></td>
+                        <td>
+                            <a href="/jogos/<%= j.id %>" class="icon-btn secondary" title="Ver detalhe" aria-label="Ver detalhe de <%= j.titulo %>">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
+                            </a>
+                        </td>
                     </tr>
                 <% }) %>
             </tbody>
@@ -64,7 +68,7 @@
         <h1>⚽ Sortear times</h1>
         <p class="hint" style="margin-bottom:0">Monta os times balanceados por nível para o próximo jogo.</p>
     </a>
-    <a class="card" style="text-decoration:none;display:block" href="/pagamentos">
+    <a class="card" style="text-decoration:none;display:block" href="/pagamentos/mensalistas">
         <h1>💰 Ver pagamentos</h1>
         <p class="hint" style="margin-bottom:0">Marcar quem já pagou a mensalidade do mês.</p>
     </a>

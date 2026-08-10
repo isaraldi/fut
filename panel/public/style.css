@@ -390,6 +390,11 @@ button.edit-toggle.active, button.edit-toggle.active:hover { background: var(--p
 }
 .icon-btn svg { width: 15px; height: 15px; }
 a.icon-btn { text-decoration: none; cursor: pointer; }
+
+.btn-icon-label { display: inline-flex; align-items: center; gap: 6px; }
+.btn-icon-label svg { flex-shrink: 0; }
+
+.team-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; }
 a.icon-btn.secondary {
     background: transparent;
     color: var(--text);

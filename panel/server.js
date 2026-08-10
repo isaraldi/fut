@@ -318,23 +318,29 @@ app.post('/jogos/:id/confirmar/:jogadorId/remover', requireLogin, (req, res) => 
 // ---------- PAGAMENTOS ----------
 
 app.get('/pagamentos', requireLogin, (req, res) => {
+    const query = req.query.mes ? '?mes=' + encodeURIComponent(req.query.mes) : '';
+    res.redirect('/pagamentos/mensalistas' + query);
+});
+
+app.get('/pagamentos/mensalistas', requireLogin, (req, res) => {
     const mes = req.query.mes || mesAtual();
 
     const jogadores = db
         .prepare(
-            `SELECT j.id, j.nome, j.papel,
+            `SELECT j.id, j.nome,
                     p.pago AS pago
              FROM jogadores j
              LEFT JOIN pagamentos p
                     ON p.jogador_id = j.id AND p.mes_referencia = ?
-             ORDER BY j.papel DESC, j.nome ASC`,
+             WHERE j.papel = 'mensalista'
+             ORDER BY j.nome ASC`,
         )
         .all(mes);
 
-    res.render('pagamentos', { usuario: req.session.usuario, jogadores, mes, ok: req.query.ok });
+    res.render('pagamentos-mensalistas', { usuario: req.session.usuario, jogadores, mes, ok: req.query.ok });
 });
 
-app.post('/pagamentos/:jogadorId/toggle', requireLogin, (req, res) => {
+app.post('/pagamentos/mensalistas/:jogadorId/toggle', requireLogin, (req, res) => {
     const mes = req.body.mes || mesAtual();
     const jogadorId = Number(req.params.jogadorId);
 
@@ -354,7 +360,47 @@ app.post('/pagamentos/:jogadorId/toggle', requireLogin, (req, res) => {
         ).run(jogadorId, mes);
     }
 
-    redirectOk(res, '/pagamentos?mes=' + encodeURIComponent(mes), 'Pagamento atualizado!');
+    redirectOk(res, '/pagamentos/mensalistas?mes=' + encodeURIComponent(mes), 'Pagamento atualizado!');
+});
+
+app.get('/pagamentos/avulsos', requireLogin, (req, res) => {
+    const enquete = db.prepare('SELECT * FROM enquetes ORDER BY id DESC LIMIT 1').get();
+
+    let jogadores = [];
+    if (enquete) {
+        const confirmados = getConfirmadosDaEnquete(enquete.id).filter((j) => j.papel === 'avulso');
+        const statusStmt = db.prepare(
+            'SELECT pago FROM pagamentos_avulsos WHERE jogador_id = ? AND enquete_id = ?',
+        );
+        jogadores = confirmados.map((j) => ({
+            id: j.id,
+            nome: j.nome,
+            pago: !!statusStmt.get(j.id, enquete.id)?.pago,
+        }));
+    }
+
+    res.render('pagamentos-avulsos', { usuario: req.session.usuario, enquete, jogadores, ok: req.query.ok });
+});
+
+app.post('/pagamentos/avulsos/:jogadorId/toggle', requireLogin, (req, res) => {
+    const jogadorId = Number(req.params.jogadorId);
+    const enqueteId = Number(req.body.enqueteId);
+
+    const atual = db
+        .prepare('SELECT * FROM pagamentos_avulsos WHERE jogador_id = ? AND enquete_id = ?')
+        .get(jogadorId, enqueteId);
+
+    if (atual) {
+        db.prepare(
+            "UPDATE pagamentos_avulsos SET pago = ?, atualizado_em = datetime('now') WHERE id = ?",
+        ).run(atual.pago ? 0 : 1, atual.id);
+    } else {
+        db.prepare(
+            'INSERT INTO pagamentos_avulsos (jogador_id, enquete_id, pago) VALUES (?, ?, 1)',
+        ).run(jogadorId, enqueteId);
+    }
+
+    redirectOk(res, '/pagamentos/avulsos', 'Pagamento atualizado!');
 });
 
 // ---------- ELENCO ----------

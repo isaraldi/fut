@@ -1,0 +1,44 @@
+<div class="page-header">
+    <div>
+        <h1>Pagamentos — Mensalistas</h1>
+        <p><%= mes %></p>
+    </div>
+</div>
+
+<div class="card">
+    <% if (jogadores.length === 0) { %>
+        <p class="empty">Nenhuma mensalista cadastrada ainda. Cadastre em <a href="/elenco">Jogadores</a>.</p>
+    <% } else { %>
+        <table>
+            <thead>
+                <tr><th>Nome</th><th>Status</th><th></th></tr>
+            </thead>
+            <tbody>
+                <% jogadores.forEach(j => { %>
+                    <tr>
+                        <td><%= j.nome %></td>
+                        <td>
+                            <span class="badge <%= j.pago ? 'pago' : 'pendente' %>">
+                                <%= j.pago ? 'Pago' : 'Pendente' %>
+                            </span>
+                        </td>
+                        <td>
+                            <form method="post" action="/pagamentos/mensalistas/<%= j.id %>/toggle">
+                                <input type="hidden" name="mes" value="<%= mes %>">
+                                <button class="secondary btn-icon-label" type="submit">
+                                    <% if (j.pago) { %>
+                                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>
+                                        Marcar pendente
+                                    <% } else { %>
+                                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                                        Marcar pago
+                                    <% } %>
+                                </button>
+                            </form>
+                        </td>
+                    </tr>
+                <% }) %>
+            </tbody>
+        </table>
+    <% } %>
+</div>
