@@ -1,5 +1,4 @@
 #!/bin/bash
-set -e
 
 if [ -d /app/storage ]; then
   mkdir -p /app/storage/data /app/storage/.wwebjs_auth

@@ -25,14 +25,6 @@ primary_region = "gru"
     handlers = ["http"]
     port = 80
 
-  [[services.http_checks]]
-    interval = "15s"
-    timeout = "5s"
-    grace_period = "60s"
-    method = "GET"
-    path = "/"
-    protocol = "http"
-
 [[vm]]
   memory = "1gb"
   cpu_kind = "shared"
