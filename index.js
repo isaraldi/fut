@@ -141,6 +141,14 @@ async function abrirEnquete(msg) {
   ).run(sent.id._serialized, msg.from, titulo);
 
   console.log(`🗳️ Enquete criada: ${titulo}`);
+
+  // fixa por 7 dias; só funciona se o número do bot for admin do grupo
+  try {
+    const fixou = await sent.pin(7 * 24 * 60 * 60);
+    if (!fixou) console.log('⚠️ Não consegui fixar a enquete (bot é admin do grupo?)');
+  } catch (err) {
+    console.error('Erro ao fixar enquete:', err);
+  }
 }
 
 client.on('message', async msg => {

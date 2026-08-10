@@ -271,6 +271,12 @@ app.get('/jogos/:id', requireLogin, (req, res) => {
     });
 });
 
+app.post('/jogos/:id/excluir', requireLogin, (req, res) => {
+    const enqueteId = Number(req.params.id);
+    db.prepare('DELETE FROM enquetes WHERE id = ?').run(enqueteId);
+    redirectOk(res, '/jogos', 'Jogo excluído.');
+});
+
 // confirma manualmente uma jogadora que não respondeu (ou respondeu errado) a enquete no WhatsApp;
 // reaproveita o texto da opção configurada pro papel escolhido, pra ficar igual a um voto de verdade
 function textoOpcaoParaPapel(papel) {

@@ -11,7 +11,7 @@
     <% } else { %>
         <table>
             <thead>
-                <tr><th>Jogo</th><th>Criada em</th><th>Confirmados</th><th>Respostas</th><th></th></tr>
+                <tr><th>Jogo</th><th>Criada em</th><th>Confirmados</th><th>Respostas</th><th></th><th></th></tr>
             </thead>
             <tbody>
                 <% jogos.forEach(j => { %>
@@ -21,6 +21,11 @@
                         <td><%= j.confirmados %></td>
                         <td><%= j.total_respostas %></td>
                         <td><a href="/jogos/<%= j.id %>">Ver detalhe →</a></td>
+                        <td>
+                            <form method="post" action="/jogos/<%= j.id %>/excluir" data-confirm="Excluir {nome}? Isso apaga as confirmações e avaliações desse jogo." data-confirm-nome="<%= j.titulo %>">
+                                <button class="danger" type="submit">Excluir</button>
+                            </form>
+                        </td>
                     </tr>
                 <% }) %>
             </tbody>

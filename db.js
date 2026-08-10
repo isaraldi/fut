@@ -194,20 +194,29 @@ function registrarAvaliacao(enqueteId, jogadorId, avaliadorId, nota) {
     recalcularNivel(jogadorId);
 }
 
+// remove emojis, seletores de variação, ZWJ e modificadores de tom de pele do nome
+// vindo do WhatsApp; se sobrar vazio (nome só com emoji), cai no fallback "Jogador"
+function limparNome(nome) {
+    const limpo = String(nome || '')
+        .replace(/\p{Extended_Pictographic}/gu, '')
+        .replace(/[\u{1F3FB}-\u{1F3FF}\u{FE0F}\u{200D}]/gu, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+    return limpo || 'Jogador';
+}
+
 function upsertJogador(whatsappId, nome, papelSugerido, telefone) {
     const existente = db
         .prepare('SELECT id, telefone FROM jogadores WHERE whatsapp_id = ?')
         .get(whatsappId);
 
     if (existente) {
-        // só preenche telefone se ainda não tiver (autofill não sobrescreve edição manual)
+        // nome não é sincronizado depois da primeira importação — só a criação pega do
+        // WhatsApp, edição manual no painel não pode ser sobrescrita depois.
+        // telefone segue a mesma lógica: só preenche se ainda não tiver.
         if (telefone && !existente.telefone) {
-            db.prepare(
-                'UPDATE jogadores SET nome = ?, telefone = ? WHERE id = ?',
-            ).run(nome, telefone, existente.id);
-        } else {
-            db.prepare('UPDATE jogadores SET nome = ? WHERE id = ?').run(
-                nome,
+            db.prepare('UPDATE jogadores SET telefone = ? WHERE id = ?').run(
+                telefone,
                 existente.id,
             );
         }
@@ -219,7 +228,7 @@ function upsertJogador(whatsappId, nome, papelSugerido, telefone) {
         .prepare(
             'INSERT INTO jogadores (nome, whatsapp_id, telefone, papel) VALUES (?, ?, ?, ?)',
         )
-        .run(nome, whatsappId, telefone || null, papelInicial);
+        .run(limparNome(nome), whatsappId, telefone || null, papelInicial);
     registrarMudancaPapel(info.lastInsertRowid, null, papelInicial);
     return info.lastInsertRowid;
 }
