@@ -296,6 +296,44 @@ th, td {
 }
 th { color: var(--muted); font-weight: 600; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.02em; }
 tbody tr:last-child td { border-bottom: none; }
+tbody tr:hover { background: var(--bg); }
+
+/* linhas editáveis: por padrão os campos aparecem como texto/badge; o ícone de lápis libera a edição */
+tr.jogador-row .field {
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--text);
+    padding: 6px 8px;
+    margin: 0;
+    width: auto;
+    max-width: 100%;
+    font-size: 0.92rem;
+}
+tr.jogador-row:not(.editing) .field { pointer-events: none; }
+tr.jogador-row.editing .field {
+    border-color: var(--border);
+    background: var(--card);
+    pointer-events: auto;
+}
+tr.jogador-row .field-number { width: 56px; }
+tr.jogador-row .field::placeholder { color: var(--faint); }
+
+select.select-badge {
+    appearance: none;
+    -webkit-appearance: none;
+    border-radius: 999px;
+    padding: 3px 9px;
+    font-size: 0.75rem;
+    cursor: default;
+    background-image: none;
+}
+tr.jogador-row.editing select.select-badge {
+    appearance: auto;
+    -webkit-appearance: menulist;
+    cursor: pointer;
+    border-radius: var(--radius-sm);
+    padding: 6px 8px;
+}
 
 .badge {
     display: inline-block;
@@ -337,6 +375,28 @@ button.secondary:hover { background: var(--bg); color: var(--text); }
 button.danger { background: var(--critical); }
 button.danger:hover { filter: brightness(0.9); }
 
+button.edit-toggle.active, button.edit-toggle.active:hover { background: var(--primary-wash); color: var(--primary); border-color: transparent; }
+
+.icon-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    border-radius: var(--radius-sm);
+    line-height: 1;
+    vertical-align: middle;
+}
+.icon-btn svg { width: 15px; height: 15px; }
+a.icon-btn { text-decoration: none; cursor: pointer; }
+a.icon-btn.secondary {
+    background: transparent;
+    color: var(--text);
+    border: 1px solid var(--border);
+}
+a.icon-btn.secondary:hover { background: var(--bg); }
+
 input[type=text], input[type=password], input[type=number], input[type=file], select {
     width: 100%;
     padding: 8px 10px;
@@ -369,6 +429,21 @@ label { font-size: 0.85rem; color: var(--muted); display: block; margin-bottom: 
 .form-row > div { flex: 1; }
 
 .empty { color: var(--muted); font-style: italic; font-size: 0.9rem; }
+
+.muted { color: var(--muted); font-weight: 400; font-size: 0.85rem; }
+
+.save-bar {
+    position: sticky;
+    bottom: 0;
+    display: flex;
+    justify-content: flex-end;
+    padding: 12px 0;
+    background: linear-gradient(to top, var(--bg) 60%, transparent);
+}
+.save-bar button {
+    padding: 10px 22px;
+    font-size: 0.95rem;
+}
 
 .hint { color: var(--muted); font-size: 0.85rem; margin-top: -6px; margin-bottom: 10px; }
 

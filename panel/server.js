@@ -398,22 +398,39 @@ app.post('/elenco/config', requireLogin, (req, res) => {
     redirectOk(res, '/elenco/config', 'Configuração salva!');
 });
 
-app.post('/elenco/:id', requireLogin, (req, res) => {
-    const { nome, telefone, nivel, papel, posicao } = req.body;
-    const id = Number(req.params.id);
-    const papelNovo = papel === 'mensalista' ? 'mensalista' : 'avulso';
+app.post('/elenco/salvar-todas', requireLogin, (req, res) => {
+    const arr = (v) => (v === undefined ? [] : Array.isArray(v) ? v : [v]);
+    const ids = arr(req.body.id);
+    const nomes = arr(req.body.nome);
+    const telefones = arr(req.body.telefone);
+    const niveis = arr(req.body.nivel);
+    const papeis = arr(req.body.papel);
+    const posicoes = arr(req.body.posicao);
 
-    const atual = db.prepare('SELECT papel FROM jogadores WHERE id = ?').get(id);
+    const salvarTodas = db.transaction(() => {
+        ids.forEach((idStr, i) => {
+            const nome = (nomes[i] || '').trim();
+            if (!nome) return;
 
-    db.prepare(
-        'UPDATE jogadores SET nome = ?, telefone = ?, nivel = ?, papel = ?, posicao = ? WHERE id = ?',
-    ).run(nome.trim(), telefone || null, Number(nivel) || 3, papelNovo, posicaoValida(posicao), id);
+            const id = Number(idStr);
+            const atual = db.prepare('SELECT papel FROM jogadores WHERE id = ?').get(id);
+            if (!atual) return;
 
-    if (atual && atual.papel !== papelNovo) {
-        registrarMudancaPapel(id, atual.papel, papelNovo);
-    }
+            const papelNovo = papeis[i] === 'mensalista' ? 'mensalista' : 'avulso';
 
-    redirectOk(res, '/elenco', `${nome.trim()} salvo!`);
+            db.prepare(
+                'UPDATE jogadores SET nome = ?, telefone = ?, nivel = ?, papel = ?, posicao = ? WHERE id = ?',
+            ).run(nome, telefones[i] || null, Number(niveis[i]) || 3, papelNovo, posicaoValida(posicoes[i]), id);
+
+            if (atual.papel !== papelNovo) {
+                registrarMudancaPapel(id, atual.papel, papelNovo);
+            }
+        });
+    });
+
+    salvarTodas();
+
+    redirectOk(res, '/elenco', 'Jogadoras salvas!');
 });
 
 app.post('/elenco/:id/excluir', requireLogin, (req, res) => {

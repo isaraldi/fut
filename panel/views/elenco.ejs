@@ -45,48 +45,77 @@
     </form>
 </div>
 
-<div class="card">
-    <h1>Lista de jogadores</h1>
-    <% if (jogadores.length === 0) { %>
+<%
+    const mensalistas = jogadores.filter(j => j.papel === 'mensalista');
+    const avulsas = jogadores.filter(j => j.papel === 'avulso');
+%>
+<% if (jogadores.length === 0) { %>
+    <div class="card">
+        <h1>Lista de jogadores</h1>
         <p class="empty">Ninguém cadastrado ainda — vote em uma enquete no WhatsApp ou adicione manualmente acima.</p>
-    <% } else { %>
-        <table>
-            <thead>
-                <tr><th>Nome</th><th>Telefone</th><th>Nível</th><th>Papel</th><th>Posição</th><th></th></tr>
-            </thead>
-            <tbody>
-                <% jogadores.forEach(j => { %>
-                    <tr>
-                        <td><input type="text" name="nome" form="edit-<%= j.id %>" value="<%= j.nome %>" required></td>
-                        <td><input type="text" name="telefone" form="edit-<%= j.id %>" value="<%= j.telefone || '' %>"></td>
-                        <td><input type="number" name="nivel" form="edit-<%= j.id %>" min="1" max="5" value="<%= j.nivel %>"></td>
-                        <td>
-                            <select name="papel" form="edit-<%= j.id %>">
-                                <option value="mensalista" <%= j.papel === 'mensalista' ? 'selected' : '' %>>Mensalista</option>
-                                <option value="avulso" <%= j.papel === 'avulso' ? 'selected' : '' %>>Avulso</option>
-                            </select>
-                        </td>
-                        <td>
-                            <select name="posicao" form="edit-<%= j.id %>">
-                                <option value="indefinida" <%= j.posicao === 'indefinida' ? 'selected' : '' %>>Indefinida</option>
-                                <option value="goleira" <%= j.posicao === 'goleira' ? 'selected' : '' %>>Goleira</option>
-                                <option value="defesa" <%= j.posicao === 'defesa' ? 'selected' : '' %>>Defesa</option>
-                                <option value="meio" <%= j.posicao === 'meio' ? 'selected' : '' %>>Meio</option>
-                                <option value="ataque" <%= j.posicao === 'ataque' ? 'selected' : '' %>>Ataque</option>
-                            </select>
-                        </td>
-                        <td style="white-space:nowrap">
-                            <form id="edit-<%= j.id %>" method="post" action="/elenco/<%= j.id %>" style="display:inline">
-                                <button type="submit">Salvar</button>
-                            </form>
-                            <a href="/elenco/<%= j.id %>/historico" class="secondary" style="display:inline-block;padding:8px 10px;border:1px solid var(--border);border-radius:6px;text-decoration:none;color:var(--text)">Histórico</a>
-                            <form method="post" action="/elenco/<%= j.id %>/excluir" style="display:inline" data-confirm="Remover {nome}?" data-confirm-nome="<%= j.nome %>">
-                                <button class="danger" type="submit">Excluir</button>
-                            </form>
-                        </td>
-                    </tr>
-                <% }) %>
-            </tbody>
-        </table>
-    <% } %>
-</div>
+    </div>
+<% } else { %>
+    <form method="post" action="/elenco/salvar-todas">
+        <% [['Mensalistas', mensalistas], ['Avulsas', avulsas]].forEach(([titulo, grupo]) => { %>
+            <div class="card">
+                <h1><%= titulo %> <span class="muted">(<%= grupo.length %>)</span></h1>
+                <% if (grupo.length === 0) { %>
+                    <p class="empty">Nenhuma jogadora <%= titulo.toLowerCase() %>.</p>
+                <% } else { %>
+                    <table>
+                        <thead>
+                            <tr><th>Nome</th><th>Telefone</th><th>Nível</th><th>Papel</th><th>Posição</th><th></th></tr>
+                        </thead>
+                        <tbody>
+                            <% grupo.forEach(j => { %>
+                                <tr class="jogador-row">
+                                    <td>
+                                        <input type="hidden" name="id" value="<%= j.id %>">
+                                        <input type="text" class="field" name="nome" value="<%= j.nome %>" tabindex="-1" required>
+                                    </td>
+                                    <td><input type="text" class="field" name="telefone" value="<%= j.telefone || '' %>" tabindex="-1" placeholder="—"></td>
+                                    <td><input type="number" class="field field-number" name="nivel" min="1" max="5" value="<%= j.nivel %>" tabindex="-1"></td>
+                                    <td>
+                                        <select class="field select-badge badge <%= j.papel %>" name="papel" data-badge-field tabindex="-1">
+                                            <option value="mensalista" <%= j.papel === 'mensalista' ? 'selected' : '' %>>Mensalista</option>
+                                            <option value="avulso" <%= j.papel === 'avulso' ? 'selected' : '' %>>Avulso</option>
+                                        </select>
+                                    </td>
+                                    <td>
+                                        <select class="field select-badge badge <%= j.posicao %>" name="posicao" data-badge-field tabindex="-1">
+                                            <option value="indefinida" <%= j.posicao === 'indefinida' ? 'selected' : '' %>>Indefinida</option>
+                                            <option value="goleira" <%= j.posicao === 'goleira' ? 'selected' : '' %>>Goleira</option>
+                                            <option value="defesa" <%= j.posicao === 'defesa' ? 'selected' : '' %>>Defesa</option>
+                                            <option value="meio" <%= j.posicao === 'meio' ? 'selected' : '' %>>Meio</option>
+                                            <option value="ataque" <%= j.posicao === 'ataque' ? 'selected' : '' %>>Ataque</option>
+                                        </select>
+                                    </td>
+                                    <td style="white-space:nowrap">
+                                        <button type="button" class="icon-btn secondary edit-toggle" title="Editar" aria-label="Editar <%= j.nome %>">
+                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg>
+                                        </button>
+                                        <a href="/elenco/<%= j.id %>/historico" class="icon-btn secondary" title="Histórico" aria-label="Histórico de <%= j.nome %>">
+                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                                        </a>
+                                        <button class="icon-btn danger" type="submit" form="delete-<%= j.id %>" title="Excluir" aria-label="Excluir <%= j.nome %>">
+                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+                                        </button>
+                                    </td>
+                                </tr>
+                            <% }) %>
+                        </tbody>
+                    </table>
+                <% } %>
+            </div>
+        <% }) %>
+        <div class="save-bar">
+            <button type="submit">Salvar todas</button>
+        </div>
+    </form>
+
+    <% jogadores.forEach(j => { %>
+        <form id="delete-<%= j.id %>" method="post" action="/elenco/<%= j.id %>/excluir" data-confirm="Remover {nome}?" data-confirm-nome="<%= j.nome %>"></form>
+    <% }) %>
+
+    <script src="/elenco.js" defer></script>
+<% } %>
