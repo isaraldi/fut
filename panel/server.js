@@ -19,6 +19,8 @@ const {
     getEnqueteOpcoes,
     criarMensagemUnica,
     criarMensagemSemanal,
+    atualizarMensagemUnica,
+    atualizarMensagemSemanal,
     getMensagensAgendadas,
     excluirMensagemAgendada,
     registrarMudancaPapel,
@@ -639,6 +641,28 @@ app.post('/mensagens', requireLogin, (req, res) => {
     }
 
     redirectOk(res, '/mensagens', 'Mensagem agendada!');
+});
+
+app.post('/mensagens/:id/editar', requireLogin, (req, res) => {
+    const id = Number(req.params.id);
+    const { grupoId, texto, tipo, data, diaSemana, horaH, horaM } = req.body;
+    if (!grupoId || !texto || !texto.trim()) {
+        return res.redirect('/mensagens');
+    }
+
+    const hh = String(horaH || '00').padStart(2, '0');
+    const mm = String(horaM || '00').padStart(2, '0');
+
+    if (tipo === 'semanal') {
+        const diaSemanaNum = Number(diaSemana);
+        if (diaSemanaNum < 0 || diaSemanaNum > 6) return res.redirect('/mensagens');
+        atualizarMensagemSemanal(id, grupoId, texto.trim(), diaSemanaNum, `${hh}:${mm}`);
+    } else {
+        if (!data) return res.redirect('/mensagens');
+        atualizarMensagemUnica(id, grupoId, texto.trim(), `${data} ${hh}:${mm}`);
+    }
+
+    redirectOk(res, '/mensagens', 'Mensagem atualizada!');
 });
 
 app.post('/mensagens/:id/excluir', requireLogin, (req, res) => {

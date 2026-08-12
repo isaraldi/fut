@@ -245,6 +245,30 @@ function criarMensagemSemanal(grupoId, texto, diaSemana, hora) {
     ).run(grupoId, texto, diaSemana, hora);
 }
 
+function getMensagemAgendada(id) {
+    return db.prepare('SELECT * FROM mensagens_agendadas WHERE id = ?').get(id);
+}
+
+// edição sempre volta o agendamento pro estado "pendente" (mesmo que já tivesse sido
+// enviado) — editar significa reconfigurar quando/o quê deve ser mandado
+function atualizarMensagemUnica(id, grupoId, texto, enviarEm) {
+    db.prepare(
+        `UPDATE mensagens_agendadas
+         SET grupo_id = ?, texto = ?, tipo = 'unica', enviar_em = ?,
+             dia_semana = NULL, hora = NULL, ultimo_envio = NULL, enviada_em = NULL
+         WHERE id = ?`,
+    ).run(grupoId, texto, enviarEm, id);
+}
+
+function atualizarMensagemSemanal(id, grupoId, texto, diaSemana, hora) {
+    db.prepare(
+        `UPDATE mensagens_agendadas
+         SET grupo_id = ?, texto = ?, tipo = 'semanal', dia_semana = ?, hora = ?,
+             enviar_em = NULL, ultimo_envio = NULL, enviada_em = NULL
+         WHERE id = ?`,
+    ).run(grupoId, texto, diaSemana, hora, id);
+}
+
 function getMensagensAgendadas() {
     return db
         .prepare(
@@ -444,6 +468,9 @@ module.exports = {
     getEnqueteOpcoes,
     criarMensagemUnica,
     criarMensagemSemanal,
+    getMensagemAgendada,
+    atualizarMensagemUnica,
+    atualizarMensagemSemanal,
     getMensagensAgendadas,
     getMensagensUnicasParaEnviar,
     getMensagensSemanais,
