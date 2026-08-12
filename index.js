@@ -22,7 +22,10 @@ const {
   getJogadorPorWhatsappId,
   getConfirmadosDaEnquete,
   registrarLog,
+  getEnviosImediatosPendentes,
+  removerEnvioImediato,
 } = require('./db');
+const { balancearTimes, montarTextoListaConfirmadas, montarTextoTimes } = require('./mensagens-prontas');
 
 const client = new Client({
   authStrategy: new LocalAuth(),
@@ -71,6 +74,7 @@ client.on('ready', async () => {
   setInterval(() => {
     checarEnvioAutomaticoDeEnquete();
     checarMensagensAgendadas();
+    checarEnviosImediatos();
   }, 60 * 1000);
   await sincronizarGruposConhecidos();
 });
@@ -379,25 +383,7 @@ async function enviarListaDeConfirmadas(msg) {
   }
 
   const confirmados = getConfirmadosDaEnquete(enquete.id);
-  const mensalistas = confirmados.filter((j) => j.papel === 'mensalista');
-  const avulsas = confirmados.filter((j) => j.papel === 'avulso');
-
-  let texto = `📋 *Lista fechada — ${enquete.titulo}*\n\n`;
-  if (confirmados.length === 0) {
-    texto += 'Ninguém confirmado ainda.';
-  } else {
-    if (mensalistas.length > 0) {
-      texto += `*Mensalistas (${mensalistas.length}):*\n`;
-      mensalistas.forEach((j, i) => { texto += `${i + 1}. ${j.nome}\n`; });
-      texto += '\n';
-    }
-    if (avulsas.length > 0) {
-      texto += `*Avulsas (${avulsas.length}):*\n`;
-      avulsas.forEach((j, i) => { texto += `${i + 1}. ${j.nome}\n`; });
-      texto += '\n';
-    }
-    texto += `Total: ${confirmados.length} confirmada${confirmados.length === 1 ? '' : 's'}`;
-  }
+  const texto = montarTextoListaConfirmadas(enquete, confirmados);
 
   await msg.reply(texto);
   registrarLog(
@@ -405,6 +391,50 @@ async function enviarListaDeConfirmadas(msg) {
     `Lista de confirmadas enviada (${confirmados.length} confirmada(s)) — "${enquete.titulo}"`,
     msg.from.endsWith('@g.us') ? msg.from : null,
   );
+}
+
+// ⚽ SORTEIA E MANDA OS TIMES — funciona em grupo ou em DM, igual !fechar
+async function enviarTimesSorteados(msg) {
+  const enquete = db.prepare('SELECT * FROM enquetes ORDER BY id DESC LIMIT 1').get();
+  if (!enquete) {
+    return msg.reply('⚽ Nenhuma enquete foi aberta ainda, não tem confirmados pra sortear.');
+  }
+
+  const confirmados = getConfirmadosDaEnquete(enquete.id);
+  if (confirmados.length < 2) {
+    return msg.reply('⚽ Confirmados de menos pra sortear times (mínimo 2).');
+  }
+
+  const times = balancearTimes(confirmados);
+  const texto = montarTextoTimes(
+    enquete.titulo,
+    times.timeA.map((j) => j.nome),
+    times.timeB.map((j) => j.nome),
+  );
+
+  await msg.reply(texto);
+  registrarLog(
+    'times', 'sucesso',
+    `Times sorteados e enviados (${confirmados.length} confirmada(s)) — "${enquete.titulo}"`,
+    msg.from.endsWith('@g.us') ? msg.from : null,
+  );
+}
+
+// 📤 FILA DE ENVIO IMEDIATO — botões "mandar pro grupo" do painel caem aqui, já que o painel
+// roda num processo separado e não tem acesso direto ao client do WhatsApp
+async function checarEnviosImediatos() {
+  const pendentes = getEnviosImediatosPendentes();
+  for (const envio of pendentes) {
+    try {
+      await client.sendMessage(envio.grupo_id, envio.texto);
+      registrarLog(envio.tipo, 'sucesso', `${envio.tipo === 'lista' ? 'Lista' : 'Times'} enviado(a) via painel`, envio.grupo_id);
+    } catch (err) {
+      registrarLog(envio.tipo, 'erro', `Falha ao enviar ${envio.tipo} via painel: ${err.message}`, envio.grupo_id);
+      console.error(`Erro ao processar envio imediato #${envio.id}:`, err);
+    } finally {
+      removerEnvioImediato(envio.id);
+    }
+  }
 }
 
 client.on('message', async msg => {
@@ -424,6 +454,11 @@ client.on('message', async msg => {
   // funciona em grupo OU em DM direto com o bot
   if (text === '!fechar') {
     return enviarListaDeConfirmadas(msg);
+  }
+
+  // funciona em grupo OU em DM direto com o bot
+  if (text === '!times') {
+    return enviarTimesSorteados(msg);
   }
 
   // roda em paralelo, sem travar o resto do handler (OCR pode levar alguns segundos)

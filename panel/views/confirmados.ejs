@@ -13,6 +13,12 @@
     <div class="card">
         <h1><%= enquete.titulo %></h1>
         <h2><%= totalVotos %> resposta<%= totalVotos === 1 ? '' : 's' %></h2>
+        <form method="post" action="/confirmados/enviar-lista">
+            <button type="submit" class="btn-icon-label">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+                Mandar lista pro grupo
+            </button>
+        </form>
     </div>
 
     <%- include('_confirmar-manual', { enquete, jogadores }) %>

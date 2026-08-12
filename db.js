@@ -92,10 +92,18 @@ db.exec(`
 
     CREATE TABLE IF NOT EXISTS logs (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        tipo TEXT NOT NULL CHECK(tipo IN ('enquete', 'mensagem', 'comprovante', 'lista')),
+        tipo TEXT NOT NULL CHECK(tipo IN ('enquete', 'mensagem', 'comprovante', 'lista', 'times')),
         nivel TEXT NOT NULL DEFAULT 'sucesso' CHECK(nivel IN ('sucesso', 'aviso', 'erro')),
         mensagem TEXT NOT NULL,
         grupo_id TEXT,
+        criado_em TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS envios_imediatos (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        grupo_id TEXT NOT NULL,
+        texto TEXT NOT NULL,
+        tipo TEXT NOT NULL CHECK(tipo IN ('lista', 'times')),
         criado_em TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
@@ -151,17 +159,17 @@ db.exec(`
     )
 `);
 
-// migração leve: logs.tipo passa a aceitar 'lista' também — diferente da migração de
-// mensagens_agendadas, aqui já existem linhas em produção, então preserva os dados
-// (SQLite não altera CHECK constraint direto, precisa recriar a tabela)
+// migração leve: logs.tipo precisa aceitar 'lista' e 'times' também — já existem linhas em
+// produção, então preserva os dados (SQLite não altera CHECK constraint direto, precisa
+// recriar a tabela)
 const schemaLogs = db
     .prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'logs'")
     .get();
-if (schemaLogs && !schemaLogs.sql.includes("'lista'")) {
+if (schemaLogs && !schemaLogs.sql.includes("'times'")) {
     db.exec(`
         CREATE TABLE logs_novo (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            tipo TEXT NOT NULL CHECK(tipo IN ('enquete', 'mensagem', 'comprovante', 'lista')),
+            tipo TEXT NOT NULL CHECK(tipo IN ('enquete', 'mensagem', 'comprovante', 'lista', 'times')),
             nivel TEXT NOT NULL DEFAULT 'sucesso' CHECK(nivel IN ('sucesso', 'aviso', 'erro')),
             mensagem TEXT NOT NULL,
             grupo_id TEXT,
@@ -234,6 +242,23 @@ function getLogs(tipo, limite = 200) {
                ORDER BY l.id DESC LIMIT ?`,
           );
     return tipo ? query.all(tipo, limite) : query.all(limite);
+}
+
+// fila de "manda isso pro grupo assim que puder" — usada pelos botões do painel (que roda num
+// processo separado do bot, sem acesso direto ao client do WhatsApp). O bot confere essa fila
+// junto com o resto a cada minuto.
+function criarEnvioImediato(grupoId, texto, tipo) {
+    db.prepare(
+        'INSERT INTO envios_imediatos (grupo_id, texto, tipo) VALUES (?, ?, ?)',
+    ).run(grupoId, texto, tipo);
+}
+
+function getEnviosImediatosPendentes() {
+    return db.prepare('SELECT * FROM envios_imediatos ORDER BY id ASC').all();
+}
+
+function removerEnvioImediato(id) {
+    db.prepare('DELETE FROM envios_imediatos WHERE id = ?').run(id);
 }
 
 // registra/atualiza um grupo do WhatsApp que o bot conhece, pra aparecer como opção
@@ -487,6 +512,9 @@ module.exports = {
     getGrupos,
     registrarLog,
     getLogs,
+    criarEnvioImediato,
+    getEnviosImediatosPendentes,
+    removerEnvioImediato,
     getEnqueteOpcoes,
     criarMensagemUnica,
     criarMensagemSemanal,

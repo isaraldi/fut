@@ -18,10 +18,19 @@
     <div class="card">
         <h1><%= enquete.titulo %></h1>
         <h2><%= confirmados.length %> confirmado<%= confirmados.length === 1 ? '' : 's' %></h2>
-        <form method="get" action="/times">
+        <form method="get" action="/times" style="display:inline">
             <button type="submit" class="btn-icon-label">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 3 21 3 21 8"></polyline><line x1="4" y1="20" x2="21" y2="3"></line><polyline points="21 16 21 21 16 21"></polyline><line x1="15" y1="15" x2="21" y2="21"></line><line x1="4" y1="4" x2="9" y2="9"></line></svg>
                 Sortear de novo
+            </button>
+        </form>
+        <form method="post" action="/times/enviar" style="display:inline">
+            <input type="hidden" name="tituloJogo" value="<%= enquete.titulo %>">
+            <% times.timeA.forEach(j => { %><input type="hidden" name="timeA" value="<%= j.nome %>"><% }) %>
+            <% times.timeB.forEach(j => { %><input type="hidden" name="timeB" value="<%= j.nome %>"><% }) %>
+            <button type="submit" class="btn-icon-label secondary">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+                Mandar esses times pro grupo
             </button>
         </form>
     </div>
