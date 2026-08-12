@@ -370,6 +370,43 @@ async function processarPossivelComprovante(msg) {
   }
 }
 
+// 📋 FECHAR LISTA — manda a lista de confirmadas da enquete mais recente. Funciona tanto
+// em grupo quanto em DM direto com o bot; responde sempre no mesmo chat de onde veio o pedido.
+async function enviarListaDeConfirmadas(msg) {
+  const enquete = db.prepare('SELECT * FROM enquetes ORDER BY id DESC LIMIT 1').get();
+  if (!enquete) {
+    return msg.reply('📋 Nenhuma enquete foi aberta ainda, não tem lista pra fechar.');
+  }
+
+  const confirmados = getConfirmadosDaEnquete(enquete.id);
+  const mensalistas = confirmados.filter((j) => j.papel === 'mensalista');
+  const avulsas = confirmados.filter((j) => j.papel === 'avulso');
+
+  let texto = `📋 *Lista fechada — ${enquete.titulo}*\n\n`;
+  if (confirmados.length === 0) {
+    texto += 'Ninguém confirmado ainda.';
+  } else {
+    if (mensalistas.length > 0) {
+      texto += `*Mensalistas (${mensalistas.length}):*\n`;
+      mensalistas.forEach((j, i) => { texto += `${i + 1}. ${j.nome}\n`; });
+      texto += '\n';
+    }
+    if (avulsas.length > 0) {
+      texto += `*Avulsas (${avulsas.length}):*\n`;
+      avulsas.forEach((j, i) => { texto += `${i + 1}. ${j.nome}\n`; });
+      texto += '\n';
+    }
+    texto += `Total: ${confirmados.length} confirmada${confirmados.length === 1 ? '' : 's'}`;
+  }
+
+  await msg.reply(texto);
+  registrarLog(
+    'lista', 'sucesso',
+    `Lista de confirmadas enviada (${confirmados.length} confirmada(s)) — "${enquete.titulo}"`,
+    msg.from.endsWith('@g.us') ? msg.from : null,
+  );
+}
+
 client.on('message', async msg => {
   console.log('msg from:', msg.from);
 
@@ -382,6 +419,11 @@ client.on('message', async msg => {
 
   if (msg.from.endsWith('@g.us') && text === '!sincronizar') {
     return sincronizarElencoDoGrupo(msg);
+  }
+
+  // funciona em grupo OU em DM direto com o bot
+  if (text === '!fechar') {
+    return enviarListaDeConfirmadas(msg);
   }
 
   // roda em paralelo, sem travar o resto do handler (OCR pode levar alguns segundos)

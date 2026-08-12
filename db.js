@@ -92,7 +92,7 @@ db.exec(`
 
     CREATE TABLE IF NOT EXISTS logs (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        tipo TEXT NOT NULL CHECK(tipo IN ('enquete', 'mensagem', 'comprovante')),
+        tipo TEXT NOT NULL CHECK(tipo IN ('enquete', 'mensagem', 'comprovante', 'lista')),
         nivel TEXT NOT NULL DEFAULT 'sucesso' CHECK(nivel IN ('sucesso', 'aviso', 'erro')),
         mensagem TEXT NOT NULL,
         grupo_id TEXT,
@@ -150,6 +150,28 @@ db.exec(`
         criado_em TEXT NOT NULL DEFAULT (datetime('now'))
     )
 `);
+
+// migração leve: logs.tipo passa a aceitar 'lista' também — diferente da migração de
+// mensagens_agendadas, aqui já existem linhas em produção, então preserva os dados
+// (SQLite não altera CHECK constraint direto, precisa recriar a tabela)
+const schemaLogs = db
+    .prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'logs'")
+    .get();
+if (schemaLogs && !schemaLogs.sql.includes("'lista'")) {
+    db.exec(`
+        CREATE TABLE logs_novo (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            tipo TEXT NOT NULL CHECK(tipo IN ('enquete', 'mensagem', 'comprovante', 'lista')),
+            nivel TEXT NOT NULL DEFAULT 'sucesso' CHECK(nivel IN ('sucesso', 'aviso', 'erro')),
+            mensagem TEXT NOT NULL,
+            grupo_id TEXT,
+            criado_em TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+        INSERT INTO logs_novo SELECT * FROM logs;
+        DROP TABLE logs;
+        ALTER TABLE logs_novo RENAME TO logs;
+    `);
+}
 
 // seed das opções padrão (mesmas que já estavam fixas no código)
 const totalOpcoes = db.prepare('SELECT COUNT(*) AS c FROM enquete_opcoes').get().c;
