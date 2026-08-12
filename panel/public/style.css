@@ -450,7 +450,7 @@ label { font-size: 0.85rem; color: var(--muted); display: block; margin-bottom: 
     font-size: 0.95rem;
 }
 
-.hint { color: var(--muted); font-size: 0.85rem; margin-top: -6px; margin-bottom: 10px; }
+.hint { color: var(--muted); font-size: 0.85rem; margin-top: 6px; margin-bottom: 10px; }
 
 .switch-row {
     display: flex;
