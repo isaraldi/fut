@@ -35,24 +35,19 @@
             </div>
         </details>
 
-        <details class="nav-group" <%= grupoAberto(['/elenco']) ? 'open' : '' %>>
-            <summary><span class="icon">👥</span> Jogadores <span class="chevron">▸</span></summary>
-            <div class="nav-sub">
-                <a class="nav-link <%= ativo('/elenco') ? 'active' : '' %>" href="/elenco">Lista</a>
-                <a class="nav-link <%= ativo('/elenco/config') ? 'active' : '' %>" href="/elenco/config">Configurações</a>
-            </div>
-        </details>
-
-        <details class="nav-group" <%= grupoAberto(['/enquete']) ? 'open' : '' %>>
-            <summary><span class="icon">🗳️</span> Enquete <span class="chevron">▸</span></summary>
-            <div class="nav-sub">
-                <a class="nav-link <%= ativo('/enquete/config') ? 'active' : '' %>" href="/enquete/config">Configurações</a>
-            </div>
-        </details>
-
-        <a class="nav-link <%= ativo('/configuracoes/aparencia') ? 'active' : '' %>" href="/configuracoes/aparencia">
-            <span class="icon">🎨</span> Aparência
+        <a class="nav-link <%= ativo('/elenco') ? 'active' : '' %>" href="/elenco">
+            <span class="icon">👥</span> Jogadores
         </a>
+
+        <details class="nav-group" <%= grupoAberto(['/elenco/config', '/jogo/config', '/enquete/config', '/configuracoes']) ? 'open' : '' %>>
+            <summary><span class="icon">⚙️</span> Configurações <span class="chevron">▸</span></summary>
+            <div class="nav-sub">
+                <a class="nav-link <%= ativo('/elenco/config') ? 'active' : '' %>" href="/elenco/config">Jogadores</a>
+                <a class="nav-link <%= ativo('/jogo/config') ? 'active' : '' %>" href="/jogo/config">Jogo</a>
+                <a class="nav-link <%= ativo('/enquete/config') ? 'active' : '' %>" href="/enquete/config">Enquete</a>
+                <a class="nav-link <%= ativo('/configuracoes/aparencia') ? 'active' : '' %>" href="/configuracoes/aparencia">Aparência</a>
+            </div>
+        </details>
     </nav>
 
     <div class="sidebar-footer">

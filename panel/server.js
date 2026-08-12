@@ -501,14 +501,34 @@ app.get('/elenco/:id/historico', requireLogin, (req, res) => {
     });
 });
 
-// ---------- CONFIGURAÇÃO DA ENQUETE (título + opções) ----------
+// ---------- CONFIGURAÇÃO DO JOGO (dia/horário) ----------
+
+app.get('/jogo/config', requireLogin, (req, res) => {
+    res.render('jogo-config', {
+        usuario: req.session.usuario,
+        diaSemana: Number(getConfig('enquete_dia_semana')),
+        hora: getConfig('enquete_hora'),
+        ok: req.query.ok,
+    });
+});
+
+app.post('/jogo/config', requireLogin, (req, res) => {
+    const diaSemana = Number(req.body.diaSemana);
+    const horaH = String(req.body.horaH || '20').padStart(2, '0');
+    const horaM = String(req.body.horaM || '00').padStart(2, '0');
+
+    if (diaSemana >= 0 && diaSemana <= 6) setConfig('enquete_dia_semana', String(diaSemana));
+    setConfig('enquete_hora', `${horaH}:${horaM}`);
+
+    redirectOk(res, '/jogo/config', 'Dia e horário salvos!');
+});
+
+// ---------- CONFIGURAÇÃO DA ENQUETE (envio automático + título + opções) ----------
 
 app.get('/enquete/config', requireLogin, (req, res) => {
     res.render('enquete-config', {
         usuario: req.session.usuario,
         titulo: getConfig('enquete_titulo_template'),
-        diaSemana: Number(getConfig('enquete_dia_semana')),
-        hora: getConfig('enquete_hora'),
         opcoes: getEnqueteOpcoes(),
         autoEnviar: getConfig('enquete_auto_enviar') === '1',
         envioDiaSemana: Number(getConfig('enquete_envio_dia_semana')),
@@ -517,17 +537,6 @@ app.get('/enquete/config', requireLogin, (req, res) => {
         grupoSelecionado: getConfig('enquete_grupo_id'),
         ok: req.query.ok,
     });
-});
-
-app.post('/enquete/config/jogo', requireLogin, (req, res) => {
-    const diaSemana = Number(req.body.diaSemana);
-    const horaH = String(req.body.horaH || '20').padStart(2, '0');
-    const horaM = String(req.body.horaM || '00').padStart(2, '0');
-
-    if (diaSemana >= 0 && diaSemana <= 6) setConfig('enquete_dia_semana', String(diaSemana));
-    setConfig('enquete_hora', `${horaH}:${horaM}`);
-
-    redirectOk(res, '/enquete/config', 'Dia e horário salvos!');
 });
 
 app.post('/enquete/config/auto', requireLogin, (req, res) => {

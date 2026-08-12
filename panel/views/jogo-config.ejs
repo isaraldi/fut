@@ -1,0 +1,50 @@
+<div class="page-header">
+    <div>
+        <h1>Configuração do jogo</h1>
+    </div>
+</div>
+
+<section class="section">
+    <div class="card">
+        <h1>Dia e horário</h1>
+        <p class="hint">
+            A data do próximo jogo é calculada automaticamente a partir do dia da semana escolhido
+            (a próxima ocorrência dele, ou hoje, se hoje já for esse dia). Usada nos tokens
+            <code>{data}</code>/<code>{dia}</code>/<code>{hora}</code> do título da enquete.
+        </p>
+        <form method="post" action="/jogo/config">
+            <div class="form-row">
+                <div>
+                    <label>Dia da semana</label>
+                    <select name="diaSemana">
+                        <option value="0" <%= diaSemana === 0 ? 'selected' : '' %>>Domingo</option>
+                        <option value="1" <%= diaSemana === 1 ? 'selected' : '' %>>Segunda-feira</option>
+                        <option value="2" <%= diaSemana === 2 ? 'selected' : '' %>>Terça-feira</option>
+                        <option value="3" <%= diaSemana === 3 ? 'selected' : '' %>>Quarta-feira</option>
+                        <option value="4" <%= diaSemana === 4 ? 'selected' : '' %>>Quinta-feira</option>
+                        <option value="5" <%= diaSemana === 5 ? 'selected' : '' %>>Sexta-feira</option>
+                        <option value="6" <%= diaSemana === 6 ? 'selected' : '' %>>Sábado</option>
+                    </select>
+                </div>
+                <div>
+                    <label>Horário</label>
+                    <div class="time-select">
+                        <select name="horaH">
+                            <% for (let h = 0; h < 24; h++) { %>
+                                <% const hh = String(h).padStart(2, '0'); %>
+                                <option value="<%= hh %>" <%= hora.split(':')[0] === hh ? 'selected' : '' %>><%= hh %></option>
+                            <% } %>
+                        </select>
+                        <span>:</span>
+                        <select name="horaM">
+                            <% ['00','15','30','45'].forEach(mm => { %>
+                                <option value="<%= mm %>" <%= hora.split(':')[1] === mm ? 'selected' : '' %>><%= mm %></option>
+                            <% }) %>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <input type="submit" value="Salvar">
+        </form>
+    </div>
+</section>
