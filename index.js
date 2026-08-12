@@ -2,7 +2,18 @@ process.env.TZ = 'America/Sao_Paulo'; // dia/hora configurados no painel são se
 
 const { Client, LocalAuth, Poll } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
-const { db, upsertJogador, getConfig, setConfig, upsertGrupo, getEnqueteOpcoes } = require('./db');
+const {
+  db,
+  upsertJogador,
+  getConfig,
+  setConfig,
+  upsertGrupo,
+  getEnqueteOpcoes,
+  getMensagensUnicasParaEnviar,
+  getMensagensSemanais,
+  marcarMensagemEnviada,
+  marcarMensagemSemanalEnviada,
+} = require('./db');
 
 const client = new Client({
   authStrategy: new LocalAuth(),
@@ -48,7 +59,10 @@ client.on('qr', qr => {
 
 client.on('ready', async () => {
   console.log('Bot pronto! 🤖');
-  setInterval(checarEnvioAutomaticoDeEnquete, 60 * 1000);
+  setInterval(() => {
+    checarEnvioAutomaticoDeEnquete();
+    checarMensagensAgendadas();
+  }, 60 * 1000);
   await sincronizarGruposConhecidos();
 });
 
@@ -199,6 +213,40 @@ async function checarEnvioAutomaticoDeEnquete() {
     await abrirEnquete(grupoId);
   } catch (err) {
     console.error('Erro ao enviar enquete automática:', err);
+  }
+}
+
+// ✉️ MENSAGENS AGENDADAS — roda a cada minuto: manda mensagens únicas cujo horário já chegou
+// e mensagens semanais recorrentes no dia/hora configurados
+async function checarMensagensAgendadas() {
+  const unicas = getMensagensUnicasParaEnviar();
+  for (const msg of unicas) {
+    try {
+      await client.sendMessage(msg.grupo_id, msg.texto);
+      marcarMensagemEnviada(msg.id);
+      console.log(`✉️ Mensagem agendada #${msg.id} enviada`);
+    } catch (err) {
+      console.error(`Erro ao enviar mensagem agendada #${msg.id}:`, err);
+    }
+  }
+
+  const agora = new Date();
+  const horaAtual = `${String(agora.getHours()).padStart(2, '0')}:${String(agora.getMinutes()).padStart(2, '0')}`;
+  const hojeLocal = `${agora.getFullYear()}-${String(agora.getMonth() + 1).padStart(2, '0')}-${String(agora.getDate()).padStart(2, '0')}`;
+
+  const semanais = getMensagensSemanais();
+  for (const msg of semanais) {
+    if (msg.dia_semana !== agora.getDay()) continue;
+    if (msg.hora !== horaAtual) continue;
+    if (msg.ultimo_envio === hojeLocal) continue; // já enviada hoje, evita duplicar
+
+    try {
+      await client.sendMessage(msg.grupo_id, msg.texto);
+      marcarMensagemSemanalEnviada(msg.id, hojeLocal);
+      console.log(`✉️ Mensagem semanal #${msg.id} enviada`);
+    } catch (err) {
+      console.error(`Erro ao enviar mensagem semanal #${msg.id}:`, err);
+    }
   }
 }
 

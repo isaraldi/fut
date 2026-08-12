@@ -1,0 +1,153 @@
+<div class="page-header">
+    <div>
+        <h1>Mensagens agendadas</h1>
+    </div>
+</div>
+
+<section class="section">
+    <div class="card">
+        <h1>Agendar mensagem</h1>
+        <p class="hint">
+            O bot manda a mensagem sozinho no grupo escolhido (checagem a cada minuto) — numa data
+            específica (só uma vez) ou toda semana, no mesmo dia e horário.
+        </p>
+        <% if (grupos.length === 0) { %>
+            <p class="hint">
+                ⚠️ Ainda não conheço nenhum grupo. A lista é sincronizada automaticamente quando o
+                bot conecta no WhatsApp — espere o bot ficar online e recarregue esta página.
+            </p>
+        <% } %>
+        <form method="post" action="/mensagens" id="form-mensagem">
+            <div class="form-row">
+                <div>
+                    <label>Grupo de destino</label>
+                    <select name="grupoId" required <%= grupos.length === 0 ? 'disabled' : '' %>>
+                        <option value="" selected disabled>Selecione um grupo</option>
+                        <% grupos.forEach(g => { %>
+                            <option value="<%= g.whatsapp_id %>"><%= g.nome %></option>
+                        <% }) %>
+                    </select>
+                </div>
+            </div>
+            <div>
+                <label>Mensagem</label>
+                <textarea name="texto" rows="4" required></textarea>
+            </div>
+
+            <div class="switch-row">
+                <label class="radio-label"><input type="radio" name="tipo" value="unica" checked> Data específica (só uma vez)</label>
+            </div>
+            <div class="switch-row">
+                <label class="radio-label"><input type="radio" name="tipo" value="semanal"> Toda semana (recorrente)</label>
+            </div>
+
+            <div id="campo-data" class="form-row">
+                <div>
+                    <label>Data</label>
+                    <input type="date" name="data">
+                </div>
+            </div>
+            <div id="campo-dia-semana" class="form-row" style="display:none">
+                <div>
+                    <label>Dia da semana</label>
+                    <select name="diaSemana">
+                        <option value="0">Domingo</option>
+                        <option value="1">Segunda-feira</option>
+                        <option value="2">Terça-feira</option>
+                        <option value="3">Quarta-feira</option>
+                        <option value="4">Quinta-feira</option>
+                        <option value="5">Sexta-feira</option>
+                        <option value="6">Sábado</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div>
+                    <label>Horário</label>
+                    <div class="time-select">
+                        <select name="horaH">
+                            <% for (let h = 0; h < 24; h++) { %>
+                                <% const hh = String(h).padStart(2, '0'); %>
+                                <option value="<%= hh %>" <%= hh === '09' ? 'selected' : '' %>><%= hh %></option>
+                            <% } %>
+                        </select>
+                        <span>:</span>
+                        <select name="horaM">
+                            <% ['00','15','30','45'].forEach(mm => { %>
+                                <option value="<%= mm %>"><%= mm %></option>
+                            <% }) %>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <input type="submit" value="Agendar mensagem" <%= grupos.length === 0 ? 'disabled' : '' %>>
+        </form>
+    </div>
+
+    <div class="card">
+        <h1>Agendamentos (<%= mensagens.length %>)</h1>
+        <% if (mensagens.length === 0) { %>
+            <p class="empty">Nenhuma mensagem agendada ainda.</p>
+        <% } else { %>
+            <table>
+                <thead>
+                    <tr><th>Grupo</th><th>Mensagem</th><th>Quando</th><th>Status</th><th></th></tr>
+                </thead>
+                <tbody>
+                    <% const NOMES_DIA_SEMANA = ['domingo', 'segunda-feira', 'terça-feira', 'quarta-feira', 'quinta-feira', 'sexta-feira', 'sábado']; %>
+                    <% mensagens.forEach(m => { %>
+                        <tr>
+                            <td><%= m.grupo_nome || m.grupo_id %></td>
+                            <td style="max-width:320px;white-space:pre-wrap"><%= m.texto %></td>
+                            <td style="white-space:nowrap">
+                                <% if (m.tipo === 'semanal') { %>
+                                    Toda <%= NOMES_DIA_SEMANA[m.dia_semana] %> às <%= m.hora %>
+                                <% } else { %>
+                                    <%= m.enviar_em %>
+                                <% } %>
+                            </td>
+                            <td>
+                                <% if (m.tipo === 'semanal') { %>
+                                    <span class="badge avulso">Recorrente</span>
+                                    <% if (m.ultimo_envio) { %>
+                                        <div class="hint" style="margin:2px 0 0">último envio: <%= m.ultimo_envio %></div>
+                                    <% } %>
+                                <% } else if (m.enviada_em) { %>
+                                    <span class="badge enviada">Enviada</span>
+                                <% } else { %>
+                                    <span class="badge pendente">Pendente</span>
+                                <% } %>
+                            </td>
+                            <td>
+                                <form method="post" action="/mensagens/<%= m.id %>/excluir" data-confirm="Remover esse agendamento?">
+                                    <button class="icon-btn danger" type="submit" title="Excluir" aria-label="Excluir agendamento">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                    <% }) %>
+                </tbody>
+            </table>
+        <% } %>
+    </div>
+</section>
+
+<script>
+    (function () {
+        var form = document.getElementById('form-mensagem');
+        var campoData = document.getElementById('campo-data');
+        var campoDiaSemana = document.getElementById('campo-dia-semana');
+        var inputData = campoData.querySelector('input[name="data"]');
+
+        form.querySelectorAll('input[name="tipo"]').forEach(function (radio) {
+            radio.addEventListener('change', function () {
+                var semanal = form.querySelector('input[name="tipo"]:checked').value === 'semanal';
+                campoDiaSemana.style.display = semanal ? '' : 'none';
+                campoData.style.display = semanal ? 'none' : '';
+                inputData.required = !semanal;
+            });
+        });
+    })();
+</script>

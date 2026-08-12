@@ -116,6 +116,32 @@ if (!colunasVotos.some((c) => c.name === 'papel')) {
     db.exec('ALTER TABLE votos ADD COLUMN papel TEXT');
 }
 
+// mensagens_agendadas: recria do zero se ainda for o shape antigo (só data específica) —
+// tabela nova, sem dados em produção, então é mais simples que uma migração incremental
+const tabelaMensagensExiste = db
+    .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'mensagens_agendadas'")
+    .get();
+if (tabelaMensagensExiste) {
+    const colunasMensagens = db.prepare('PRAGMA table_info(mensagens_agendadas)').all();
+    if (!colunasMensagens.some((c) => c.name === 'tipo')) {
+        db.exec('DROP TABLE mensagens_agendadas');
+    }
+}
+db.exec(`
+    CREATE TABLE IF NOT EXISTS mensagens_agendadas (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        grupo_id TEXT NOT NULL,
+        texto TEXT NOT NULL,
+        tipo TEXT NOT NULL DEFAULT 'unica' CHECK(tipo IN ('unica', 'semanal')),
+        enviar_em TEXT, -- usado quando tipo='unica': 'YYYY-MM-DD HH:MM' local (America/Sao_Paulo)
+        dia_semana INTEGER, -- usado quando tipo='semanal': 0=domingo ... 6=sábado
+        hora TEXT, -- usado quando tipo='semanal': 'HH:MM'
+        ultimo_envio TEXT, -- usado quando tipo='semanal': data local do último disparo, evita duplicar
+        enviada_em TEXT, -- usado quando tipo='unica': quando foi enviada
+        criado_em TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+`);
+
 // seed das opções padrão (mesmas que já estavam fixas no código)
 const totalOpcoes = db.prepare('SELECT COUNT(*) AS c FROM enquete_opcoes').get().c;
 if (totalOpcoes === 0) {
@@ -170,6 +196,63 @@ function getEnqueteOpcoes() {
     return db
         .prepare('SELECT * FROM enquete_opcoes ORDER BY ordem ASC, id ASC')
         .all();
+}
+
+function criarMensagemUnica(grupoId, texto, enviarEm) {
+    db.prepare(
+        `INSERT INTO mensagens_agendadas (grupo_id, texto, tipo, enviar_em) VALUES (?, ?, 'unica', ?)`,
+    ).run(grupoId, texto, enviarEm);
+}
+
+function criarMensagemSemanal(grupoId, texto, diaSemana, hora) {
+    db.prepare(
+        `INSERT INTO mensagens_agendadas (grupo_id, texto, tipo, dia_semana, hora) VALUES (?, ?, 'semanal', ?, ?)`,
+    ).run(grupoId, texto, diaSemana, hora);
+}
+
+function getMensagensAgendadas() {
+    return db
+        .prepare(
+            `SELECT m.*, g.nome AS grupo_nome
+             FROM mensagens_agendadas m
+             LEFT JOIN grupos g ON g.whatsapp_id = m.grupo_id
+             ORDER BY m.tipo ASC, m.enviar_em DESC, m.dia_semana ASC`,
+        )
+        .all();
+}
+
+// mensagens únicas pendentes cujo horário já chegou (comparação por string funciona
+// porque 'YYYY-MM-DD HH:MM' é ordenável lexicograficamente)
+function getMensagensUnicasParaEnviar() {
+    const agora = new Date();
+    const agoraLocal = `${agora.getFullYear()}-${String(agora.getMonth() + 1).padStart(2, '0')}-${String(agora.getDate()).padStart(2, '0')} ${String(agora.getHours()).padStart(2, '0')}:${String(agora.getMinutes()).padStart(2, '0')}`;
+    return db
+        .prepare(
+            `SELECT * FROM mensagens_agendadas
+             WHERE tipo = 'unica' AND enviada_em IS NULL AND enviar_em <= ?
+             ORDER BY enviar_em ASC`,
+        )
+        .all(agoraLocal);
+}
+
+function getMensagensSemanais() {
+    return db.prepare(`SELECT * FROM mensagens_agendadas WHERE tipo = 'semanal'`).all();
+}
+
+function marcarMensagemEnviada(id) {
+    db.prepare(
+        `UPDATE mensagens_agendadas SET enviada_em = datetime('now') WHERE id = ?`,
+    ).run(id);
+}
+
+function marcarMensagemSemanalEnviada(id, dataLocal) {
+    db.prepare(
+        'UPDATE mensagens_agendadas SET ultimo_envio = ? WHERE id = ?',
+    ).run(dataLocal, id);
+}
+
+function excluirMensagemAgendada(id) {
+    db.prepare('DELETE FROM mensagens_agendadas WHERE id = ?').run(id);
 }
 
 function registrarMudancaPapel(jogadorId, papelAnterior, papelNovo) {
@@ -279,6 +362,14 @@ module.exports = {
     upsertGrupo,
     getGrupos,
     getEnqueteOpcoes,
+    criarMensagemUnica,
+    criarMensagemSemanal,
+    getMensagensAgendadas,
+    getMensagensUnicasParaEnviar,
+    getMensagensSemanais,
+    marcarMensagemEnviada,
+    marcarMensagemSemanalEnviada,
+    excluirMensagemAgendada,
     registrarMudancaPapel,
     getPapelHistorico,
     getConfirmadosDaEnquete,

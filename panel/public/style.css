@@ -344,7 +344,7 @@ tr.jogador-row.editing select.select-badge {
 }
 .badge.mensalista { background: var(--accent-blue-wash); color: var(--accent-blue); }
 .badge.avulso { background: var(--border); color: var(--muted); }
-.badge.pago { background: var(--good-wash); color: var(--good); }
+.badge.pago, .badge.enviada { background: var(--good-wash); color: var(--good); }
 .badge.pendente { background: var(--critical-wash); color: var(--critical); }
 
 .badge.goleira { background: var(--warning-wash); color: var(--warning); }
@@ -402,7 +402,7 @@ a.icon-btn.secondary {
 }
 a.icon-btn.secondary:hover { background: var(--bg); }
 
-input[type=text], input[type=password], input[type=number], input[type=file], select {
+input[type=text], input[type=password], input[type=number], input[type=file], input[type=date], textarea, select {
     width: 100%;
     padding: 8px 10px;
     border-radius: var(--radius-sm);
@@ -412,7 +412,8 @@ input[type=text], input[type=password], input[type=number], input[type=file], se
     margin-bottom: 10px;
     font-size: 0.9rem;
 }
-input:focus, select:focus { outline: 2px solid var(--primary-wash); border-color: var(--primary); }
+textarea { resize: vertical; font-family: inherit; }
+input:focus, select:focus, textarea:focus { outline: 2px solid var(--primary-wash); border-color: var(--primary); }
 
 label { font-size: 0.85rem; color: var(--muted); display: block; margin-bottom: 4px; }
 
@@ -458,10 +459,19 @@ label { font-size: 0.85rem; color: var(--muted); display: block; margin-bottom: 
     gap: 10px;
     margin: 10px 0;
 }
-.switch-row input[type=checkbox] {
+.switch-row input[type=checkbox], .switch-row input[type=radio] {
     width: 18px;
     height: 18px;
     margin: 0;
+}
+.switch-row label.radio-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+    font-size: 0.9rem;
+    color: var(--text);
+    cursor: pointer;
 }
 
 .team-col { flex: 1; min-width: 220px; }

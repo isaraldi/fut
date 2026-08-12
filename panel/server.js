@@ -1,3 +1,5 @@
+process.env.TZ = 'America/Sao_Paulo'; // mesmo fuso do bot, pra data/hora bater com o que o admin configura
+
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
 
 const express = require('express');
@@ -14,6 +16,10 @@ const {
     setConfig,
     getGrupos,
     getEnqueteOpcoes,
+    criarMensagemUnica,
+    criarMensagemSemanal,
+    getMensagensAgendadas,
+    excluirMensagemAgendada,
     registrarMudancaPapel,
     getPapelHistorico,
     getConfirmadosDaEnquete,
@@ -600,6 +606,43 @@ app.post('/enquete/config/opcoes/:id/excluir', requireLogin, (req, res) => {
         Number(req.params.id),
     );
     redirectOk(res, '/enquete/config', 'Opção removida.');
+});
+
+// ---------- MENSAGENS AGENDADAS ----------
+
+app.get('/mensagens', requireLogin, (req, res) => {
+    res.render('mensagens', {
+        usuario: req.session.usuario,
+        mensagens: getMensagensAgendadas(),
+        grupos: getGrupos(),
+        ok: req.query.ok,
+    });
+});
+
+app.post('/mensagens', requireLogin, (req, res) => {
+    const { grupoId, texto, tipo, data, diaSemana, horaH, horaM } = req.body;
+    if (!grupoId || !texto || !texto.trim()) {
+        return res.redirect('/mensagens');
+    }
+
+    const hh = String(horaH || '00').padStart(2, '0');
+    const mm = String(horaM || '00').padStart(2, '0');
+
+    if (tipo === 'semanal') {
+        const diaSemanaNum = Number(diaSemana);
+        if (diaSemanaNum < 0 || diaSemanaNum > 6) return res.redirect('/mensagens');
+        criarMensagemSemanal(grupoId, texto.trim(), diaSemanaNum, `${hh}:${mm}`);
+    } else {
+        if (!data) return res.redirect('/mensagens');
+        criarMensagemUnica(grupoId, texto.trim(), `${data} ${hh}:${mm}`);
+    }
+
+    redirectOk(res, '/mensagens', 'Mensagem agendada!');
+});
+
+app.post('/mensagens/:id/excluir', requireLogin, (req, res) => {
+    excluirMensagemAgendada(Number(req.params.id));
+    redirectOk(res, '/mensagens', 'Agendamento removido.');
 });
 
 // ---------- SORTEIO INTELIGENTE DE TIMES ----------
