@@ -133,6 +133,16 @@ if (!colunasVotos.some((c) => c.name === 'papel')) {
     db.exec('ALTER TABLE votos ADD COLUMN papel TEXT');
 }
 
+// migração leve: enquetes.fechada_em/desafixada_em — controla o "fechamento" manual da
+// lista (o WhatsApp não tem API pra travar uma enquete nativa contra novos votos)
+const colunasEnquetes = db.prepare('PRAGMA table_info(enquetes)').all();
+if (!colunasEnquetes.some((c) => c.name === 'fechada_em')) {
+    db.exec('ALTER TABLE enquetes ADD COLUMN fechada_em TEXT');
+}
+if (!colunasEnquetes.some((c) => c.name === 'desafixada_em')) {
+    db.exec('ALTER TABLE enquetes ADD COLUMN desafixada_em TEXT');
+}
+
 // mensagens_agendadas: recria do zero se ainda for o shape antigo (só data específica) —
 // tabela nova, sem dados em produção, então é mais simples que uma migração incremental
 const tabelaMensagensExiste = db
@@ -259,6 +269,28 @@ function getEnviosImediatosPendentes() {
 
 function removerEnvioImediato(id) {
     db.prepare('DELETE FROM envios_imediatos WHERE id = ?').run(id);
+}
+
+// fecha a lista: novos votos (ou mudanças de voto) da enquete passam a ser ignorados.
+// idempotente — chamar duas vezes não perde a data original do fechamento
+function fecharEnquete(enqueteId) {
+    db.prepare(
+        `UPDATE enquetes SET fechada_em = datetime('now') WHERE id = ? AND fechada_em IS NULL`,
+    ).run(enqueteId);
+}
+
+// enquetes fechadas mas que ainda não foram desafixadas do grupo — o bot confere isso
+// periodicamente, porque fechar pelo painel não tem acesso direto ao client do WhatsApp
+function getEnquetesFechadasNaoDesafixadas() {
+    return db
+        .prepare('SELECT * FROM enquetes WHERE fechada_em IS NOT NULL AND desafixada_em IS NULL')
+        .all();
+}
+
+function marcarEnqueteDesafixada(enqueteId) {
+    db.prepare(
+        `UPDATE enquetes SET desafixada_em = datetime('now') WHERE id = ?`,
+    ).run(enqueteId);
 }
 
 // registra/atualiza um grupo do WhatsApp que o bot conhece, pra aparecer como opção
@@ -515,6 +547,9 @@ module.exports = {
     criarEnvioImediato,
     getEnviosImediatosPendentes,
     removerEnvioImediato,
+    fecharEnquete,
+    getEnquetesFechadasNaoDesafixadas,
+    marcarEnqueteDesafixada,
     getEnqueteOpcoes,
     criarMensagemUnica,
     criarMensagemSemanal,

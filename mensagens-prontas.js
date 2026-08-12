@@ -88,6 +88,7 @@ function montarTextoListaConfirmadas(enquete, confirmados) {
         texto += '\n';
     }
     texto += `Total: ${confirmados.length} confirmada${confirmados.length === 1 ? '' : 's'}`;
+    texto += '\n\n🔒 Lista fechada — votos depois disso não contam mais.';
     return texto;
 }
 

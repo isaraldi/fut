@@ -29,6 +29,7 @@ const {
     getAvaliacoesDaEnquete,
     registrarAvaliacao,
     criarEnvioImediato,
+    fecharEnquete,
 } = require('../db');
 const { balancearTimes, montarTextoListaConfirmadas, montarTextoTimes } = require('../mensagens-prontas');
 
@@ -207,8 +208,9 @@ app.post('/confirmados/enviar-lista', requireLogin, (req, res) => {
     const confirmados = getConfirmadosDaEnquete(enquete.id);
     const texto = montarTextoListaConfirmadas(enquete, confirmados);
     criarEnvioImediato(grupoId, texto, 'lista');
+    fecharEnquete(enquete.id); // novos votos passam a ser ignorados; o bot desafixa a enquete no próximo minuto
 
-    redirectOk(res, '/confirmados', 'Lista enviada! Pode levar até 1 minuto pra aparecer no grupo.');
+    redirectOk(res, '/confirmados', 'Lista enviada e enquete fechada! Pode levar até 1 minuto pra aparecer no grupo.');
 });
 
 // ---------- HOME (resumo geral) ----------

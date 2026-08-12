@@ -24,6 +24,9 @@ const {
   registrarLog,
   getEnviosImediatosPendentes,
   removerEnvioImediato,
+  fecharEnquete,
+  getEnquetesFechadasNaoDesafixadas,
+  marcarEnqueteDesafixada,
 } = require('./db');
 const { balancearTimes, montarTextoListaConfirmadas, montarTextoTimes } = require('./mensagens-prontas');
 
@@ -75,6 +78,7 @@ client.on('ready', async () => {
     checarEnvioAutomaticoDeEnquete();
     checarMensagensAgendadas();
     checarEnviosImediatos();
+    checarEnquetesParaDesafixar();
   }, 60 * 1000);
   await sincronizarGruposConhecidos();
 });
@@ -386,9 +390,10 @@ async function enviarListaDeConfirmadas(msg) {
   const texto = montarTextoListaConfirmadas(enquete, confirmados);
 
   await msg.reply(texto);
+  fecharEnquete(enquete.id); // a partir daqui, novos votos na enquete são ignorados
   registrarLog(
     'lista', 'sucesso',
-    `Lista de confirmadas enviada (${confirmados.length} confirmada(s)) — "${enquete.titulo}"`,
+    `Lista de confirmadas enviada e enquete fechada (${confirmados.length} confirmada(s)) — "${enquete.titulo}"`,
     msg.from.endsWith('@g.us') ? msg.from : null,
   );
 }
@@ -433,6 +438,25 @@ async function checarEnviosImediatos() {
       console.error(`Erro ao processar envio imediato #${envio.id}:`, err);
     } finally {
       removerEnvioImediato(envio.id);
+    }
+  }
+}
+
+// 📌 DESAFIXA ENQUETES JÁ FECHADAS — fechar pelo painel só grava no banco (processo sem
+// client do WhatsApp), então o bot confere aqui e desafixa de fato a mensagem no grupo
+async function checarEnquetesParaDesafixar() {
+  const pendentes = getEnquetesFechadasNaoDesafixadas();
+  for (const enquete of pendentes) {
+    try {
+      const msgOriginal = await client.getMessageById(enquete.message_id);
+      if (msgOriginal) {
+        const desafixou = await msgOriginal.unpin();
+        if (!desafixou) console.log(`⚠️ Não consegui desafixar a enquete #${enquete.id} (bot é admin do grupo?)`);
+      }
+    } catch (err) {
+      console.error(`Erro ao desafixar enquete #${enquete.id}:`, err);
+    } finally {
+      marcarEnqueteDesafixada(enquete.id);
     }
   }
 }
@@ -596,9 +620,13 @@ client.on('vote_update', async vote => {
     if (!msgId) return;
 
     const enquete = db
-      .prepare('SELECT id FROM enquetes WHERE message_id = ?')
+      .prepare('SELECT * FROM enquetes WHERE message_id = ?')
       .get(msgId);
     if (!enquete) return; // enquete de outra origem, ignora
+    if (enquete.fechada_em) {
+      console.log(`🔒 Voto ignorado — enquete #${enquete.id} já está com a lista fechada`);
+      return;
+    }
 
     const idCanonico = await resolverIdCanonico(vote.voter);
     const contact = await client.getContactById(idCanonico);
