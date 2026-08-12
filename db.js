@@ -255,6 +255,49 @@ function excluirMensagemAgendada(id) {
     db.prepare('DELETE FROM mensagens_agendadas WHERE id = ?').run(id);
 }
 
+// marca (só liga, nunca desliga) o pagamento da mensalidade de um mês — usado tanto pelo
+// toggle manual do painel quanto pela leitura automática de comprovante no grupo
+function marcarPagamentoMensalista(jogadorId, mesReferencia) {
+    const atual = db
+        .prepare('SELECT * FROM pagamentos WHERE jogador_id = ? AND mes_referencia = ?')
+        .get(jogadorId, mesReferencia);
+
+    if (atual) {
+        if (!atual.pago) {
+            db.prepare(
+                "UPDATE pagamentos SET pago = 1, atualizado_em = datetime('now') WHERE id = ?",
+            ).run(atual.id);
+        }
+    } else {
+        db.prepare(
+            'INSERT INTO pagamentos (jogador_id, mes_referencia, pago) VALUES (?, ?, 1)',
+        ).run(jogadorId, mesReferencia);
+    }
+}
+
+// mesma ideia, mas pro pagamento avulso de um jogo específico
+function marcarPagamentoAvulso(jogadorId, enqueteId) {
+    const atual = db
+        .prepare('SELECT * FROM pagamentos_avulsos WHERE jogador_id = ? AND enquete_id = ?')
+        .get(jogadorId, enqueteId);
+
+    if (atual) {
+        if (!atual.pago) {
+            db.prepare(
+                "UPDATE pagamentos_avulsos SET pago = 1, atualizado_em = datetime('now') WHERE id = ?",
+            ).run(atual.id);
+        }
+    } else {
+        db.prepare(
+            'INSERT INTO pagamentos_avulsos (jogador_id, enquete_id, pago) VALUES (?, ?, 1)',
+        ).run(jogadorId, enqueteId);
+    }
+}
+
+function getJogadorPorWhatsappId(whatsappId) {
+    return db.prepare('SELECT * FROM jogadores WHERE whatsapp_id = ?').get(whatsappId);
+}
+
 function registrarMudancaPapel(jogadorId, papelAnterior, papelNovo) {
     db.prepare(
         'INSERT INTO papel_historico (jogador_id, papel_anterior, papel_novo) VALUES (?, ?, ?)',
@@ -370,6 +413,9 @@ module.exports = {
     marcarMensagemEnviada,
     marcarMensagemSemanalEnviada,
     excluirMensagemAgendada,
+    marcarPagamentoMensalista,
+    marcarPagamentoAvulso,
+    getJogadorPorWhatsappId,
     registrarMudancaPapel,
     getPapelHistorico,
     getConfirmadosDaEnquete,

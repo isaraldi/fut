@@ -1,6 +1,10 @@
 process.env.TZ = 'America/Sao_Paulo'; // dia/hora configurados no painel são sempre no horário de Brasília
 
+const os = require('os');
+const fs = require('fs');
+const path = require('path');
 const { Client, LocalAuth, Poll } = require('whatsapp-web.js');
+const { createWorker } = require('tesseract.js');
 const qrcode = require('qrcode-terminal');
 const {
   db,
@@ -13,6 +17,10 @@ const {
   getMensagensSemanais,
   marcarMensagemEnviada,
   marcarMensagemSemanalEnviada,
+  marcarPagamentoMensalista,
+  marcarPagamentoAvulso,
+  getJogadorPorWhatsappId,
+  getConfirmadosDaEnquete,
 } = require('./db');
 
 const client = new Client({
@@ -250,6 +258,79 @@ async function checarMensagensAgendadas() {
   }
 }
 
+// 🧾 COMPROVANTE DE PAGAMENTO — OCR local (tesseract.js, roda em WASM, sem shell out)
+// lazy + reaproveitado entre chamadas, pra não recarregar o modelo a cada imagem
+let ocrWorkerPromise = null;
+function getOcrWorker() {
+  if (!ocrWorkerPromise) {
+    ocrWorkerPromise = createWorker('por', undefined, {
+      cachePath: path.join(__dirname, 'data', 'tesseract-cache'),
+    });
+  }
+  return ocrWorkerPromise;
+}
+
+// sinais de que a imagem é um comprovante de pagamento e não só uma foto qualquer do grupo —
+// sem isso, QUALQUER imagem postada por uma mensalista marcaria pagamento sozinha
+const PALAVRAS_COMPROVANTE = [
+  'comprovante', 'pix', 'transferência', 'transferencia', 'recibo',
+  'pagamento', 'ted', 'boleto', 'transação', 'transacao',
+];
+
+async function processarPossivelComprovante(msg) {
+  let caminhoTemp;
+  try {
+    const media = await msg.downloadMedia();
+    if (!media || !media.mimetype || !media.mimetype.startsWith('image/')) return;
+
+    const extensao = media.mimetype.split('/')[1] || 'jpg';
+    caminhoTemp = path.join(os.tmpdir(), `comprovante-${Date.now()}-${Math.random().toString(36).slice(2)}.${extensao}`);
+    fs.writeFileSync(caminhoTemp, Buffer.from(media.data, 'base64'));
+
+    const worker = await getOcrWorker();
+    const { data: { text } } = await worker.recognize(caminhoTemp);
+    const textoLower = text.toLowerCase();
+
+    const pareceComprovante =
+      PALAVRAS_COMPROVANTE.some((p) => textoLower.includes(p)) && /r\$\s?\d/.test(textoLower);
+    if (!pareceComprovante) return;
+
+    const idCanonico = await resolverIdCanonico(getUserId(msg));
+    const jogador = getJogadorPorWhatsappId(idCanonico);
+    if (!jogador) {
+      console.log(`🧾 Comprovante detectado, mas remetente ${idCanonico} não está no elenco`);
+      return;
+    }
+
+    if (jogador.papel === 'mensalista') {
+      const mes = new Date().toISOString().slice(0, 7); // mesmo cálculo do painel (mesAtual())
+      marcarPagamentoMensalista(jogador.id, mes);
+      console.log(`🧾 Comprovante de ${jogador.nome} reconhecido — mensalidade de ${mes} marcada como paga`);
+    } else {
+      const enquete = db.prepare('SELECT * FROM enquetes ORDER BY id DESC LIMIT 1').get();
+      if (!enquete) return;
+      const confirmado = getConfirmadosDaEnquete(enquete.id)
+        .find((j) => j.id === jogador.id && j.papel === 'avulso');
+      if (!confirmado) {
+        console.log(`🧾 Comprovante de ${jogador.nome} reconhecido, mas ela não confirmou como avulsa no jogo mais recente`);
+        return;
+      }
+      marcarPagamentoAvulso(jogador.id, enquete.id);
+      console.log(`🧾 Comprovante de ${jogador.nome} reconhecido — pagamento avulso do jogo #${enquete.id} marcado como pago`);
+    }
+
+    try {
+      await msg.react('✅');
+    } catch (err) {
+      // reação é só feedback visual, não crítico
+    }
+  } catch (err) {
+    console.error('Erro ao processar possível comprovante:', err);
+  } finally {
+    if (caminhoTemp) fs.unlink(caminhoTemp, () => {});
+  }
+}
+
 client.on('message', async msg => {
   console.log('msg from:', msg.from);
 
@@ -262,6 +343,13 @@ client.on('message', async msg => {
 
   if (msg.from.endsWith('@g.us') && text === '!sincronizar') {
     return sincronizarElencoDoGrupo(msg);
+  }
+
+  // roda em paralelo, sem travar o resto do handler (OCR pode levar alguns segundos)
+  if (msg.from.endsWith('@g.us') && msg.hasMedia && msg.type === 'image') {
+    processarPossivelComprovante(msg).catch((err) =>
+      console.error('Erro ao processar possível comprovante:', err),
+    );
   }
 
   const config = groupConfigs[msg.from];
