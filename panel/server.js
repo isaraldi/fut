@@ -15,6 +15,7 @@ const {
     getConfig,
     setConfig,
     getGrupos,
+    getLogs,
     getEnqueteOpcoes,
     criarMensagemUnica,
     criarMensagemSemanal,
@@ -643,6 +644,17 @@ app.post('/mensagens', requireLogin, (req, res) => {
 app.post('/mensagens/:id/excluir', requireLogin, (req, res) => {
     excluirMensagemAgendada(Number(req.params.id));
     redirectOk(res, '/mensagens', 'Agendamento removido.');
+});
+
+// ---------- LOGS (enquete/mensagem/comprovante) ----------
+
+app.get('/logs', requireLogin, (req, res) => {
+    const tipo = ['enquete', 'mensagem', 'comprovante'].includes(req.query.tipo) ? req.query.tipo : null;
+    res.render('logs', {
+        usuario: req.session.usuario,
+        logs: getLogs(tipo),
+        tipo,
+    });
 });
 
 // ---------- SORTEIO INTELIGENTE DE TIMES ----------

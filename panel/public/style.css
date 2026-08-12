@@ -344,8 +344,9 @@ tr.jogador-row.editing select.select-badge {
 }
 .badge.mensalista { background: var(--accent-blue-wash); color: var(--accent-blue); }
 .badge.avulso { background: var(--border); color: var(--muted); }
-.badge.pago, .badge.enviada { background: var(--good-wash); color: var(--good); }
-.badge.pendente { background: var(--critical-wash); color: var(--critical); }
+.badge.pago, .badge.enviada, .badge.sucesso { background: var(--good-wash); color: var(--good); }
+.badge.pendente, .badge.erro { background: var(--critical-wash); color: var(--critical); }
+.badge.aviso { background: var(--warning-wash); color: var(--warning); }
 
 .badge.goleira { background: var(--warning-wash); color: var(--warning); }
 .badge.defesa { background: var(--accent-blue-wash); color: var(--accent-blue); }
@@ -373,6 +374,20 @@ button.secondary {
 button.secondary:hover { background: var(--bg); color: var(--text); }
 
 button.danger { background: var(--critical); }
+
+.filter-pills { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+.filter-pills a {
+    display: inline-block;
+    padding: 6px 14px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    font-size: 0.85rem;
+    font-weight: 600;
+    text-decoration: none;
+}
+.filter-pills a:hover { background: var(--bg); color: var(--text); }
+.filter-pills a.active { background: var(--primary); color: white; border-color: var(--primary); }
 button.danger:hover { filter: brightness(0.9); }
 
 button.edit-toggle.active, button.edit-toggle.active:hover { background: var(--primary-wash); color: var(--primary); border-color: transparent; }

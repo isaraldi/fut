@@ -1,0 +1,35 @@
+<div class="page-header">
+    <div>
+        <h1>Logs</h1>
+    </div>
+</div>
+
+<div class="filter-pills">
+    <a href="/logs" class="<%= !tipo ? 'active' : '' %>">Todos</a>
+    <a href="/logs?tipo=enquete" class="<%= tipo === 'enquete' ? 'active' : '' %>">Enquete</a>
+    <a href="/logs?tipo=mensagem" class="<%= tipo === 'mensagem' ? 'active' : '' %>">Mensagem</a>
+    <a href="/logs?tipo=comprovante" class="<%= tipo === 'comprovante' ? 'active' : '' %>">Comprovante</a>
+</div>
+
+<div class="card">
+    <% if (logs.length === 0) { %>
+        <p class="empty">Nenhum evento registrado ainda.</p>
+    <% } else { %>
+        <table>
+            <thead>
+                <tr><th>Quando</th><th>Tipo</th><th>Status</th><th>Grupo</th><th>Detalhe</th></tr>
+            </thead>
+            <tbody>
+                <% logs.forEach(l => { %>
+                    <tr>
+                        <td style="white-space:nowrap"><%= l.criado_em %></td>
+                        <td style="text-transform:capitalize"><%= l.tipo %></td>
+                        <td><span class="badge <%= l.nivel %>"><%= l.nivel %></span></td>
+                        <td><%= l.grupo_nome || '—' %></td>
+                        <td><%= l.mensagem %></td>
+                    </tr>
+                <% }) %>
+            </tbody>
+        </table>
+    <% } %>
+</div>

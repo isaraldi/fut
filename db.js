@@ -90,6 +90,15 @@ db.exec(`
         atualizado_em TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
+    CREATE TABLE IF NOT EXISTS logs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        tipo TEXT NOT NULL CHECK(tipo IN ('enquete', 'mensagem', 'comprovante')),
+        nivel TEXT NOT NULL DEFAULT 'sucesso' CHECK(nivel IN ('sucesso', 'aviso', 'erro')),
+        mensagem TEXT NOT NULL,
+        grupo_id TEXT,
+        criado_em TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
     CREATE TABLE IF NOT EXISTS avaliacoes (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         enquete_id INTEGER NOT NULL REFERENCES enquetes(id) ON DELETE CASCADE,
@@ -177,6 +186,32 @@ function setConfig(chave, valor) {
         `INSERT INTO configuracoes (chave, valor) VALUES (?, ?)
          ON CONFLICT(chave) DO UPDATE SET valor = excluded.valor`,
     ).run(chave, valor);
+}
+
+// registra um evento (enquete/mensagem/comprovante) pra tela de Logs do painel.
+// mantém só os últimos 1000 registros, pra não crescer pra sempre
+function registrarLog(tipo, nivel, mensagem, grupoId = null) {
+    db.prepare(
+        'INSERT INTO logs (tipo, nivel, mensagem, grupo_id) VALUES (?, ?, ?, ?)',
+    ).run(tipo, nivel, mensagem, grupoId);
+    db.prepare(
+        'DELETE FROM logs WHERE id NOT IN (SELECT id FROM logs ORDER BY id DESC LIMIT 1000)',
+    ).run();
+}
+
+function getLogs(tipo, limite = 200) {
+    const query = tipo
+        ? db.prepare(
+              `SELECT l.*, g.nome AS grupo_nome FROM logs l
+               LEFT JOIN grupos g ON g.whatsapp_id = l.grupo_id
+               WHERE l.tipo = ? ORDER BY l.id DESC LIMIT ?`,
+          )
+        : db.prepare(
+              `SELECT l.*, g.nome AS grupo_nome FROM logs l
+               LEFT JOIN grupos g ON g.whatsapp_id = l.grupo_id
+               ORDER BY l.id DESC LIMIT ?`,
+          );
+    return tipo ? query.all(tipo, limite) : query.all(limite);
 }
 
 // registra/atualiza um grupo do WhatsApp que o bot conhece, pra aparecer como opção
@@ -404,6 +439,8 @@ module.exports = {
     setConfig,
     upsertGrupo,
     getGrupos,
+    registrarLog,
+    getLogs,
     getEnqueteOpcoes,
     criarMensagemUnica,
     criarMensagemSemanal,

@@ -39,6 +39,10 @@
             <span class="icon">👥</span> Jogadores
         </a>
 
+        <a class="nav-link <%= caminho.startsWith('/logs') ? 'active' : '' %>" href="/logs">
+            <span class="icon">📋</span> Logs
+        </a>
+
         <details class="nav-group" <%= grupoAberto(['/elenco/config', '/jogo/config', '/enquete/config', '/mensagens', '/configuracoes']) ? 'open' : '' %>>
             <summary><span class="icon">⚙️</span> Configurações <span class="chevron">▸</span></summary>
             <div class="nav-sub">

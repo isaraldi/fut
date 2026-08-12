@@ -21,6 +21,7 @@ const {
   marcarPagamentoAvulso,
   getJogadorPorWhatsappId,
   getConfirmadosDaEnquete,
+  registrarLog,
 } = require('./db');
 
 const client = new Client({
@@ -155,7 +156,7 @@ function proximoDiaDeJogo() {
 // 🗳️ ENQUETE NATIVA + registro no banco pro painel
 // groupId: grupo de destino. msgParaErro: opcional, só usado pra responder erros
 // quando a enquete foi disparada manualmente via !enquete (o envio automático não tem msg).
-async function abrirEnquete(groupId, msgParaErro) {
+async function abrirEnquete(groupId, msgParaErro, origem = 'manual') {
   const { data, dia } = proximoDiaDeJogo();
   const hora = getConfig('enquete_hora') || '20:00';
   const template = getConfig('enquete_titulo_template') || 'JOGO DE QUARTA - {data}';
@@ -167,6 +168,7 @@ async function abrirEnquete(groupId, msgParaErro) {
   const opcoes = getEnqueteOpcoes();
   if (opcoes.length < 2) {
     const erro = '❌ Configure pelo menos 2 opções da enquete no painel antes de abrir.';
+    registrarLog('enquete', 'erro', `Falha ao abrir enquete (${origem}): menos de 2 opções configuradas`, groupId);
     if (msgParaErro) return msgParaErro.reply(erro);
     console.error(erro);
     return;
@@ -184,6 +186,7 @@ async function abrirEnquete(groupId, msgParaErro) {
     'INSERT INTO enquetes (message_id, group_id, titulo) VALUES (?, ?, ?)'
   ).run(sent.id._serialized, groupId, titulo);
 
+  registrarLog('enquete', 'sucesso', `Enquete "${titulo}" enviada (${origem})`, groupId);
   console.log(`🗳️ Enquete criada: ${titulo}`);
 
   // fixa por 7 dias; só funciona se o número do bot for admin do grupo
@@ -218,22 +221,30 @@ async function checarEnvioAutomaticoDeEnquete() {
   setConfig('enquete_auto_ultimo_envio', hojeLocal);
   console.log('⏰ Horário configurado atingido, enviando enquete automaticamente...');
   try {
-    await abrirEnquete(grupoId);
+    await abrirEnquete(grupoId, null, 'automática');
   } catch (err) {
+    registrarLog('enquete', 'erro', `Falha ao enviar enquete automática: ${err.message}`, grupoId);
     console.error('Erro ao enviar enquete automática:', err);
   }
 }
 
 // ✉️ MENSAGENS AGENDADAS — roda a cada minuto: manda mensagens únicas cujo horário já chegou
 // e mensagens semanais recorrentes no dia/hora configurados
+function resumoTexto(texto, tamanho = 60) {
+  const limpo = texto.replace(/\s+/g, ' ').trim();
+  return limpo.length > tamanho ? `${limpo.slice(0, tamanho)}…` : limpo;
+}
+
 async function checarMensagensAgendadas() {
   const unicas = getMensagensUnicasParaEnviar();
   for (const msg of unicas) {
     try {
       await client.sendMessage(msg.grupo_id, msg.texto);
       marcarMensagemEnviada(msg.id);
+      registrarLog('mensagem', 'sucesso', `Mensagem única enviada: "${resumoTexto(msg.texto)}"`, msg.grupo_id);
       console.log(`✉️ Mensagem agendada #${msg.id} enviada`);
     } catch (err) {
+      registrarLog('mensagem', 'erro', `Falha ao enviar mensagem única #${msg.id}: ${err.message}`, msg.grupo_id);
       console.error(`Erro ao enviar mensagem agendada #${msg.id}:`, err);
     }
   }
@@ -251,8 +262,10 @@ async function checarMensagensAgendadas() {
     try {
       await client.sendMessage(msg.grupo_id, msg.texto);
       marcarMensagemSemanalEnviada(msg.id, hojeLocal);
+      registrarLog('mensagem', 'sucesso', `Mensagem semanal enviada: "${resumoTexto(msg.texto)}"`, msg.grupo_id);
       console.log(`✉️ Mensagem semanal #${msg.id} enviada`);
     } catch (err) {
+      registrarLog('mensagem', 'erro', `Falha ao enviar mensagem semanal #${msg.id}: ${err.message}`, msg.grupo_id);
       console.error(`Erro ao enviar mensagem semanal #${msg.id}:`, err);
     }
   }
@@ -291,20 +304,34 @@ async function processarPossivelComprovante(msg) {
     const { data: { text } } = await worker.recognize(caminhoTemp);
     const textoLower = text.toLowerCase();
 
-    const pareceComprovante =
-      PALAVRAS_COMPROVANTE.some((p) => textoLower.includes(p)) && /r\$\s?\d/.test(textoLower);
-    if (!pareceComprovante) return;
+    const temPalavraChave = PALAVRAS_COMPROVANTE.some((p) => textoLower.includes(p));
+    const temValor = /r\$\s?\d/.test(textoLower);
+
+    // nenhum sinal de comprovante (foto do jogo, meme, etc) — não loga, isso é ruído
+    if (!temPalavraChave && !temValor) return;
+
+    // achou só um dos dois sinais — provavelmente é um comprovante, mas o OCR não confirmou
+    // os dois; vale registrar pra você conferir manualmente, mas não marca pagamento sozinho
+    if (!(temPalavraChave && temValor)) {
+      registrarLog(
+        'comprovante', 'aviso',
+        `Imagem parece comprovante mas não deu pra confirmar (OCR: "${resumoTexto(text, 100)}")`,
+        msg.from,
+      );
+      return;
+    }
 
     const idCanonico = await resolverIdCanonico(getUserId(msg));
     const jogador = getJogadorPorWhatsappId(idCanonico);
     if (!jogador) {
-      console.log(`🧾 Comprovante detectado, mas remetente ${idCanonico} não está no elenco`);
+      registrarLog('comprovante', 'aviso', `Comprovante reconhecido, mas remetente (${idCanonico}) não está no elenco`, msg.from);
       return;
     }
 
     if (jogador.papel === 'mensalista') {
       const mes = new Date().toISOString().slice(0, 7); // mesmo cálculo do painel (mesAtual())
       marcarPagamentoMensalista(jogador.id, mes);
+      registrarLog('comprovante', 'sucesso', `Comprovante de ${jogador.nome} reconhecido — mensalidade de ${mes} marcada como paga`, msg.from);
       console.log(`🧾 Comprovante de ${jogador.nome} reconhecido — mensalidade de ${mes} marcada como paga`);
     } else {
       const enquete = db.prepare('SELECT * FROM enquetes ORDER BY id DESC LIMIT 1').get();
@@ -312,10 +339,11 @@ async function processarPossivelComprovante(msg) {
       const confirmado = getConfirmadosDaEnquete(enquete.id)
         .find((j) => j.id === jogador.id && j.papel === 'avulso');
       if (!confirmado) {
-        console.log(`🧾 Comprovante de ${jogador.nome} reconhecido, mas ela não confirmou como avulsa no jogo mais recente`);
+        registrarLog('comprovante', 'aviso', `Comprovante de ${jogador.nome} reconhecido, mas ela não confirmou como avulsa no jogo mais recente`, msg.from);
         return;
       }
       marcarPagamentoAvulso(jogador.id, enquete.id);
+      registrarLog('comprovante', 'sucesso', `Comprovante de ${jogador.nome} reconhecido — pagamento avulso do jogo #${enquete.id} marcado como pago`, msg.from);
       console.log(`🧾 Comprovante de ${jogador.nome} reconhecido — pagamento avulso do jogo #${enquete.id} marcado como pago`);
     }
 
@@ -325,6 +353,7 @@ async function processarPossivelComprovante(msg) {
       // reação é só feedback visual, não crítico
     }
   } catch (err) {
+    registrarLog('comprovante', 'erro', `Erro ao processar possível comprovante: ${err.message}`, msg.from);
     console.error('Erro ao processar possível comprovante:', err);
   } finally {
     if (caminhoTemp) fs.unlink(caminhoTemp, () => {});
