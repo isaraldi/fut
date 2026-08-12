@@ -81,8 +81,18 @@ async function sincronizarGruposConhecidos() {
   try {
     const chats = await client.getChats();
     const grupos = chats.filter(c => c.isGroup);
-    grupos.forEach(g => upsertGrupo(g.id._serialized, g.name));
-    console.log(`📋 ${grupos.length} grupo(s) sincronizado(s) pro painel`);
+    let sincronizados = 0;
+    for (const g of grupos) {
+      try {
+        // alguns grupos podem não ter nome (ex: grupo sem assunto definido) — usa o id como
+        // fallback, senão um único grupo sem nome quebrava a sincronização de todos os outros
+        upsertGrupo(g.id._serialized, g.name || g.id._serialized);
+        sincronizados++;
+      } catch (err) {
+        console.error(`Erro ao sincronizar grupo ${g.id._serialized}:`, err);
+      }
+    }
+    console.log(`📋 ${sincronizados} grupo(s) sincronizado(s) pro painel`);
   } catch (err) {
     console.error('Erro ao sincronizar grupos:', err);
   }
