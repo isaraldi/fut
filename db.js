@@ -78,6 +78,12 @@ db.exec(`
         alterado_em TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
+    CREATE TABLE IF NOT EXISTS grupos (
+        whatsapp_id TEXT PRIMARY KEY,
+        nome TEXT NOT NULL,
+        atualizado_em TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
     CREATE TABLE IF NOT EXISTS avaliacoes (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         enquete_id INTEGER NOT NULL REFERENCES enquetes(id) ON DELETE CASCADE,
@@ -118,8 +124,12 @@ if (totalOpcoes === 0) {
 const DEFAULT_CONFIG = {
     enquete_titulo_template: 'JOGO DE QUARTA - {data}',
     elenco_auto_incluir_grupo: '0',
-    enquete_dia_semana: '3', // 0=domingo ... 6=sábado (3=quarta, mantém o padrão atual)
-    enquete_hora: '20:00',
+    enquete_dia_semana: '3', // dia do JOGO: 0=domingo ... 6=sábado (3=quarta, mantém o padrão atual) — usado nos tokens {data}/{dia}/{hora} do título
+    enquete_hora: '20:00', // horário do JOGO
+    enquete_auto_enviar: '0',
+    enquete_envio_dia_semana: '1', // dia em que a ENQUETE é disparada (independente do dia do jogo)
+    enquete_envio_hora: '09:00', // horário em que a ENQUETE é disparada
+    enquete_grupo_id: '', // preenchido automaticamente na 1ª vez que alguém manda !enquete no grupo
 };
 
 function getConfig(chave) {
@@ -135,6 +145,19 @@ function setConfig(chave, valor) {
         `INSERT INTO configuracoes (chave, valor) VALUES (?, ?)
          ON CONFLICT(chave) DO UPDATE SET valor = excluded.valor`,
     ).run(chave, valor);
+}
+
+// registra/atualiza um grupo do WhatsApp que o bot conhece, pra aparecer como opção
+// no seletor de "pra qual grupo mandar a enquete automática" no painel
+function upsertGrupo(whatsappId, nome) {
+    db.prepare(
+        `INSERT INTO grupos (whatsapp_id, nome, atualizado_em) VALUES (?, ?, datetime('now'))
+         ON CONFLICT(whatsapp_id) DO UPDATE SET nome = excluded.nome, atualizado_em = datetime('now')`,
+    ).run(whatsappId, nome);
+}
+
+function getGrupos() {
+    return db.prepare('SELECT * FROM grupos ORDER BY nome ASC').all();
 }
 
 function getEnqueteOpcoes() {
@@ -247,6 +270,8 @@ module.exports = {
     upsertJogador,
     getConfig,
     setConfig,
+    upsertGrupo,
+    getGrupos,
     getEnqueteOpcoes,
     registrarMudancaPapel,
     getPapelHistorico,

@@ -48,6 +48,72 @@
             <input type="submit" value="Salvar">
         </form>
     </div>
+
+    <div class="card">
+        <h1>Envio automático</h1>
+        <p class="hint">
+            Dia e horário em que a <strong>enquete é disparada</strong> — diferente do dia/horário
+            do jogo configurado acima (que só define a data que aparece no texto da enquete).
+            Ex: jogo quarta-feira às 20h, mas a enquete pode ser mandada segunda-feira de manhã.
+        </p>
+        <% if (grupos.length === 0) { %>
+            <p class="hint">
+                ⚠️ Ainda não conheço nenhum grupo. A lista é sincronizada automaticamente quando o
+                bot conecta no WhatsApp — espere o bot ficar online e recarregue esta página.
+            </p>
+        <% } %>
+        <form method="post" action="/enquete/config/auto">
+            <div class="form-row">
+                <div>
+                    <label>Grupo de destino</label>
+                    <select name="grupoId" <%= grupos.length === 0 ? 'disabled' : '' %>>
+                        <% if (!grupoSelecionado) { %>
+                            <option value="" selected disabled>Selecione um grupo</option>
+                        <% } %>
+                        <% grupos.forEach(g => { %>
+                            <option value="<%= g.whatsapp_id %>" <%= grupoSelecionado === g.whatsapp_id ? 'selected' : '' %>><%= g.nome %></option>
+                        <% }) %>
+                    </select>
+                </div>
+            </div>
+            <div class="form-row">
+                <div>
+                    <label>Dia da semana do envio</label>
+                    <select name="envioDiaSemana">
+                        <option value="0" <%= envioDiaSemana === 0 ? 'selected' : '' %>>Domingo</option>
+                        <option value="1" <%= envioDiaSemana === 1 ? 'selected' : '' %>>Segunda-feira</option>
+                        <option value="2" <%= envioDiaSemana === 2 ? 'selected' : '' %>>Terça-feira</option>
+                        <option value="3" <%= envioDiaSemana === 3 ? 'selected' : '' %>>Quarta-feira</option>
+                        <option value="4" <%= envioDiaSemana === 4 ? 'selected' : '' %>>Quinta-feira</option>
+                        <option value="5" <%= envioDiaSemana === 5 ? 'selected' : '' %>>Sexta-feira</option>
+                        <option value="6" <%= envioDiaSemana === 6 ? 'selected' : '' %>>Sábado</option>
+                    </select>
+                </div>
+                <div>
+                    <label>Horário do envio</label>
+                    <div class="time-select">
+                        <select name="envioHoraH">
+                            <% for (let h = 0; h < 24; h++) { %>
+                                <% const hh = String(h).padStart(2, '0'); %>
+                                <option value="<%= hh %>" <%= envioHora.split(':')[0] === hh ? 'selected' : '' %>><%= hh %></option>
+                            <% } %>
+                        </select>
+                        <span>:</span>
+                        <select name="envioHoraM">
+                            <% ['00','15','30','45'].forEach(mm => { %>
+                                <option value="<%= mm %>" <%= envioHora.split(':')[1] === mm ? 'selected' : '' %>><%= mm %></option>
+                            <% }) %>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div class="switch-row">
+                <input type="checkbox" id="autoEnviar" name="autoEnviar" <%= autoEnviar ? 'checked' : '' %>>
+                <label for="autoEnviar">Enviar enquete automaticamente no dia/horário acima</label>
+            </div>
+            <input type="submit" value="Salvar">
+        </form>
+    </div>
 </section>
 
 <section class="section">

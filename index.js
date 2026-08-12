@@ -1,6 +1,8 @@
+process.env.TZ = 'America/Sao_Paulo'; // dia/hora configurados no painel são sempre no horário de Brasília
+
 const { Client, LocalAuth, Poll } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
-const { db, upsertJogador, getConfig, getEnqueteOpcoes } = require('./db');
+const { db, upsertJogador, getConfig, setConfig, upsertGrupo, getEnqueteOpcoes } = require('./db');
 
 const client = new Client({
   authStrategy: new LocalAuth(),
@@ -44,9 +46,24 @@ client.on('qr', qr => {
   qrcode.generate(qr, { small: true });
 });
 
-client.on('ready', () => {
+client.on('ready', async () => {
   console.log('Bot pronto! 🤖');
+  setInterval(checarEnvioAutomaticoDeEnquete, 60 * 1000);
+  await sincronizarGruposConhecidos();
 });
+
+// 📋 lista os grupos que o bot participa e salva no banco, pra aparecerem como opção
+// no seletor "pra qual grupo mandar a enquete automática" no painel
+async function sincronizarGruposConhecidos() {
+  try {
+    const chats = await client.getChats();
+    const grupos = chats.filter(c => c.isGroup);
+    grupos.forEach(g => upsertGrupo(g.id._serialized, g.name));
+    console.log(`📋 ${grupos.length} grupo(s) sincronizado(s) pro painel`);
+  } catch (err) {
+    console.error('Erro ao sincronizar grupos:', err);
+  }
+}
 
 
 // 🔥 função util
@@ -114,7 +131,9 @@ function proximoDiaDeJogo() {
 }
 
 // 🗳️ ENQUETE NATIVA + registro no banco pro painel
-async function abrirEnquete(msg) {
+// groupId: grupo de destino. msgParaErro: opcional, só usado pra responder erros
+// quando a enquete foi disparada manualmente via !enquete (o envio automático não tem msg).
+async function abrirEnquete(groupId, msgParaErro) {
   const { data, dia } = proximoDiaDeJogo();
   const hora = getConfig('enquete_hora') || '20:00';
   const template = getConfig('enquete_titulo_template') || 'JOGO DE QUARTA - {data}';
@@ -125,7 +144,10 @@ async function abrirEnquete(msg) {
 
   const opcoes = getEnqueteOpcoes();
   if (opcoes.length < 2) {
-    return msg.reply('❌ Configure pelo menos 2 opções da enquete no painel antes de abrir.');
+    const erro = '❌ Configure pelo menos 2 opções da enquete no painel antes de abrir.';
+    if (msgParaErro) return msgParaErro.reply(erro);
+    console.error(erro);
+    return;
   }
 
   const poll = new Poll(
@@ -134,11 +156,11 @@ async function abrirEnquete(msg) {
     { allowMultipleAnswers: false }
   );
 
-  const sent = await client.sendMessage(msg.from, poll);
+  const sent = await client.sendMessage(groupId, poll);
 
   db.prepare(
     'INSERT INTO enquetes (message_id, group_id, titulo) VALUES (?, ?, ?)'
-  ).run(sent.id._serialized, msg.from, titulo);
+  ).run(sent.id._serialized, groupId, titulo);
 
   console.log(`🗳️ Enquete criada: ${titulo}`);
 
@@ -151,6 +173,35 @@ async function abrirEnquete(msg) {
   }
 }
 
+// ⏰ ENVIO AUTOMÁTICO — roda a cada minuto (chamado pelo setInterval em 'ready') e,
+// se o toggle estiver ativo e for a hora configurada, abre a enquete sozinho.
+async function checarEnvioAutomaticoDeEnquete() {
+  if (getConfig('enquete_auto_enviar') !== '1') return;
+
+  const grupoId = getConfig('enquete_grupo_id');
+  if (!grupoId) return; // ainda não sabemos o grupo: precisa rodar !enquete manualmente 1x antes
+
+  const diaSemanaAlvo = Number(getConfig('enquete_envio_dia_semana'));
+  const [horaAlvo, minutoAlvo] = (getConfig('enquete_envio_hora') || '09:00').split(':').map(Number);
+
+  const agora = new Date();
+  if (agora.getDay() !== diaSemanaAlvo) return;
+  if (agora.getHours() !== horaAlvo || agora.getMinutes() !== minutoAlvo) return;
+
+  // trava por data local (não por semana) pra não reenviar se o processo reiniciar no mesmo
+  // minuto, e nem depender de o processo ficar de pé por 7 dias inteiros sem reiniciar
+  const hojeLocal = `${agora.getFullYear()}-${String(agora.getMonth() + 1).padStart(2, '0')}-${String(agora.getDate()).padStart(2, '0')}`;
+  if (getConfig('enquete_auto_ultimo_envio') === hojeLocal) return;
+
+  setConfig('enquete_auto_ultimo_envio', hojeLocal);
+  console.log('⏰ Horário configurado atingido, enviando enquete automaticamente...');
+  try {
+    await abrirEnquete(grupoId);
+  } catch (err) {
+    console.error('Erro ao enviar enquete automática:', err);
+  }
+}
+
 client.on('message', async msg => {
   console.log('msg from:', msg.from);
 
@@ -158,7 +209,7 @@ client.on('message', async msg => {
 
   // funciona em qualquer grupo, independente do groupConfigs legado
   if (msg.from.endsWith('@g.us') && text === '!enquete') {
-    return abrirEnquete(msg);
+    return abrirEnquete(msg.from, msg);
   }
 
   if (msg.from.endsWith('@g.us') && text === '!sincronizar') {

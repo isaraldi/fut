@@ -11,6 +11,7 @@ const {
     db,
     getConfig,
     setConfig,
+    getGrupos,
     getEnqueteOpcoes,
     registrarMudancaPapel,
     getPapelHistorico,
@@ -507,6 +508,11 @@ app.get('/enquete/config', requireLogin, (req, res) => {
         diaSemana: Number(getConfig('enquete_dia_semana')),
         hora: getConfig('enquete_hora'),
         opcoes: getEnqueteOpcoes(),
+        autoEnviar: getConfig('enquete_auto_enviar') === '1',
+        envioDiaSemana: Number(getConfig('enquete_envio_dia_semana')),
+        envioHora: getConfig('enquete_envio_hora'),
+        grupos: getGrupos(),
+        grupoSelecionado: getConfig('enquete_grupo_id'),
         ok: req.query.ok,
     });
 });
@@ -520,6 +526,21 @@ app.post('/enquete/config/jogo', requireLogin, (req, res) => {
     setConfig('enquete_hora', `${horaH}:${horaM}`);
 
     redirectOk(res, '/enquete/config', 'Dia e horário salvos!');
+});
+
+app.post('/enquete/config/auto', requireLogin, (req, res) => {
+    const envioDiaSemana = Number(req.body.envioDiaSemana);
+    const envioHoraH = String(req.body.envioHoraH || '09').padStart(2, '0');
+    const envioHoraM = String(req.body.envioHoraM || '00').padStart(2, '0');
+
+    if (envioDiaSemana >= 0 && envioDiaSemana <= 6) {
+        setConfig('enquete_envio_dia_semana', String(envioDiaSemana));
+    }
+    setConfig('enquete_envio_hora', `${envioHoraH}:${envioHoraM}`);
+    if (req.body.grupoId) setConfig('enquete_grupo_id', req.body.grupoId);
+    setConfig('enquete_auto_enviar', req.body.autoEnviar === 'on' ? '1' : '0');
+
+    redirectOk(res, '/enquete/config', 'Envio automático atualizado!');
 });
 
 app.post('/enquete/config/titulo', requireLogin, (req, res) => {
