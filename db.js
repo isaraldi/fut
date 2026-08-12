@@ -78,6 +78,12 @@ db.exec(`
         alterado_em TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
+    CREATE TABLE IF NOT EXISTS sessions (
+        sid TEXT PRIMARY KEY,
+        dados TEXT NOT NULL,
+        expira_em INTEGER NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS grupos (
         whatsapp_id TEXT PRIMARY KEY,
         nome TEXT NOT NULL,

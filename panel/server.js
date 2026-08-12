@@ -7,6 +7,7 @@ const bcrypt = require('bcryptjs');
 const path = require('path');
 const fs = require('fs');
 const multer = require('multer');
+const SqliteSessionStore = require('./sqlite-session-store');
 const {
     db,
     getConfig,
@@ -62,6 +63,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.urlencoded({ extended: false }));
 app.use(
     session({
+        store: new SqliteSessionStore(db),
         secret: process.env.SESSION_SECRET,
         resave: false,
         saveUninitialized: false,
