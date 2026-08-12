@@ -27,6 +27,7 @@ const {
   fecharEnquete,
   getEnquetesFechadasNaoDesafixadas,
   marcarEnqueteDesafixada,
+  registrarTentativaDesafixar,
 } = require('./db');
 const { balancearTimes, montarTextoListaConfirmadas, montarTextoTimes } = require('./mensagens-prontas');
 
@@ -444,19 +445,45 @@ async function checarEnviosImediatos() {
 
 // 📌 DESAFIXA ENQUETES JÁ FECHADAS — fechar pelo painel só grava no banco (processo sem
 // client do WhatsApp), então o bot confere aqui e desafixa de fato a mensagem no grupo
+const MAX_TENTATIVAS_DESAFIXAR = 5; // ~5 minutos tentando antes de desistir
+
 async function checarEnquetesParaDesafixar() {
   const pendentes = getEnquetesFechadasNaoDesafixadas();
   for (const enquete of pendentes) {
     try {
       const msgOriginal = await client.getMessageById(enquete.message_id);
-      if (msgOriginal) {
-        const desafixou = await msgOriginal.unpin();
-        if (!desafixou) console.log(`⚠️ Não consegui desafixar a enquete #${enquete.id} (bot é admin do grupo?)`);
+      if (!msgOriginal) {
+        registrarLog('lista', 'aviso', `Não achei a mensagem da enquete #${enquete.id} pra desafixar (pode já ter sido apagada)`, enquete.group_id);
+        marcarEnqueteDesafixada(enquete.id); // sem a mensagem não tem como tentar de novo
+        continue;
+      }
+
+      const desafixou = await msgOriginal.unpin();
+      if (desafixou) {
+        marcarEnqueteDesafixada(enquete.id);
+        continue;
+      }
+
+      // não marca como desafixada ainda: tenta de novo nos próximos minutos. Causa mais
+      // comum de falhar: o número do bot precisa ser admin do grupo pra conseguir desafixar
+      registrarTentativaDesafixar(enquete.id);
+      if (enquete.tentativas_desafixar + 1 >= MAX_TENTATIVAS_DESAFIXAR) {
+        registrarLog(
+          'lista', 'aviso',
+          `Desisti de tentar desafixar a enquete #${enquete.id} depois de ${MAX_TENTATIVAS_DESAFIXAR} tentativas — o bot provavelmente não é admin do grupo. Desafixe manualmente.`,
+          enquete.group_id,
+        );
+        marcarEnqueteDesafixada(enquete.id); // desiste, evita ficar tentando pra sempre
+      } else if (enquete.tentativas_desafixar === 0) {
+        registrarLog(
+          'lista', 'aviso',
+          `Não consegui desafixar a enquete #${enquete.id} — o bot precisa ser admin do grupo. Vou tentar de novo.`,
+          enquete.group_id,
+        );
       }
     } catch (err) {
+      registrarLog('lista', 'erro', `Erro ao desafixar enquete #${enquete.id}: ${err.message}`, enquete.group_id);
       console.error(`Erro ao desafixar enquete #${enquete.id}:`, err);
-    } finally {
-      marcarEnqueteDesafixada(enquete.id);
     }
   }
 }

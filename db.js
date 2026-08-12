@@ -142,6 +142,9 @@ if (!colunasEnquetes.some((c) => c.name === 'fechada_em')) {
 if (!colunasEnquetes.some((c) => c.name === 'desafixada_em')) {
     db.exec('ALTER TABLE enquetes ADD COLUMN desafixada_em TEXT');
 }
+if (!colunasEnquetes.some((c) => c.name === 'tentativas_desafixar')) {
+    db.exec('ALTER TABLE enquetes ADD COLUMN tentativas_desafixar INTEGER NOT NULL DEFAULT 0');
+}
 
 // mensagens_agendadas: recria do zero se ainda for o shape antigo (só data específica) —
 // tabela nova, sem dados em produção, então é mais simples que uma migração incremental
@@ -290,6 +293,12 @@ function getEnquetesFechadasNaoDesafixadas() {
 function marcarEnqueteDesafixada(enqueteId) {
     db.prepare(
         `UPDATE enquetes SET desafixada_em = datetime('now') WHERE id = ?`,
+    ).run(enqueteId);
+}
+
+function registrarTentativaDesafixar(enqueteId) {
+    db.prepare(
+        'UPDATE enquetes SET tentativas_desafixar = tentativas_desafixar + 1 WHERE id = ?',
     ).run(enqueteId);
 }
 
@@ -550,6 +559,7 @@ module.exports = {
     fecharEnquete,
     getEnquetesFechadasNaoDesafixadas,
     marcarEnqueteDesafixada,
+    registrarTentativaDesafixar,
     getEnqueteOpcoes,
     criarMensagemUnica,
     criarMensagemSemanal,
