@@ -583,6 +583,15 @@ app.post('/enquete/config/auto', requireLogin, (req, res) => {
     redirectOk(res, '/enquete/config', 'Envio automático atualizado!');
 });
 
+app.post('/enquete/config/enviar-agora', requireLogin, (req, res) => {
+    const grupoId = getConfig('enquete_grupo_id');
+    if (!grupoId) {
+        return redirectOk(res, '/enquete/config', 'Configure o grupo de destino antes de enviar.');
+    }
+    setConfig('enquete_solicitar_envio', '1');
+    redirectOk(res, '/enquete/config', 'Enquete será enviada em até 1 minuto.');
+});
+
 app.post('/enquete/config/titulo', requireLogin, (req, res) => {
     const titulo = (req.body.titulo || '').trim();
     if (titulo) setConfig('enquete_titulo_template', titulo);

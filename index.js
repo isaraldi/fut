@@ -73,16 +73,78 @@ client.on('qr', qr => {
   qrcode.generate(qr, { small: true });
 });
 
+// evita criar um segundo setInterval quando 'ready' dispara de novo depois de
+// um reiniciarSessaoWhatsapp() (destroy + initialize reautentica e reemite 'ready')
+let intervaloIniciado = false;
+
 client.on('ready', async () => {
   console.log('Bot pronto! 🤖');
-  setInterval(() => {
-    checarEnvioAutomaticoDeEnquete();
-    checarMensagensAgendadas();
-    checarEnviosImediatos();
-    checarEnquetesParaDesafixar();
-  }, 60 * 1000);
+  if (!intervaloIniciado) {
+    intervaloIniciado = true;
+    setInterval(() => {
+      checarEnvioAutomaticoDeEnquete();
+      checarEnvioManualDeEnqueteViaPainel();
+      checarMensagensAgendadas();
+      checarEnviosImediatos();
+      checarEnquetesParaDesafixar();
+      checarReinicioAgendadoDoBot();
+    }, 60 * 1000);
+  }
   await sincronizarGruposConhecidos();
 });
+
+// 🔄 REINÍCIO DA SESSÃO DO WHATSAPP — fecha e reabre o Chromium/Puppeteer mantendo a
+// autenticação salva (LocalAuth não é apagada por destroy(), só por logout()), sem precisar
+// escanear QR code de novo. Usado tanto pelo watchdog (sessão travou) quanto pelo reinício
+// diário agendado (evita que a sessão fique de pé por dias e comece a travar sozinha).
+let reiniciandoSessao = false;
+async function reiniciarSessaoWhatsapp() {
+  if (reiniciandoSessao) return; // já tem um reinício em andamento, não empilha outro
+  reiniciandoSessao = true;
+  try {
+    console.log('🔄 Reiniciando sessão do WhatsApp...');
+    await client.destroy();
+    await client.initialize();
+    console.log('🔄 Sessão do WhatsApp reiniciada.');
+  } finally {
+    reiniciandoSessao = false;
+  }
+}
+
+// ⏳ corre uma promise contra um prazo; se estourar, loga, aciona o reinício da sessão do
+// WhatsApp (a chamada travada só se resolve derrubando o navegador mesmo) e rejeita —
+// evita depender do timeout padrão do Puppeteer (~3min) pra perceber que travou
+function comTimeoutDeSessao(promise, ms, rotulo) {
+  promise.catch(() => {}); // se a sessão for reiniciada, a promise original ainda pode rejeitar sozinha depois; evita unhandled rejection
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => {
+      setTimeout(() => {
+        console.error(`⚠️ ${rotulo} travou (sem resposta em ${ms / 1000}s) — reiniciando sessão do WhatsApp...`);
+        reiniciarSessaoWhatsapp().catch((err) => console.error('Falha ao reiniciar sessão do WhatsApp:', err));
+        reject(new Error(`${rotulo} travou (sessão do WhatsApp reiniciada)`));
+      }, ms);
+    }),
+  ]);
+}
+
+// reinicia a sessão 1x por dia, de madrugada, antes que dias de uptime a deixem instável
+const REINICIO_DIARIO_HORA = 4; // 4h da manhã (horário de Brasília), baixo movimento
+async function checarReinicioAgendadoDoBot() {
+  const agora = new Date();
+  if (agora.getHours() !== REINICIO_DIARIO_HORA || agora.getMinutes() !== 0) return;
+
+  const hojeLocal = `${agora.getFullYear()}-${String(agora.getMonth() + 1).padStart(2, '0')}-${String(agora.getDate()).padStart(2, '0')}`;
+  if (getConfig('bot_reinicio_ultimo') === hojeLocal) return;
+  setConfig('bot_reinicio_ultimo', hojeLocal);
+
+  console.log('🔄 Reinício diário agendado da sessão do WhatsApp...');
+  try {
+    await reiniciarSessaoWhatsapp();
+  } catch (err) {
+    console.error('Falha no reinício diário agendado da sessão do WhatsApp:', err);
+  }
+}
 
 // 📋 lista os grupos que o bot participa e salva no banco, pra aparecerem como opção
 // no seletor "pra qual grupo mandar a enquete automática" no painel
@@ -199,7 +261,11 @@ async function abrirEnquete(groupId, msgParaErro, origem = 'manual') {
     { allowMultipleAnswers: false }
   );
 
-  const sent = await client.sendMessage(groupId, poll);
+  const sent = await comTimeoutDeSessao(
+    client.sendMessage(groupId, poll),
+    30 * 1000,
+    'Envio da enquete',
+  );
 
   db.prepare(
     'INSERT INTO enquetes (message_id, group_id, titulo) VALUES (?, ?, ?)'
@@ -250,6 +316,29 @@ async function checarEnvioAutomaticoDeEnquete() {
   } catch (err) {
     registrarLog('enquete', 'erro', `Falha ao enviar enquete automática: ${err.message}`, grupoId);
     console.error('Erro ao enviar enquete automática:', err);
+  }
+}
+
+// 🖱️ ENVIO MANUAL VIA PAINEL — botão "Enviar enquete agora" pede pelo config (o painel roda
+// num processo separado, sem acesso ao client do WhatsApp). Só limpa o pedido depois de
+// enviar com sucesso, pra tentar de novo nos minutos seguintes se a sessão travar.
+async function checarEnvioManualDeEnqueteViaPainel() {
+  if (getConfig('enquete_solicitar_envio') !== '1') return;
+
+  const grupoId = getConfig('enquete_grupo_id');
+  if (!grupoId) {
+    registrarLog('enquete', 'erro', 'Pedido de envio via painel sem grupo configurado');
+    setConfig('enquete_solicitar_envio', '0');
+    return;
+  }
+
+  console.log('🖱️ Enviando enquete solicitada pelo painel...');
+  try {
+    await abrirEnquete(grupoId, null, 'painel');
+    setConfig('enquete_solicitar_envio', '0');
+  } catch (err) {
+    registrarLog('enquete', 'erro', `Falha ao enviar enquete via painel: ${err.message}`, grupoId);
+    console.error('Erro ao enviar enquete via painel:', err);
   }
 }
 

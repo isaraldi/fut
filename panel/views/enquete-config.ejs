@@ -6,6 +6,20 @@
 
 <section class="section">
     <div class="card">
+        <h1>Enviar agora</h1>
+        <p class="hint">
+            Abre a enquete no grupo configurado abaixo na hora, sem precisar mandar
+            <code>!enquete</code> pelo WhatsApp.
+        </p>
+        <form method="post" action="/enquete/config/enviar-agora" data-confirm="Enviar a enquete agora pro grupo?">
+            <input type="submit" value="🗳️ Enviar enquete agora" <%= grupoSelecionado ? '' : 'disabled' %>>
+        </form>
+        <% if (!grupoSelecionado) { %>
+            <p class="hint">Selecione o grupo de destino abaixo antes de enviar.</p>
+        <% } %>
+    </div>
+
+    <div class="card">
         <h1>Envio automático</h1>
         <p class="hint">
             Dia e horário em que a <strong>enquete é disparada</strong> — diferente do dia/horário

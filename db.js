@@ -214,6 +214,8 @@ const DEFAULT_CONFIG = {
     enquete_envio_dia_semana: '1', // dia em que a ENQUETE é disparada (independente do dia do jogo)
     enquete_envio_hora: '09:00', // horário em que a ENQUETE é disparada
     enquete_grupo_id: '', // preenchido automaticamente na 1ª vez que alguém manda !enquete no grupo
+    bot_reinicio_ultimo: '', // data (YYYY-MM-DD) do último reinício diário agendado da sessão do WhatsApp
+    enquete_solicitar_envio: '0', // '1' = botão "Enviar agora" do painel pediu pra abrir a enquete
 };
 
 function getConfig(chave) {
