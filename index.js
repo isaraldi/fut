@@ -230,17 +230,23 @@ async function checarEnvioAutomaticoDeEnquete() {
 
   const agora = new Date();
   if (agora.getDay() !== diaSemanaAlvo) return;
-  if (agora.getHours() !== horaAlvo || agora.getMinutes() !== minutoAlvo) return;
 
   // trava por data local (não por semana) pra não reenviar se o processo reiniciar no mesmo
-  // minuto, e nem depender de o processo ficar de pé por 7 dias inteiros sem reiniciar
+  // dia, e nem depender de o processo ficar de pé por 7 dias inteiros sem reiniciar
   const hojeLocal = `${agora.getFullYear()}-${String(agora.getMonth() + 1).padStart(2, '0')}-${String(agora.getDate()).padStart(2, '0')}`;
-  if (getConfig('enquete_auto_ultimo_envio') === hojeLocal) return;
+  if (getConfig('enquete_auto_ultimo_envio') === hojeLocal) return; // já enviada com sucesso hoje
 
-  setConfig('enquete_auto_ultimo_envio', hojeLocal);
+  // usa >= (não ===) e só marca como enviada depois do envio dar certo: se o WhatsApp travar
+  // no minuto exato do horário configurado (ex: sessão do Chromium instável), tenta de novo
+  // nos minutos seguintes em vez de desistir até a semana que vem
+  const minutosAgora = agora.getHours() * 60 + agora.getMinutes();
+  const minutosAlvo = horaAlvo * 60 + minutoAlvo;
+  if (minutosAgora < minutosAlvo) return;
+
   console.log('⏰ Horário configurado atingido, enviando enquete automaticamente...');
   try {
     await abrirEnquete(grupoId, null, 'automática');
+    setConfig('enquete_auto_ultimo_envio', hojeLocal);
   } catch (err) {
     registrarLog('enquete', 'erro', `Falha ao enviar enquete automática: ${err.message}`, grupoId);
     console.error('Erro ao enviar enquete automática:', err);
