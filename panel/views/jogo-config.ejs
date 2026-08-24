@@ -47,4 +47,31 @@
             <input type="submit" value="Salvar">
         </form>
     </div>
+
+    <div class="card">
+        <h1>Valores</h1>
+        <p class="hint">
+            Ao receber um comprovante de pagamento no grupo, o bot lê o valor nele por OCR e
+            compara com os valores configurados aqui: se bater com a mensalidade, marca a
+            mensalidade do mês como paga; se bater com o avulso, marca o pagamento avulso do
+            jogo. Se o valor do comprovante não for igual a nenhum dos dois, o bot não marca
+            nada como pago (fica só um aviso na tela de Logs pra conferência manual).
+        </p>
+        <form method="post" action="/jogo/config">
+            <input type="hidden" name="diaSemana" value="<%= diaSemana %>">
+            <input type="hidden" name="horaH" value="<%= hora.split(':')[0] %>">
+            <input type="hidden" name="horaM" value="<%= hora.split(':')[1] %>">
+            <div class="form-row">
+                <div>
+                    <label>Valor da mensalidade (R$)</label>
+                    <input type="number" name="valorMensal" step="0.01" min="0" placeholder="Ex: 50,00" value="<%= valorMensal || '' %>">
+                </div>
+                <div>
+                    <label>Valor do avulso (R$)</label>
+                    <input type="number" name="valorAvulso" step="0.01" min="0" placeholder="Ex: 20,00" value="<%= valorAvulso || '' %>">
+                </div>
+            </div>
+            <input type="submit" value="Salvar">
+        </form>
+    </div>
 </section>

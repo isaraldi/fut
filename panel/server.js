@@ -537,6 +537,8 @@ app.get('/jogo/config', requireLogin, (req, res) => {
         usuario: req.session.usuario,
         diaSemana: Number(getConfig('enquete_dia_semana')),
         hora: getConfig('enquete_hora'),
+        valorMensal: getConfig('valor_mensal'),
+        valorAvulso: getConfig('valor_avulso'),
         ok: req.query.ok,
     });
 });
@@ -549,7 +551,13 @@ app.post('/jogo/config', requireLogin, (req, res) => {
     if (diaSemana >= 0 && diaSemana <= 6) setConfig('enquete_dia_semana', String(diaSemana));
     setConfig('enquete_hora', `${horaH}:${horaM}`);
 
-    redirectOk(res, '/jogo/config', 'Dia e horário salvos!');
+    const valorMensal = parseFloat(String(req.body.valorMensal).replace(',', '.'));
+    setConfig('valor_mensal', Number.isFinite(valorMensal) && valorMensal > 0 ? valorMensal.toFixed(2) : '');
+
+    const valorAvulso = parseFloat(String(req.body.valorAvulso).replace(',', '.'));
+    setConfig('valor_avulso', Number.isFinite(valorAvulso) && valorAvulso > 0 ? valorAvulso.toFixed(2) : '');
+
+    redirectOk(res, '/jogo/config', 'Configurações salvas!');
 });
 
 // ---------- CONFIGURAÇÃO DA ENQUETE (envio automático + título + opções) ----------

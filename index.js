@@ -404,6 +404,25 @@ const PALAVRAS_COMPROVANTE = [
   'pagamento', 'ted', 'boleto', 'transação', 'transacao',
 ];
 
+// extrai todos os valores em R$ que aparecem no texto do OCR (aceita "R$ 1.234,56", "R$50,00" etc)
+function extrairValoresBRL(texto) {
+  const valores = [];
+  const regex = /r\$\s*(\d{1,3}(?:\.\d{3})*(?:,\d{2})?|\d+(?:,\d{2})?)/gi;
+  let match;
+  while ((match = regex.exec(texto)) !== null) {
+    let bruto = match[1];
+    bruto = bruto.includes(',') ? bruto.replace(/\./g, '').replace(',', '.') : bruto;
+    const numero = parseFloat(bruto);
+    if (Number.isFinite(numero)) valores.push(numero);
+  }
+  return valores;
+}
+
+// compara com tolerância de 1 centavo, pra escapar de arredondamento
+function valorBate(valorExtraido, valorConfigurado) {
+  return Math.abs(valorExtraido - valorConfigurado) < 0.01;
+}
+
 async function processarPossivelComprovante(msg) {
   let caminhoTemp;
   try {
@@ -442,7 +461,34 @@ async function processarPossivelComprovante(msg) {
       return;
     }
 
-    if (jogador.papel === 'mensalista') {
+    // com os valores de mensal/avulso configurados no painel (Jogo > Valores), o valor lido no
+    // comprovante é que decide o tipo do pagamento — não o papel cadastrado do jogador. Se o
+    // valor não bater com nenhum dos dois configurados, não marca pagamento nenhum
+    const valorMensalCfg = parseFloat(getConfig('valor_mensal'));
+    const valorAvulsoCfg = parseFloat(getConfig('valor_avulso'));
+    const valoresConfigurados = Number.isFinite(valorMensalCfg) || Number.isFinite(valorAvulsoCfg);
+    const valoresEncontrados = extrairValoresBRL(textoLower);
+
+    let tipo;
+    if (valoresConfigurados) {
+      if (Number.isFinite(valorMensalCfg) && valoresEncontrados.some((v) => valorBate(v, valorMensalCfg))) {
+        tipo = 'mensal';
+      } else if (Number.isFinite(valorAvulsoCfg) && valoresEncontrados.some((v) => valorBate(v, valorAvulsoCfg))) {
+        tipo = 'avulso';
+      } else {
+        registrarLog(
+          'comprovante', 'aviso',
+          `Comprovante de ${jogador.nome} reconhecido, mas o valor (${valoresEncontrados.map((v) => `R$${v.toFixed(2)}`).join(', ') || 'não identificado'}) não bate com a mensalidade nem o avulso configurados — não marcado como pago`,
+          msg.from,
+        );
+        return;
+      }
+    } else {
+      // fallback: valores ainda não configurados no painel, usa o papel cadastrado do jogador
+      tipo = jogador.papel === 'mensalista' ? 'mensal' : 'avulso';
+    }
+
+    if (tipo === 'mensal') {
       const mes = new Date().toISOString().slice(0, 7); // mesmo cálculo do painel (mesAtual())
       marcarPagamentoMensalista(jogador.id, mes);
       registrarLog('comprovante', 'sucesso', `Comprovante de ${jogador.nome} reconhecido — mensalidade de ${mes} marcada como paga`, msg.from);
