@@ -70,7 +70,7 @@
         </div>
         <div class="user-row">
             <span><%= typeof usuario !== 'undefined' ? usuario : '' %></span>
-            <form method="post" action="/logout" style="margin:0">
+            <form method="post" action="/logout" style="margin:0"><input type="hidden" name="_csrf" value="<%= csrfToken %>">
                 <button class="secondary" type="submit" style="padding:5px 10px;font-size:0.8rem">Sair</button>
             </form>
         </div>

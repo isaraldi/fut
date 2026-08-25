@@ -3,7 +3,7 @@
         <h1><%= enquete.titulo %></h1>
         <p><a href="/jogos">&larr; Voltar pro histórico de jogos</a></p>
     </div>
-    <form method="post" action="/jogos/<%= enquete.id %>/excluir" data-confirm="Excluir {nome}? Isso apaga as confirmações e avaliações desse jogo." data-confirm-nome="<%= enquete.titulo %>">
+    <form method="post" action="/jogos/<%= enquete.id %>/excluir" data-confirm="Excluir {nome}? Isso apaga as confirmações e avaliações desse jogo." data-confirm-nome="<%= enquete.titulo %>"><input type="hidden" name="_csrf" value="<%= csrfToken %>">
         <button class="danger btn-icon-label" type="submit">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
             Excluir jogo

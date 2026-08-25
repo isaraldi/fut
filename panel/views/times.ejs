@@ -24,7 +24,7 @@
                 Sortear de novo
             </button>
         </form>
-        <form method="post" action="/times/enviar" style="display:inline">
+        <form method="post" action="/times/enviar" style="display:inline"><input type="hidden" name="_csrf" value="<%= csrfToken %>">
             <input type="hidden" name="tituloJogo" value="<%= enquete.titulo %>">
             <% times.timeA.forEach(j => { %><input type="hidden" name="timeA" value="<%= j.nome %>"><% }) %>
             <% times.timeB.forEach(j => { %><input type="hidden" name="timeB" value="<%= j.nome %>"><% }) %>

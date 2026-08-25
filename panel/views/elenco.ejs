@@ -7,7 +7,7 @@
 
 <div class="card">
     <h1>Adicionar jogador</h1>
-    <form method="post" action="/elenco">
+    <form method="post" action="/elenco"><input type="hidden" name="_csrf" value="<%= csrfToken %>">
         <div class="form-row">
             <div>
                 <label>Nome</label>
@@ -55,7 +55,7 @@
         <p class="empty">Ninguém cadastrado ainda — vote em uma enquete no WhatsApp ou adicione manualmente acima.</p>
     </div>
 <% } else { %>
-    <form method="post" action="/elenco/salvar-todas">
+    <form method="post" action="/elenco/salvar-todas"><input type="hidden" name="_csrf" value="<%= csrfToken %>">
         <% [['Mensalistas', mensalistas], ['Avulsas', avulsas]].forEach(([titulo, grupo]) => { %>
             <div class="card">
                 <h1><%= titulo %> <span class="muted">(<%= grupo.length %>)</span></h1>
@@ -114,7 +114,7 @@
     </form>
 
     <% jogadores.forEach(j => { %>
-        <form id="delete-<%= j.id %>" method="post" action="/elenco/<%= j.id %>/excluir" data-confirm="Remover {nome}?" data-confirm-nome="<%= j.nome %>"></form>
+        <form id="delete-<%= j.id %>" method="post" action="/elenco/<%= j.id %>/excluir" data-confirm="Remover {nome}?" data-confirm-nome="<%= j.nome %>"><input type="hidden" name="_csrf" value="<%= csrfToken %>"></form>
     <% }) %>
 
     <script src="/elenco.js" defer></script>

@@ -23,7 +23,7 @@
                             </span>
                         </td>
                         <td>
-                            <form method="post" action="/pagamentos/mensalistas/<%= j.id %>/toggle">
+                            <form method="post" action="/pagamentos/mensalistas/<%= j.id %>/toggle"><input type="hidden" name="_csrf" value="<%= csrfToken %>">
                                 <input type="hidden" name="mes" value="<%= mes %>">
                                 <button class="secondary btn-icon-label" type="submit">
                                     <% if (j.pago) { %>

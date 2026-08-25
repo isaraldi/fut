@@ -1,7 +1,7 @@
 <div class="card">
     <h1>Confirmar manualmente</h1>
     <p class="hint">Pra quando alguém joga mas não respondeu (ou respondeu errado) a enquete no WhatsApp.</p>
-    <form method="post" action="/jogos/<%= enquete.id %>/confirmar">
+    <form method="post" action="/jogos/<%= enquete.id %>/confirmar"><input type="hidden" name="_csrf" value="<%= csrfToken %>">
         <div class="form-row">
             <div>
                 <label>Jogadora</label>

@@ -24,6 +24,7 @@ primary_region = "gru"
   [[services.ports]]
     handlers = ["http"]
     port = 80
+    force_https = true
 
 [[vm]]
   memory = "1gb"

@@ -17,14 +17,14 @@
         <div style="margin-bottom:16px">
             <img src="<%= logoUrl %>" alt="Logo atual" style="max-width:160px;max-height:160px;border-radius:8px;border:1px solid var(--border)">
         </div>
-        <form method="post" action="/configuracoes/aparencia/logo/remover" onsubmit="return confirm('Remover a logo?')" style="margin-bottom:16px">
+        <form method="post" action="/configuracoes/aparencia/logo/remover" onsubmit="return confirm('Remover a logo?')" style="margin-bottom:16px"><input type="hidden" name="_csrf" value="<%= csrfToken %>">
             <button class="danger" type="submit">Remover logo</button>
         </form>
     <% } else { %>
         <p class="empty">Nenhuma logo configurada ainda — mostra só o texto/ícone.</p>
     <% } %>
 
-    <form method="post" action="/configuracoes/aparencia/logo" enctype="multipart/form-data">
+    <form method="post" action="/configuracoes/aparencia/logo" enctype="multipart/form-data"><input type="hidden" name="_csrf" value="<%= csrfToken %>">
         <input type="file" name="logo" accept="image/png,image/jpeg,image/webp,image/svg+xml" required>
         <input type="submit" value="Enviar logo">
     </form>

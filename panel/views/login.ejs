@@ -7,7 +7,7 @@
         <% if (erro) { %>
             <p class="erro"><%= erro %></p>
         <% } %>
-        <form method="post" action="/login" autocomplete="on">
+        <form method="post" action="/login" autocomplete="on"><input type="hidden" name="_csrf" value="<%= csrfToken %>">
             <label for="usuario">Usuário</label>
             <input type="text" id="usuario" name="usuario" autocomplete="username" autofocus required>
             <label for="senha">Senha</label>

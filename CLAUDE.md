@@ -56,3 +56,19 @@ Several bot features are meant to work both inside the WhatsApp group and in a d
 ### Timezone
 
 Both `index.js` and `panel/server.js` force `process.env.TZ = 'America/Sao_Paulo'` at the very top, before anything else runs. All date/day-of-week logic (poll scheduling, "which month is this payment for", weekly messages) assumes Brasília local time.
+
+### Non-root container
+
+The Dockerfile installs `gosu`; `docker-entrypoint.sh` runs as root only long enough to symlink/`chown` the Fly volume (`/app/storage`), then drops to the unprivileged `node` user (via `gosu node`) to actually run `index.js`, `panel/server.js`, and the Chromium instance underneath. New processes/services started from the entrypoint must follow the same pattern — don't add a bare `node ...` line there without the `gosu node` prefix, or it'll run as root.
+
+### CSRF protection is manual, per-form
+
+`csurf` is deprecated, so CSRF uses a hand-rolled synchronizer token: `panel/server.js` generates a random token per session (`req.session.csrfToken`), exposes it as `csrfToken` to every view, and a global middleware rejects any POST whose body's `_csrf` doesn't match. **Every new `<form method="post">` in `panel/views/` must include `<input type="hidden" name="_csrf" value="<%= csrfToken %>">`** or it will get a 403. The one exception is multipart forms (`enctype="multipart/form-data"`, currently only the logo upload) — the global middleware skips those because `express.urlencoded` can't parse multipart bodies, so the route itself re-checks the token after `multer` runs; follow that same pattern for any future file-upload route.
+
+### Helmet is on, CSP is off
+
+`panel/server.js` uses `helmet({ contentSecurityPolicy: false })`. CSP is explicitly disabled because most views have inline `<script>` blocks with no nonce — enabling the default CSP would silently break them. The other headers (frame options, no-sniff, HSTS, etc.) are active.
+
+### Secure session cookie needs the proxy headers
+
+The session cookie is `secure: true` + `sameSite: 'lax'`, and `app.set('trust proxy', 1)` is set so Express trusts Fly's `X-Forwarded-Proto` header to know the original request was HTTPS. `fly.toml`'s port-80 listener also sets `force_https = true`. If any of these three pieces (trust proxy, force_https, secure cookie) is removed independently of the others, login can silently break (server won't set the session cookie at all if it doesn't believe the connection is secure).

@@ -22,7 +22,7 @@
                 </select>
             </div>
 
-            <form id="form-avaliacao" method="post" action="/votacao/<%= enquete.id %>/avaliar" style="display:none">
+            <form id="form-avaliacao" method="post" action="/votacao/<%= enquete.id %>/avaliar" style="display:none"><input type="hidden" name="_csrf" value="<%= csrfToken %>">
                 <input type="hidden" name="avaliador_id" id="input-avaliador-id">
                 <p class="hint">
                     Avaliando como <strong id="texto-avaliador"></strong> ·

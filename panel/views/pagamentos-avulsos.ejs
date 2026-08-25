@@ -25,7 +25,7 @@
                             </span>
                         </td>
                         <td>
-                            <form method="post" action="/pagamentos/avulsos/<%= j.id %>/toggle">
+                            <form method="post" action="/pagamentos/avulsos/<%= j.id %>/toggle"><input type="hidden" name="_csrf" value="<%= csrfToken %>">
                                 <input type="hidden" name="enqueteId" value="<%= enquete.id %>">
                                 <button class="secondary btn-icon-label" type="submit">
                                     <% if (j.pago) { %>

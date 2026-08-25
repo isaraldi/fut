@@ -26,7 +26,7 @@
                         <td><%= j.telefone || '—' %></td>
                         <td><span class="badge <%= j.papel %>"><%= j.papel %></span></td>
                         <td style="white-space:nowrap">
-                            <form method="post" action="/elenco/<%= j.id %>/reativar" style="display:inline">
+                            <form method="post" action="/elenco/<%= j.id %>/reativar" style="display:inline"><input type="hidden" name="_csrf" value="<%= csrfToken %>">
                                 <button class="secondary btn-icon-label" type="submit">
                                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>
                                     Reativar
@@ -44,5 +44,5 @@
 </div>
 
 <% jogadores.forEach(j => { %>
-    <form id="delete-inativa-<%= j.id %>" method="post" action="/elenco/<%= j.id %>/excluir" data-confirm="Excluir {nome} de vez? Isso apaga o histórico de pagamentos e presenças dela." data-confirm-nome="<%= j.nome %>"></form>
+    <form id="delete-inativa-<%= j.id %>" method="post" action="/elenco/<%= j.id %>/excluir" data-confirm="Excluir {nome} de vez? Isso apaga o histórico de pagamentos e presenças dela." data-confirm-nome="<%= j.nome %>"><input type="hidden" name="_csrf" value="<%= csrfToken %>"></form>
 <% }) %>

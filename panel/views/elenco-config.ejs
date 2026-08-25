@@ -10,7 +10,7 @@
         Quando ativado, toda pessoa adicionada ao grupo do WhatsApp é incluída automaticamente
         na lista de jogadores (nome e telefone preenchidos a partir do contato do WhatsApp).
     </p>
-    <form method="post" action="/elenco/config">
+    <form method="post" action="/elenco/config"><input type="hidden" name="_csrf" value="<%= csrfToken %>">
         <div class="switch-row">
             <input type="checkbox" id="autoIncluir" name="autoIncluir" <%= autoIncluir ? 'checked' : '' %>>
             <label for="autoIncluir">Incluir automaticamente novos membros do grupo</label>
@@ -33,7 +33,7 @@
             bot conecta no WhatsApp — espere o bot ficar online e recarregue esta página.
         </p>
     <% } %>
-    <form method="post" action="/elenco/config/sincronizar">
+    <form method="post" action="/elenco/config/sincronizar"><input type="hidden" name="_csrf" value="<%= csrfToken %>">
         <div class="form-row">
             <div>
                 <label>Grupo</label>

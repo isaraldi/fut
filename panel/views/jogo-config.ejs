@@ -12,7 +12,7 @@
             (a próxima ocorrência dele, ou hoje, se hoje já for esse dia). Usada nos tokens
             <code>{data}</code>/<code>{dia}</code>/<code>{hora}</code> do título da enquete.
         </p>
-        <form method="post" action="/jogo/config">
+        <form method="post" action="/jogo/config"><input type="hidden" name="_csrf" value="<%= csrfToken %>">
             <input type="hidden" name="valorMensal" value="<%= valorMensal || '' %>">
             <input type="hidden" name="valorAvulso" value="<%= valorAvulso || '' %>">
             <input type="hidden" name="vagasMaximo" value="<%= vagasMaximo || '' %>">
@@ -60,7 +60,7 @@
             espera — só joga se alguém da lista de confirmadas sair. Deixe em branco pra não
             ter limite. O valor vale a partir da próxima enquete aberta; jogos já criados não mudam.
         </p>
-        <form method="post" action="/jogo/config">
+        <form method="post" action="/jogo/config"><input type="hidden" name="_csrf" value="<%= csrfToken %>">
             <input type="hidden" name="diaSemana" value="<%= diaSemana %>">
             <input type="hidden" name="horaH" value="<%= hora.split(':')[0] %>">
             <input type="hidden" name="horaM" value="<%= hora.split(':')[1] %>">
@@ -85,7 +85,7 @@
             jogo. Se o valor do comprovante não for igual a nenhum dos dois, o bot não marca
             nada como pago (fica só um aviso na tela de Logs pra conferência manual).
         </p>
-        <form method="post" action="/jogo/config">
+        <form method="post" action="/jogo/config"><input type="hidden" name="_csrf" value="<%= csrfToken %>">
             <input type="hidden" name="diaSemana" value="<%= diaSemana %>">
             <input type="hidden" name="horaH" value="<%= hora.split(':')[0] %>">
             <input type="hidden" name="horaM" value="<%= hora.split(':')[1] %>">
@@ -115,7 +115,7 @@
             alguém desistir, o bot passa a vaga pra próxima da lista de espera sozinho (ou
             reabre a lista, se não tiver ninguém esperando).
         </p>
-        <form method="post" action="/jogo/config/fechamento-automatico">
+        <form method="post" action="/jogo/config/fechamento-automatico"><input type="hidden" name="_csrf" value="<%= csrfToken %>">
             <div class="switch-row">
                 <input type="checkbox" id="fechamentoAutomatico" name="fechamentoAutomatico" <%= fechamentoAutomatico ? 'checked' : '' %>>
                 <label for="fechamentoAutomatico">Fechar a lista automaticamente quando as vagas encherem</label>
