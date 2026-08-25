@@ -7,6 +7,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 \
     make \
     g++ \
+    gosu \
     && rm -rf /var/lib/apt/lists/*
 
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
@@ -23,8 +24,12 @@ COPY . .
 ENV NODE_ENV=production
 
 RUN mkdir -p /app/data /app/.wwebjs_auth /app/.wwebjs_cache \
-    && chmod +x /app/docker-entrypoint.sh
+    && chmod +x /app/docker-entrypoint.sh \
+    && chown -R node:node /app
 
 EXPOSE 4000
 
+# segue rodando como root (usuário padrão da imagem) porque o entrypoint precisa dele pra
+# ajustar a dono do volume persistente do Fly antes de derrubar privilégio pro usuário "node"
+# (ver docker-entrypoint.sh) — não roda o bot/painel de fato como root
 CMD ["/app/docker-entrypoint.sh"]

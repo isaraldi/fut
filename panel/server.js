@@ -2,6 +2,18 @@ process.env.TZ = 'America/Sao_Paulo'; // mesmo fuso do bot, pra data/hora bater 
 
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
 
+// 💥 erro não tratado (bug real) — mais seguro encerrar e deixar o Docker/Fly reiniciar o
+// processo (que reinicia o bot junto, ver docker-entrypoint.sh) do que seguir em estado desconhecido
+process.on('unhandledRejection', (motivo) => {
+    console.error('🔥 unhandledRejection não tratada — encerrando processo:', motivo);
+    process.exit(1);
+});
+
+process.on('uncaughtException', (err) => {
+    console.error('🔥 uncaughtException não tratada — encerrando processo:', err);
+    process.exit(1);
+});
+
 const express = require('express');
 const expressLayouts = require('express-ejs-layouts');
 const session = require('express-session');

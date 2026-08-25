@@ -33,6 +33,18 @@ const {
 } = require('./db');
 const { balancearTimes, montarTextoListaConfirmadas, montarTextoListaAtual, montarTextoTimes } = require('./mensagens-prontas');
 
+// 💥 erro não tratado (bug real, não um erro esperado de rede/WhatsApp) — mais seguro encerrar
+// e deixar o Docker/Fly reiniciar o processo do que continuar rodando em estado desconhecido
+process.on('unhandledRejection', (motivo) => {
+  console.error('🔥 unhandledRejection não tratada — encerrando processo:', motivo);
+  process.exit(1);
+});
+
+process.on('uncaughtException', (err) => {
+  console.error('🔥 uncaughtException não tratada — encerrando processo:', err);
+  process.exit(1);
+});
+
 const client = new Client({
   authStrategy: new LocalAuth(),
   puppeteer: {
