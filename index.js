@@ -21,6 +21,7 @@ const {
   marcarPagamentoAvulso,
   getJogadorPorWhatsappId,
   getConfirmadosDaEnquete,
+  getListaDeEsperaDaEnquete,
   registrarLog,
   getEnviosImediatosPendentes,
   removerEnvioImediato,
@@ -267,9 +268,11 @@ async function abrirEnquete(groupId, msgParaErro, origem = 'manual') {
     'Envio da enquete',
   );
 
+  const vagasConfiguradas = parseInt(getConfig('jogo_vagas_maximo'), 10);
+  const vagasMaximo = Number.isFinite(vagasConfiguradas) && vagasConfiguradas > 0 ? vagasConfiguradas : null;
   db.prepare(
-    'INSERT INTO enquetes (message_id, group_id, titulo) VALUES (?, ?, ?)'
-  ).run(sent.id._serialized, groupId, titulo);
+    'INSERT INTO enquetes (message_id, group_id, titulo, vagas_maximo) VALUES (?, ?, ?, ?)'
+  ).run(sent.id._serialized, groupId, titulo, vagasMaximo);
 
   registrarLog('enquete', 'sucesso', `Enquete "${titulo}" enviada (${origem})`, groupId);
   console.log(`🗳️ Enquete criada: ${titulo}`);
@@ -529,7 +532,8 @@ async function enviarListaDeConfirmadas(msg) {
   }
 
   const confirmados = getConfirmadosDaEnquete(enquete.id);
-  const texto = montarTextoListaConfirmadas(enquete, confirmados);
+  const listaDeEspera = getListaDeEsperaDaEnquete(enquete.id);
+  const texto = montarTextoListaConfirmadas(enquete, confirmados, listaDeEspera);
 
   await msg.reply(texto);
   fecharEnquete(enquete.id); // a partir daqui, novos votos na enquete são ignorados

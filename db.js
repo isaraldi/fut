@@ -145,6 +145,12 @@ if (!colunasEnquetes.some((c) => c.name === 'desafixada_em')) {
 if (!colunasEnquetes.some((c) => c.name === 'tentativas_desafixar')) {
     db.exec('ALTER TABLE enquetes ADD COLUMN tentativas_desafixar INTEGER NOT NULL DEFAULT 0');
 }
+// migração leve: enquetes.vagas_maximo — snapshot do limite configurado no momento em que a
+// enquete foi criada. Não lê o config ao vivo pra não reescrever quem "jogou" em jogos passados
+// se o limite for alterado depois no painel.
+if (!colunasEnquetes.some((c) => c.name === 'vagas_maximo')) {
+    db.exec('ALTER TABLE enquetes ADD COLUMN vagas_maximo INTEGER');
+}
 
 // mensagens_agendadas: recria do zero se ainda for o shape antigo (só data específica) —
 // tabela nova, sem dados em produção, então é mais simples que uma migração incremental
@@ -218,6 +224,7 @@ const DEFAULT_CONFIG = {
     enquete_solicitar_envio: '0', // '1' = botão "Enviar agora" do painel pediu pra abrir a enquete
     valor_mensal: '', // valor (R$) da mensalidade — usado pra reconhecer comprovantes automaticamente
     valor_avulso: '', // valor (R$) do avulso — idem
+    jogo_vagas_maximo: '', // nº máximo de jogadoras no jogo — vazio = sem limite. Snapshot em enquetes.vagas_maximo na criação
 };
 
 function getConfig(chave) {
@@ -463,18 +470,49 @@ function getPapelHistorico(jogadorId) {
         .all(jogadorId);
 }
 
-// jogadoras que confirmaram presença (papel preenchido) num jogo específico,
-// usadas tanto pro sorteio de times quanto pra tela pública de avaliação pós-jogo
-function getConfirmadosDaEnquete(enqueteId) {
-    return db
+// separa quem votou (papel preenchido) em "tem vaga" x "lista de espera", respeitando o
+// limite de vagas travado na própria enquete (enquetes.vagas_maximo). Mensalista sempre tem
+// prioridade sobre avulso; dentro do mesmo grupo, quem confirmou primeiro fica com a vaga
+function separarConfirmadosPorVagas(enqueteId) {
+    const todos = db
         .prepare(
-            `SELECT j.id, j.nome, j.nivel, j.papel, j.posicao
+            `SELECT j.id, j.nome, j.nivel, j.posicao, v.papel, v.votado_em
              FROM votos v
              JOIN jogadores j ON j.id = v.jogador_id
-             WHERE v.enquete_id = ? AND v.papel IS NOT NULL
-             ORDER BY j.nome ASC`,
+             WHERE v.enquete_id = ? AND v.papel IS NOT NULL`,
         )
         .all(enqueteId);
+
+    const porNome = (a, b) => a.nome.localeCompare(b.nome, 'pt-BR');
+    const { vagas_maximo: vagasMaximo } =
+        db.prepare('SELECT vagas_maximo FROM enquetes WHERE id = ?').get(enqueteId) || {};
+
+    if (!vagasMaximo) {
+        return { dentro: [...todos].sort(porNome), fora: [] };
+    }
+
+    const porOrdemDeChegada = (a, b) => a.votado_em.localeCompare(b.votado_em);
+    const fila = [
+        ...todos.filter((j) => j.papel === 'mensalista').sort(porOrdemDeChegada),
+        ...todos.filter((j) => j.papel === 'avulso').sort(porOrdemDeChegada),
+    ];
+
+    return {
+        dentro: fila.slice(0, vagasMaximo).sort(porNome),
+        fora: fila.slice(vagasMaximo).sort(porOrdemDeChegada),
+    };
+}
+
+// jogadoras que confirmaram presença E têm vaga garantida — usadas tanto pro sorteio de times
+// quanto pra tela pública de avaliação pós-jogo e pra cobrança de pagamento avulso
+function getConfirmadosDaEnquete(enqueteId) {
+    return separarConfirmadosPorVagas(enqueteId).dentro;
+}
+
+// quem confirmou mas ficou de fora por causa do limite de vagas (só entra se alguém da lista
+// de confirmados sair)
+function getListaDeEsperaDaEnquete(enqueteId) {
+    return separarConfirmadosPorVagas(enqueteId).fora;
 }
 
 // todas as notas já registradas num jogo, pra pré-preencher o formulário de quem já votou
@@ -582,6 +620,7 @@ module.exports = {
     registrarMudancaPapel,
     getPapelHistorico,
     getConfirmadosDaEnquete,
+    getListaDeEsperaDaEnquete,
     getAvaliacoesDaEnquete,
     registrarAvaliacao,
 };

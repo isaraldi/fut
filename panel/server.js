@@ -26,6 +26,7 @@ const {
     registrarMudancaPapel,
     getPapelHistorico,
     getConfirmadosDaEnquete,
+    getListaDeEsperaDaEnquete,
     getAvaliacoesDaEnquete,
     registrarAvaliacao,
     criarEnvioImediato,
@@ -186,12 +187,14 @@ app.get('/confirmados', requireLogin, (req, res) => {
         : { votos: [], grupos: {} };
 
     const jogadores = db.prepare('SELECT id, nome, papel FROM jogadores ORDER BY nome ASC').all();
+    const listaDeEspera = enquete ? getListaDeEsperaDaEnquete(enquete.id) : [];
 
     res.render('confirmados', {
         enquete,
         grupos,
         totalVotos: votos.length,
         jogadores,
+        listaDeEspera,
         ok: req.query.ok,
     });
 });
@@ -206,7 +209,8 @@ app.post('/confirmados/enviar-lista', requireLogin, (req, res) => {
     if (!enquete) return res.redirect('/confirmados');
 
     const confirmados = getConfirmadosDaEnquete(enquete.id);
-    const texto = montarTextoListaConfirmadas(enquete, confirmados);
+    const listaDeEspera = getListaDeEsperaDaEnquete(enquete.id);
+    const texto = montarTextoListaConfirmadas(enquete, confirmados, listaDeEspera);
     criarEnvioImediato(grupoId, texto, 'lista');
     fecharEnquete(enquete.id); // novos votos passam a ser ignorados; o bot desafixa a enquete no próximo minuto
 
@@ -539,6 +543,7 @@ app.get('/jogo/config', requireLogin, (req, res) => {
         hora: getConfig('enquete_hora'),
         valorMensal: getConfig('valor_mensal'),
         valorAvulso: getConfig('valor_avulso'),
+        vagasMaximo: getConfig('jogo_vagas_maximo'),
         ok: req.query.ok,
     });
 });
@@ -556,6 +561,9 @@ app.post('/jogo/config', requireLogin, (req, res) => {
 
     const valorAvulso = parseFloat(String(req.body.valorAvulso).replace(',', '.'));
     setConfig('valor_avulso', Number.isFinite(valorAvulso) && valorAvulso > 0 ? valorAvulso.toFixed(2) : '');
+
+    const vagasMaximo = parseInt(req.body.vagasMaximo, 10);
+    setConfig('jogo_vagas_maximo', Number.isFinite(vagasMaximo) && vagasMaximo > 0 ? String(vagasMaximo) : '');
 
     redirectOk(res, '/jogo/config', 'Configurações salvas!');
 });

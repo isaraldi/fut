@@ -24,6 +24,30 @@
         </form>
     </div>
 
+    <% if (listaDeEspera.length > 0) { %>
+        <div class="card">
+            <h1>⏳ Lista de espera (<%= listaDeEspera.length %>)</h1>
+            <p class="hint">
+                Confirmaram, mas o jogo já bateu o limite de vagas configurado em
+                <a href="/jogo/config">Configurações → Jogo</a>. Só entram se alguém da lista
+                de confirmadas sair.
+            </p>
+            <table>
+                <thead>
+                    <tr><th>Nome</th><th>Papel</th></tr>
+                </thead>
+                <tbody>
+                    <% listaDeEspera.forEach(j => { %>
+                        <tr>
+                            <td><%= j.nome %></td>
+                            <td><span class="badge <%= j.papel %>"><%= j.papel %></span></td>
+                        </tr>
+                    <% }) %>
+                </tbody>
+            </table>
+        </div>
+    <% } %>
+
     <%- include('_confirmar-manual', { enquete, jogadores }) %>
 
     <%- include('_votos-por-opcao', { grupos, enqueteId: enquete.id }) %>

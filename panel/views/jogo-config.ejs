@@ -13,6 +13,9 @@
             <code>{data}</code>/<code>{dia}</code>/<code>{hora}</code> do título da enquete.
         </p>
         <form method="post" action="/jogo/config">
+            <input type="hidden" name="valorMensal" value="<%= valorMensal || '' %>">
+            <input type="hidden" name="valorAvulso" value="<%= valorAvulso || '' %>">
+            <input type="hidden" name="vagasMaximo" value="<%= vagasMaximo || '' %>">
             <div class="form-row">
                 <div>
                     <label>Dia da semana</label>
@@ -49,6 +52,31 @@
     </div>
 
     <div class="card">
+        <h1>Vagas</h1>
+        <p class="hint">
+            Número máximo de jogadoras no jogo. Mensalistas sempre têm prioridade: as vagas
+            delas são reservadas primeiro, e o que sobrar vai pras avulsas que confirmaram,
+            por ordem de quem confirmou primeiro. Quem ficar de fora entra numa lista de
+            espera — só joga se alguém da lista de confirmadas sair. Deixe em branco pra não
+            ter limite. O valor vale a partir da próxima enquete aberta; jogos já criados não mudam.
+        </p>
+        <form method="post" action="/jogo/config">
+            <input type="hidden" name="diaSemana" value="<%= diaSemana %>">
+            <input type="hidden" name="horaH" value="<%= hora.split(':')[0] %>">
+            <input type="hidden" name="horaM" value="<%= hora.split(':')[1] %>">
+            <input type="hidden" name="valorMensal" value="<%= valorMensal || '' %>">
+            <input type="hidden" name="valorAvulso" value="<%= valorAvulso || '' %>">
+            <div class="form-row">
+                <div>
+                    <label>Vagas máximo (jogadoras)</label>
+                    <input type="number" name="vagasMaximo" step="1" min="1" placeholder="Ex: 12" value="<%= vagasMaximo || '' %>">
+                </div>
+            </div>
+            <input type="submit" value="Salvar">
+        </form>
+    </div>
+
+    <div class="card">
         <h1>Valores</h1>
         <p class="hint">
             Ao receber um comprovante de pagamento no grupo, o bot lê o valor nele por OCR e
@@ -61,6 +89,7 @@
             <input type="hidden" name="diaSemana" value="<%= diaSemana %>">
             <input type="hidden" name="horaH" value="<%= hora.split(':')[0] %>">
             <input type="hidden" name="horaM" value="<%= hora.split(':')[1] %>">
+            <input type="hidden" name="vagasMaximo" value="<%= vagasMaximo || '' %>">
             <div class="form-row">
                 <div>
                     <label>Valor da mensalidade (R$)</label>

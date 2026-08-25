@@ -66,10 +66,10 @@ function balancearTimes(jogadores) {
     return { timeA, timeB, somaA, somaB };
 }
 
-function montarTextoListaConfirmadas(enquete, confirmados) {
+function montarTextoListaConfirmadas(enquete, confirmados, listaDeEspera = []) {
     let texto = `📋 *Lista fechada — ${enquete.titulo}*\n\n`;
 
-    if (confirmados.length === 0) {
+    if (confirmados.length === 0 && listaDeEspera.length === 0) {
         texto += 'Ninguém confirmado ainda.';
         return texto;
     }
@@ -88,6 +88,13 @@ function montarTextoListaConfirmadas(enquete, confirmados) {
         texto += '\n';
     }
     texto += `Total: ${confirmados.length} confirmada${confirmados.length === 1 ? '' : 's'}`;
+
+    if (listaDeEspera.length > 0) {
+        texto += `\n\n⏳ *Lista de espera (${listaDeEspera.length}):*\n`;
+        listaDeEspera.forEach((j, i) => { texto += `${i + 1}. ${j.nome}\n`; });
+        texto += '\nSó entra se algum dos confirmados sair da lista.';
+    }
+
     texto += '\n\n🔒 Lista fechada — votos depois disso não contam mais.';
     return texto;
 }
