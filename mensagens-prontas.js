@@ -66,14 +66,10 @@ function balancearTimes(jogadores) {
     return { timeA, timeB, somaA, somaB };
 }
 
-function montarTextoListaConfirmadas(enquete, confirmados, listaDeEspera = []) {
-    let texto = `📋 *Lista fechada — ${enquete.titulo}*\n\n`;
-
-    if (confirmados.length === 0 && listaDeEspera.length === 0) {
-        texto += 'Ninguém confirmado ainda.';
-        return texto;
-    }
-
+// monta as seções "Mensalistas (n)" / "Avulsas (n)" — a ordem de cada lista é a mesma
+// ordem em que os arrays chegam (sempre por ordem de confirmação, nunca alfabética)
+function montarSecoesDeConfirmadas(confirmados) {
+    let texto = '';
     const mensalistas = confirmados.filter((j) => j.papel === 'mensalista');
     const avulsas = confirmados.filter((j) => j.papel === 'avulso');
 
@@ -87,6 +83,34 @@ function montarTextoListaConfirmadas(enquete, confirmados, listaDeEspera = []) {
         avulsas.forEach((j, i) => { texto += `${i + 1}. ${j.nome}\n`; });
         texto += '\n';
     }
+    return texto;
+}
+
+// mensagem oficial de fechamento — só quem realmente tem vaga garantida entra aqui
+function montarTextoListaConfirmadas(enquete, confirmados) {
+    let texto = `📋 *Lista fechada — ${enquete.titulo}*\n\n`;
+
+    if (confirmados.length === 0) {
+        texto += 'Ninguém confirmado ainda.';
+        return texto;
+    }
+
+    texto += montarSecoesDeConfirmadas(confirmados);
+    texto += `Total: ${confirmados.length} confirmada${confirmados.length === 1 ? '' : 's'}`;
+    texto += '\n\n🔒 Lista fechada — votos depois disso não contam mais.';
+    return texto;
+}
+
+// prévia da enquete ainda aberta — mostra confirmadas E lista de espera, sem fechar nada
+function montarTextoListaAtual(enquete, confirmados, listaDeEspera = []) {
+    let texto = `📋 *Lista atual — ${enquete.titulo}*\n\n`;
+
+    if (confirmados.length === 0 && listaDeEspera.length === 0) {
+        texto += 'Ninguém confirmado ainda.';
+        return texto;
+    }
+
+    texto += montarSecoesDeConfirmadas(confirmados);
     texto += `Total: ${confirmados.length} confirmada${confirmados.length === 1 ? '' : 's'}`;
 
     if (listaDeEspera.length > 0) {
@@ -95,7 +119,7 @@ function montarTextoListaConfirmadas(enquete, confirmados, listaDeEspera = []) {
         texto += '\nSó entra se algum dos confirmados sair da lista.';
     }
 
-    texto += '\n\n🔒 Lista fechada — votos depois disso não contam mais.';
+    texto += '\n\nEssa lista ainda pode mudar — a enquete continua aberta.';
     return texto;
 }
 
@@ -114,5 +138,6 @@ module.exports = {
     embaralhar,
     balancearTimes,
     montarTextoListaConfirmadas,
+    montarTextoListaAtual,
     montarTextoTimes,
 };

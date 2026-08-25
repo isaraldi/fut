@@ -209,8 +209,7 @@ app.post('/confirmados/enviar-lista', requireLogin, (req, res) => {
     if (!enquete) return res.redirect('/confirmados');
 
     const confirmados = getConfirmadosDaEnquete(enquete.id);
-    const listaDeEspera = getListaDeEsperaDaEnquete(enquete.id);
-    const texto = montarTextoListaConfirmadas(enquete, confirmados, listaDeEspera);
+    const texto = montarTextoListaConfirmadas(enquete, confirmados);
     criarEnvioImediato(grupoId, texto, 'lista');
     fecharEnquete(enquete.id); // novos votos passam a ser ignorados; o bot desafixa a enquete no próximo minuto
 

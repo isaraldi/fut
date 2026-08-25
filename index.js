@@ -30,7 +30,7 @@ const {
   marcarEnqueteDesafixada,
   registrarTentativaDesafixar,
 } = require('./db');
-const { balancearTimes, montarTextoListaConfirmadas, montarTextoTimes } = require('./mensagens-prontas');
+const { balancearTimes, montarTextoListaConfirmadas, montarTextoListaAtual, montarTextoTimes } = require('./mensagens-prontas');
 
 const client = new Client({
   authStrategy: new LocalAuth(),
@@ -532,14 +532,57 @@ async function enviarListaDeConfirmadas(msg) {
   }
 
   const confirmados = getConfirmadosDaEnquete(enquete.id);
-  const listaDeEspera = getListaDeEsperaDaEnquete(enquete.id);
-  const texto = montarTextoListaConfirmadas(enquete, confirmados, listaDeEspera);
+  const texto = montarTextoListaConfirmadas(enquete, confirmados);
 
   await msg.reply(texto);
   fecharEnquete(enquete.id); // a partir daqui, novos votos na enquete são ignorados
   registrarLog(
     'lista', 'sucesso',
     `Lista de confirmadas enviada e enquete fechada (${confirmados.length} confirmada(s)) — "${enquete.titulo}"`,
+    msg.from.endsWith('@g.us') ? msg.from : null,
+  );
+}
+
+// 📋 LISTA ATUAL — prévia de quem está confirmada e quem está na espera, sem fechar a
+// enquete. Funciona em grupo ou em DM, igual !fechar
+async function enviarListaAtual(msg) {
+  const enquete = db.prepare('SELECT * FROM enquetes ORDER BY id DESC LIMIT 1').get();
+  if (!enquete) {
+    return msg.reply('📋 Nenhuma enquete foi aberta ainda.');
+  }
+
+  const confirmados = getConfirmadosDaEnquete(enquete.id);
+  const listaDeEspera = getListaDeEsperaDaEnquete(enquete.id);
+  const texto = montarTextoListaAtual(enquete, confirmados, listaDeEspera);
+
+  await msg.reply(texto);
+  registrarLog(
+    'lista', 'sucesso',
+    `Lista atual enviada (${confirmados.length} confirmada(s), ${listaDeEspera.length} na espera) — "${enquete.titulo}"`,
+    msg.from.endsWith('@g.us') ? msg.from : null,
+  );
+}
+
+// ⏳ LISTA DE ESPERA — manda só quem ficou de fora por causa do limite de vagas
+async function enviarListaDeEspera(msg) {
+  const enquete = db.prepare('SELECT * FROM enquetes ORDER BY id DESC LIMIT 1').get();
+  if (!enquete) {
+    return msg.reply('⏳ Nenhuma enquete foi aberta ainda.');
+  }
+
+  const listaDeEspera = getListaDeEsperaDaEnquete(enquete.id);
+  if (listaDeEspera.length === 0) {
+    return msg.reply('⏳ Ninguém na lista de espera agora.');
+  }
+
+  let texto = `⏳ *Lista de espera — ${enquete.titulo}*\n\n`;
+  listaDeEspera.forEach((j, i) => { texto += `${i + 1}. ${j.nome}\n`; });
+  texto += '\nSó entram se algum dos confirmados sair da lista.';
+
+  await msg.reply(texto);
+  registrarLog(
+    'lista', 'sucesso',
+    `Lista de espera enviada (${listaDeEspera.length} na espera) — "${enquete.titulo}"`,
     msg.from.endsWith('@g.us') ? msg.from : null,
   );
 }
@@ -650,6 +693,16 @@ client.on('message', async msg => {
   // funciona em grupo OU em DM direto com o bot
   if (text === '!fechar') {
     return enviarListaDeConfirmadas(msg);
+  }
+
+  // funciona em grupo OU em DM direto com o bot
+  if (text === '!lista') {
+    return enviarListaAtual(msg);
+  }
+
+  // funciona em grupo OU em DM direto com o bot
+  if (text === '!espera') {
+    return enviarListaDeEspera(msg);
   }
 
   // funciona em grupo OU em DM direto com o bot

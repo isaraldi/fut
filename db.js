@@ -472,7 +472,8 @@ function getPapelHistorico(jogadorId) {
 
 // separa quem votou (papel preenchido) em "tem vaga" x "lista de espera", respeitando o
 // limite de vagas travado na própria enquete (enquetes.vagas_maximo). Mensalista sempre tem
-// prioridade sobre avulso; dentro do mesmo grupo, quem confirmou primeiro fica com a vaga
+// prioridade sobre avulso pra alocação de vaga; dentro do mesmo grupo, quem confirmou
+// primeiro fica com a vaga. Isso decide QUEM entra — a EXIBIÇÃO é outra regra (ver abaixo)
 function separarConfirmadosPorVagas(enqueteId) {
     const todos = db
         .prepare(
@@ -483,23 +484,32 @@ function separarConfirmadosPorVagas(enqueteId) {
         )
         .all(enqueteId);
 
-    const porNome = (a, b) => a.nome.localeCompare(b.nome, 'pt-BR');
     const { vagas_maximo: vagasMaximo } =
         db.prepare('SELECT vagas_maximo FROM enquetes WHERE id = ?').get(enqueteId) || {};
 
+    const porNome = (a, b) => a.nome.localeCompare(b.nome, 'pt-BR');
+    const porOrdemDeChegada = (a, b) => a.votado_em.localeCompare(b.votado_em);
+
+    // exibição: mensalistas sempre em ordem alfabética; avulsas sempre por ordem de
+    // confirmação na enquete (e a lista de espera herda essa mesma ordem, automaticamente)
+    const paraExibicao = (lista) => [
+        ...lista.filter((j) => j.papel === 'mensalista').sort(porNome),
+        ...lista.filter((j) => j.papel === 'avulso').sort(porOrdemDeChegada),
+    ];
+
     if (!vagasMaximo) {
-        return { dentro: [...todos].sort(porNome), fora: [] };
+        return { dentro: paraExibicao(todos), fora: [] };
     }
 
-    const porOrdemDeChegada = (a, b) => a.votado_em.localeCompare(b.votado_em);
+    // alocação das vagas: sempre por ordem de chegada, mensalista primeiro
     const fila = [
         ...todos.filter((j) => j.papel === 'mensalista').sort(porOrdemDeChegada),
         ...todos.filter((j) => j.papel === 'avulso').sort(porOrdemDeChegada),
     ];
 
     return {
-        dentro: fila.slice(0, vagasMaximo).sort(porNome),
-        fora: fila.slice(vagasMaximo).sort(porOrdemDeChegada),
+        dentro: paraExibicao(fila.slice(0, vagasMaximo)),
+        fora: paraExibicao(fila.slice(vagasMaximo)),
     };
 }
 
