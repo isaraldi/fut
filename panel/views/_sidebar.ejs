@@ -43,13 +43,14 @@
             <span class="icon">📋</span> Logs
         </a>
 
-        <details class="nav-group" <%= grupoAberto(['/elenco/config', '/jogo/config', '/enquete/config', '/mensagens', '/configuracoes']) ? 'open' : '' %>>
+        <details class="nav-group" <%= grupoAberto(['/elenco/config', '/jogo/config', '/enquete/config', '/mensagens', '/comandos', '/configuracoes']) ? 'open' : '' %>>
             <summary><span class="icon">⚙️</span> Configurações <span class="chevron">▸</span></summary>
             <div class="nav-sub">
                 <a class="nav-link <%= ativo('/elenco/config') ? 'active' : '' %>" href="/elenco/config">Jogadores</a>
                 <a class="nav-link <%= ativo('/jogo/config') ? 'active' : '' %>" href="/jogo/config">Jogo</a>
                 <a class="nav-link <%= ativo('/enquete/config') ? 'active' : '' %>" href="/enquete/config">Enquete</a>
                 <a class="nav-link <%= ativo('/mensagens') ? 'active' : '' %>" href="/mensagens">Mensagens</a>
+                <a class="nav-link <%= ativo('/comandos') ? 'active' : '' %>" href="/comandos">Comandos</a>
                 <a class="nav-link <%= ativo('/configuracoes/aparencia') ? 'active' : '' %>" href="/configuracoes/aparencia">Aparência</a>
             </div>
         </details>

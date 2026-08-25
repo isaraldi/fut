@@ -1,0 +1,73 @@
+<div class="page-header">
+    <div>
+        <h1>Comandos</h1>
+    </div>
+</div>
+
+<div class="card">
+    <h1>Comandos disponíveis</h1>
+    <p class="hint">
+        Comandos que funcionam mandando mensagem no grupo do WhatsApp (ou em DM direto com o
+        número do bot, quando marcado abaixo). Só quem estiver liberado na lista logo abaixo
+        consegue usá-los — quem não estiver liberado recebe um aviso e nada acontece.
+    </p>
+    <table>
+        <thead>
+            <tr><th>Comando</th><th>Onde funciona</th><th>O que faz</th></tr>
+        </thead>
+        <tbody>
+            <% comandos.forEach(c => { %>
+                <tr>
+                    <td><code><%= c.comando %></code></td>
+                    <td><%= c.onde %></td>
+                    <td><%= c.descricao %></td>
+                </tr>
+            <% }) %>
+        </tbody>
+    </table>
+</div>
+
+<div class="card">
+    <h1>Quem pode usar comandos</h1>
+    <p class="hint">
+        Whitelist por jogadora — evita que qualquer pessoa do grupo mande <code>!fechar</code>
+        (ou outro comando) sem querer. Precisa estar cadastrada no elenco pra aparecer aqui.
+        Ninguém vem liberado por padrão, inclusive quem já usava os comandos antes — libere
+        pelo menos a si mesma abaixo.
+    </p>
+    <% if (jogadores.length === 0) { %>
+        <p class="empty">Nenhuma jogadora cadastrada ainda.</p>
+    <% } else { %>
+        <table>
+            <thead>
+                <tr><th>Nome</th><th>Telefone</th><th>Status</th><th></th></tr>
+            </thead>
+            <tbody>
+                <% jogadores.forEach(j => { %>
+                    <tr>
+                        <td><%= j.nome %></td>
+                        <td><%= j.telefone || '—' %></td>
+                        <td>
+                            <span class="badge <%= j.pode_comandar ? 'pago' : 'pendente' %>">
+                                <%= j.pode_comandar ? 'Liberado' : 'Bloqueado' %>
+                            </span>
+                        </td>
+                        <td>
+                            <form method="post" action="/comandos/<%= j.id %>/toggle">
+                                <button class="secondary btn-icon-label" type="submit">
+                                    <% if (j.pode_comandar) { %>
+                                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 9.9-1"></path></svg>
+                                        Bloquear
+                                    <% } else { %>
+                                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 9.9-1"></path></svg>
+                                        Liberar
+                                    <% } %>
+                                </button>
+                            </form>
+                        </td>
+                    </tr>
+                <% }) %>
+            </tbody>
+        </table>
+    <% } %>
+</div>

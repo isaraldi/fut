@@ -31,6 +31,9 @@ const {
     registrarAvaliacao,
     criarEnvioImediato,
     fecharEnquete,
+    getJogadoresParaPermissao,
+    definirPermissaoComando,
+    reativarJogador,
 } = require('../db');
 const { balancearTimes, montarTextoListaConfirmadas, montarTextoTimes } = require('../mensagens-prontas');
 
@@ -442,9 +445,12 @@ app.post('/pagamentos/avulsos/:jogadorId/toggle', requireLogin, (req, res) => {
 
 app.get('/elenco', requireLogin, (req, res) => {
     const jogadores = db
-        .prepare('SELECT * FROM jogadores ORDER BY papel DESC, nivel DESC, nome ASC')
+        .prepare('SELECT * FROM jogadores WHERE ativo = 1 ORDER BY papel DESC, nivel DESC, nome ASC')
         .all();
-    res.render('elenco', { usuario: req.session.usuario, jogadores, ok: req.query.ok });
+    const inativas = db
+        .prepare('SELECT * FROM jogadores WHERE ativo = 0 ORDER BY nome ASC')
+        .all();
+    res.render('elenco', { usuario: req.session.usuario, jogadores, inativas, ok: req.query.ok });
 });
 
 app.post('/elenco', requireLogin, (req, res) => {
@@ -470,8 +476,17 @@ app.get('/elenco/config', requireLogin, (req, res) => {
     res.render('elenco-config', {
         usuario: req.session.usuario,
         autoIncluir: getConfig('elenco_auto_incluir_grupo') === '1',
+        grupos: getGrupos(),
         ok: req.query.ok,
     });
+});
+
+app.post('/elenco/config/sincronizar', requireLogin, (req, res) => {
+    const grupoId = req.body.grupoId;
+    if (!grupoId) return res.redirect('/elenco/config');
+
+    setConfig('sincronizar_grupo_pendente', grupoId);
+    redirectOk(res, '/elenco/config', 'Sincronização solicitada! Pode levar até 1 minuto — confira em Logs.');
 });
 
 app.post('/elenco/config', requireLogin, (req, res) => {
@@ -521,6 +536,11 @@ app.post('/elenco/:id/excluir', requireLogin, (req, res) => {
     redirectOk(res, '/elenco', 'Jogador removido.');
 });
 
+app.post('/elenco/:id/reativar', requireLogin, (req, res) => {
+    reativarJogador(Number(req.params.id));
+    redirectOk(res, '/elenco', 'Jogadora reativada!');
+});
+
 app.get('/elenco/:id/historico', requireLogin, (req, res) => {
     const id = Number(req.params.id);
     const jogador = db.prepare('SELECT * FROM jogadores WHERE id = ?').get(id);
@@ -531,6 +551,35 @@ app.get('/elenco/:id/historico', requireLogin, (req, res) => {
         jogador,
         historico: getPapelHistorico(id),
     });
+});
+
+// ---------- COMANDOS DO BOT (referência + whitelist de quem pode usar) ----------
+
+const COMANDOS_DO_BOT = [
+    { comando: '!enquete', onde: 'Grupo', descricao: 'Abre uma nova enquete de confirmação pro jogo.' },
+    { comando: '!sincronizar', onde: 'Grupo', descricao: 'Sincroniza o elenco com os membros atuais do grupo do WhatsApp.' },
+    { comando: '!fechar', onde: 'Grupo ou DM', descricao: 'Fecha a enquete: manda quem realmente vai jogar (respeitando o limite de vagas) e trava novos votos.' },
+    { comando: '!lista', onde: 'Grupo ou DM', descricao: 'Mostra a lista atual — confirmadas e lista de espera — sem fechar a enquete. Pode repetir quantas vezes quiser.' },
+    { comando: '!espera', onde: 'Grupo ou DM', descricao: 'Mostra só quem está na lista de espera agora.' },
+    { comando: '!times', onde: 'Grupo ou DM', descricao: 'Sorteia e manda os times balanceados por nível.' },
+];
+
+app.get('/comandos', requireLogin, (req, res) => {
+    res.render('comandos', {
+        usuario: req.session.usuario,
+        comandos: COMANDOS_DO_BOT,
+        jogadores: getJogadoresParaPermissao(),
+        ok: req.query.ok,
+    });
+});
+
+app.post('/comandos/:id/toggle', requireLogin, (req, res) => {
+    const id = Number(req.params.id);
+    const jogador = db.prepare('SELECT pode_comandar FROM jogadores WHERE id = ?').get(id);
+    if (!jogador) return res.redirect('/comandos');
+
+    definirPermissaoComando(id, !jogador.pode_comandar);
+    redirectOk(res, '/comandos', 'Permissão atualizada!');
 });
 
 // ---------- CONFIGURAÇÃO DO JOGO (dia/horário) ----------

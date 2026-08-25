@@ -126,6 +126,20 @@ if (!colunasJogadores.some((c) => c.name === 'posicao')) {
     );
 }
 
+// migração leve: jogadores.pode_comandar — whitelist de quem pode usar comandos do bot no
+// WhatsApp (!fechar, !enquete, etc). Começa desligado pra todo mundo, inclusive quem já
+// estava cadastrado — precisa liberar manualmente no painel depois de subir essa versão
+if (!colunasJogadores.some((c) => c.name === 'pode_comandar')) {
+    db.exec('ALTER TABLE jogadores ADD COLUMN pode_comandar INTEGER NOT NULL DEFAULT 0');
+}
+
+// migração leve: jogadores.ativo — marcado automaticamente pela sincronização de elenco
+// (quem some dos participantes do grupo sincronizado vira inativa, nunca é excluída, pra não
+// perder o histórico de pagamentos/presença). Começa ativo pra todo mundo que já existia
+if (!colunasJogadores.some((c) => c.name === 'ativo')) {
+    db.exec('ALTER TABLE jogadores ADD COLUMN ativo INTEGER NOT NULL DEFAULT 1');
+}
+
 // migração leve: votos.papel (denormalizado no momento do voto,
 // pra não depender de enquete_opcoes que pode mudar depois)
 const colunasVotos = db.prepare('PRAGMA table_info(votos)').all();
@@ -200,6 +214,26 @@ if (schemaLogs && !schemaLogs.sql.includes("'times'")) {
     `);
 }
 
+// migração leve: logs.tipo precisa aceitar 'elenco' também (sincronização disparada pelo painel)
+const schemaLogsElenco = db
+    .prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'logs'")
+    .get();
+if (schemaLogsElenco && !schemaLogsElenco.sql.includes("'elenco'")) {
+    db.exec(`
+        CREATE TABLE logs_novo (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            tipo TEXT NOT NULL CHECK(tipo IN ('enquete', 'mensagem', 'comprovante', 'lista', 'times', 'elenco')),
+            nivel TEXT NOT NULL DEFAULT 'sucesso' CHECK(nivel IN ('sucesso', 'aviso', 'erro')),
+            mensagem TEXT NOT NULL,
+            grupo_id TEXT,
+            criado_em TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+        INSERT INTO logs_novo SELECT * FROM logs;
+        DROP TABLE logs;
+        ALTER TABLE logs_novo RENAME TO logs;
+    `);
+}
+
 // seed das opções padrão (mesmas que já estavam fixas no código)
 const totalOpcoes = db.prepare('SELECT COUNT(*) AS c FROM enquete_opcoes').get().c;
 if (totalOpcoes === 0) {
@@ -225,6 +259,7 @@ const DEFAULT_CONFIG = {
     valor_mensal: '', // valor (R$) da mensalidade — usado pra reconhecer comprovantes automaticamente
     valor_avulso: '', // valor (R$) do avulso — idem
     jogo_vagas_maximo: '', // nº máximo de jogadoras no jogo — vazio = sem limite. Snapshot em enquetes.vagas_maximo na criação
+    sincronizar_grupo_pendente: '', // whatsapp_id do grupo que o botão do painel pediu pra sincronizar agora
 };
 
 function getConfig(chave) {
@@ -456,6 +491,28 @@ function getJogadorPorWhatsappId(whatsappId) {
     return db.prepare('SELECT * FROM jogadores WHERE whatsapp_id = ?').get(whatsappId);
 }
 
+// whitelist de comandos — só quem tem pode_comandar = 1 consegue usar !fechar, !enquete etc
+function podeUsarComandos(whatsappId) {
+    const jogador = db
+        .prepare('SELECT pode_comandar FROM jogadores WHERE whatsapp_id = ?')
+        .get(whatsappId);
+    return !!(jogador && jogador.pode_comandar);
+}
+
+function getJogadoresParaPermissao() {
+    return db
+        .prepare('SELECT id, nome, telefone, pode_comandar FROM jogadores ORDER BY nome ASC')
+        .all();
+}
+
+function definirPermissaoComando(jogadorId, pode) {
+    db.prepare('UPDATE jogadores SET pode_comandar = ? WHERE id = ?').run(pode ? 1 : 0, jogadorId);
+}
+
+function reativarJogador(jogadorId) {
+    db.prepare('UPDATE jogadores SET ativo = 1 WHERE id = ?').run(jogadorId);
+}
+
 function registrarMudancaPapel(jogadorId, papelAnterior, papelNovo) {
     db.prepare(
         'INSERT INTO papel_historico (jogador_id, papel_anterior, papel_novo) VALUES (?, ?, ?)',
@@ -627,6 +684,10 @@ module.exports = {
     marcarPagamentoMensalista,
     marcarPagamentoAvulso,
     getJogadorPorWhatsappId,
+    podeUsarComandos,
+    getJogadoresParaPermissao,
+    definirPermissaoComando,
+    reativarJogador,
     registrarMudancaPapel,
     getPapelHistorico,
     getConfirmadosDaEnquete,

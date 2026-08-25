@@ -22,10 +22,32 @@
 <div class="card">
     <h1>Sincronizar membros já existentes</h1>
     <p class="hint">
-        Isso só funciona pelo próprio WhatsApp: um admin manda <code>!sincronizar</code> no grupo
-        e o bot adiciona todo mundo que ainda não está na lista (o painel não tem acesso direto
-        à lista de participantes do grupo, só o bot que já está conectado).
+        Adiciona ao elenco todo mundo que já está no grupo do WhatsApp e ainda não está
+        cadastrado. Só adiciona — <strong>nunca remove ninguém</strong>, nem quem já saiu do
+        grupo, pra não apagar o histórico de pagamentos e presenças de quem já jogou. Pra tirar
+        alguém do elenco, use o botão de excluir na tela de <a href="/elenco">Jogadores</a>.
     </p>
+    <% if (grupos.length === 0) { %>
+        <p class="hint">
+            ⚠️ Ainda não conheço nenhum grupo. A lista é sincronizada automaticamente quando o
+            bot conecta no WhatsApp — espere o bot ficar online e recarregue esta página.
+        </p>
+    <% } %>
+    <form method="post" action="/elenco/config/sincronizar">
+        <div class="form-row">
+            <div>
+                <label>Grupo</label>
+                <select name="grupoId" <%= grupos.length === 0 ? 'disabled' : '' %> required>
+                    <option value="" selected disabled>Selecione um grupo</option>
+                    <% grupos.forEach(g => { %>
+                        <option value="<%= g.whatsapp_id %>"><%= g.nome %></option>
+                    <% }) %>
+                </select>
+            </div>
+        </div>
+        <input type="submit" value="🔄 Sincronizar agora" <%= grupos.length === 0 ? 'disabled' : '' %>>
+    </form>
+    <p class="hint">Ou mande <code>!sincronizar</code> direto no grupo pelo WhatsApp — funciona igual.</p>
     <p class="hint">
         ⚠️ Sobre o telefone: contas com id no formato <code>@lid</code> (cada vez mais comuns por
         privacidade do WhatsApp) não expõem o número de telefone real — só contas <code>@c.us</code>

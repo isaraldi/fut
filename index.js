@@ -20,6 +20,7 @@ const {
   marcarPagamentoMensalista,
   marcarPagamentoAvulso,
   getJogadorPorWhatsappId,
+  podeUsarComandos,
   getConfirmadosDaEnquete,
   getListaDeEsperaDaEnquete,
   registrarLog,
@@ -89,6 +90,7 @@ client.on('ready', async () => {
       checarEnviosImediatos();
       checarEnquetesParaDesafixar();
       checarReinicioAgendadoDoBot();
+      checarSincronizacaoPendente();
     }, 60 * 1000);
   }
   await sincronizarGruposConhecidos();
@@ -210,6 +212,16 @@ async function resolverIdCanonico(whatsappId) {
     console.error(`Erro ao resolver id canônico de ${whatsappId}:`, err.message);
     return whatsappId;
   }
+}
+
+// 🔒 checa se quem mandou a mensagem está na whitelist de comandos (painel → Comandos)
+async function remetenteAutorizado(msg) {
+  const idCanonico = await resolverIdCanonico(getUserId(msg));
+  return podeUsarComandos(idCanonico);
+}
+
+async function negarComando(msg) {
+  return msg.reply('🔒 Você não tem permissão pra usar comandos do bot. Peça pra um admin te liberar no painel (Comandos).');
 }
 
 // 🤖 id do próprio bot, pra nunca incluir ele mesmo no elenco
@@ -683,30 +695,36 @@ client.on('message', async msg => {
 
   // funciona em qualquer grupo, independente do groupConfigs legado
   if (msg.from.endsWith('@g.us') && text === '!enquete') {
+    if (!(await remetenteAutorizado(msg))) return negarComando(msg);
     return abrirEnquete(msg.from, msg);
   }
 
   if (msg.from.endsWith('@g.us') && text === '!sincronizar') {
+    if (!(await remetenteAutorizado(msg))) return negarComando(msg);
     return sincronizarElencoDoGrupo(msg);
   }
 
   // funciona em grupo OU em DM direto com o bot
   if (text === '!fechar') {
+    if (!(await remetenteAutorizado(msg))) return negarComando(msg);
     return enviarListaDeConfirmadas(msg);
   }
 
   // funciona em grupo OU em DM direto com o bot
   if (text === '!lista') {
+    if (!(await remetenteAutorizado(msg))) return negarComando(msg);
     return enviarListaAtual(msg);
   }
 
   // funciona em grupo OU em DM direto com o bot
   if (text === '!espera') {
+    if (!(await remetenteAutorizado(msg))) return negarComando(msg);
     return enviarListaDeEspera(msg);
   }
 
   // funciona em grupo OU em DM direto com o bot
   if (text === '!times') {
+    if (!(await remetenteAutorizado(msg))) return negarComando(msg);
     return enviarTimesSorteados(msg);
   }
 
@@ -927,32 +945,80 @@ client.on('group_join', async notification => {
   }
 });
 
-// 🔄 SINCRONIZAR ELENCO COM MEMBROS ATUAIS DO GRUPO (sob demanda, admin manda no grupo)
-async function sincronizarElencoDoGrupo(msg) {
-  const chat = await msg.getChat();
-  if (!chat.isGroup) return;
-
+// 🔄 SINCRONIZAR ELENCO — percorre os participantes atuais do grupo e garante que todos
+// estejam no elenco. Só ADICIONA quem ainda não está cadastrado; nunca remove ninguém, nem
+// quem já saiu do grupo, pra não apagar o histórico de pagamentos/presença de quem já jogou
+async function sincronizarElencoDeChat(chat) {
   let novos = 0;
   let total = 0;
+  const idsNoGrupo = new Set();
+
   for (const participant of chat.participants) {
     const whatsappId = getIdSerialized(participant.id);
     if (!whatsappId) continue;
 
     const idCanonico = await resolverIdCanonico(whatsappId);
-    const jaExistia = !!db
-      .prepare('SELECT id FROM jogadores WHERE whatsapp_id = ?')
+    const existente = db
+      .prepare('SELECT id, ativo FROM jogadores WHERE whatsapp_id = ?')
       .get(idCanonico);
 
     const jogadorId = await sincronizarJogadorPorId(whatsappId);
     if (!jogadorId) continue; // pulado: era o próprio bot, ou deu erro
 
+    idsNoGrupo.add(jogadorId);
+    if (existente && !existente.ativo) {
+      db.prepare('UPDATE jogadores SET ativo = 1 WHERE id = ?').run(jogadorId); // voltou pro grupo
+    }
+
     total++;
-    if (!jaExistia) novos++;
+    if (!existente) novos++;
   }
 
-  return msg.reply(
-    `🔄 Elenco sincronizado! ${total} membro(s) do grupo no elenco, ${novos} novo(s) adicionado(s).`
-  );
+  // quem estava ativa mas não apareceu entre os participantes atuais desse grupo saiu —
+  // marca como inativa (nunca exclui, pra preservar o histórico de pagamentos/presença)
+  let inativados = 0;
+  const marcarInativo = db.prepare('UPDATE jogadores SET ativo = 0 WHERE id = ?');
+  for (const j of db.prepare('SELECT id FROM jogadores WHERE ativo = 1').all()) {
+    if (!idsNoGrupo.has(j.id)) {
+      marcarInativo.run(j.id);
+      inativados++;
+    }
+  }
+
+  return { total, novos, inativados };
+}
+
+// comando !sincronizar mandado direto no grupo
+async function sincronizarElencoDoGrupo(msg) {
+  const chat = await msg.getChat();
+  if (!chat.isGroup) return;
+
+  const { total, novos, inativados } = await sincronizarElencoDeChat(chat);
+  let texto = `🔄 Elenco sincronizado! ${total} membro(s) do grupo no elenco, ${novos} novo(s) adicionado(s).`;
+  if (inativados > 0) texto += ` ${inativados} marcada(s) como inativa(s) por não estarem mais no grupo.`;
+  return msg.reply(texto);
+}
+
+// botão "Sincronizar agora" do painel — o painel roda num processo separado sem acesso ao
+// client do WhatsApp, então só grava o pedido no config; o bot confere aqui a cada minuto
+async function checarSincronizacaoPendente() {
+  const grupoId = getConfig('sincronizar_grupo_pendente');
+  if (!grupoId) return;
+
+  try {
+    const chat = await client.getChatById(grupoId);
+    const { total, novos, inativados } = await sincronizarElencoDeChat(chat);
+    registrarLog(
+      'elenco', 'sucesso',
+      `Elenco sincronizado pelo painel — ${total} membro(s) no elenco, ${novos} novo(s) adicionado(s), ${inativados} marcada(s) como inativa(s)`,
+      grupoId,
+    );
+  } catch (err) {
+    registrarLog('elenco', 'erro', `Falha ao sincronizar elenco via painel: ${err.message}`, grupoId);
+    console.error('Erro ao sincronizar elenco via painel:', err);
+  } finally {
+    setConfig('sincronizar_grupo_pendente', '');
+  }
 }
 
 // ⚖️ balanceamento
