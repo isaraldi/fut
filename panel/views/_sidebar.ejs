@@ -35,9 +35,15 @@
             </div>
         </details>
 
-        <a class="nav-link <%= ativo('/elenco') ? 'active' : '' %>" href="/elenco">
-            <span class="icon">👥</span> Jogadores
-        </a>
+        <details class="nav-group" <%= (ativo('/elenco') || (caminho.startsWith('/elenco/') && !caminho.startsWith('/elenco/config'))) ? 'open' : '' %>>
+            <summary><span class="icon">👥</span> Jogadores <span class="chevron">▸</span></summary>
+            <div class="nav-sub">
+                <a class="nav-link <%= ativo('/elenco') ? 'active' : '' %>" href="/elenco">Ativos</a>
+                <a class="nav-link <%= ativo('/elenco/inativos') ? 'active' : '' %>" href="/elenco/inativos">
+                    Inativos<% if (jogadorasInativasCount > 0) { %> (<%= jogadorasInativasCount %>)<% } %>
+                </a>
+            </div>
+        </details>
 
         <a class="nav-link <%= caminho.startsWith('/logs') ? 'active' : '' %>" href="/logs">
             <span class="icon">📋</span> Logs

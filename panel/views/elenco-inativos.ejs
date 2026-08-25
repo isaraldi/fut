@@ -1,0 +1,48 @@
+<div class="page-header">
+    <div>
+        <h1>Jogadoras inativas</h1>
+        <p><%= jogadores.length %> jogadora<%= jogadores.length === 1 ? '' : 's' %> saiu(íram) do grupo</p>
+    </div>
+</div>
+
+<div class="card">
+    <p class="hint">
+        Marcadas automaticamente como inativas quando a sincronização de elenco não encontra
+        mais a jogadora entre os participantes do grupo. O histórico de pagamentos e presenças
+        fica preservado — reative se ela voltar pro grupo, ou exclua de vez se não for mais
+        precisar dos dados dela.
+    </p>
+    <% if (jogadores.length === 0) { %>
+        <p class="empty">Nenhuma jogadora inativa no momento.</p>
+    <% } else { %>
+        <table>
+            <thead>
+                <tr><th>Nome</th><th>Telefone</th><th>Papel</th><th></th></tr>
+            </thead>
+            <tbody>
+                <% jogadores.forEach(j => { %>
+                    <tr>
+                        <td><%= j.nome %></td>
+                        <td><%= j.telefone || '—' %></td>
+                        <td><span class="badge <%= j.papel %>"><%= j.papel %></span></td>
+                        <td style="white-space:nowrap">
+                            <form method="post" action="/elenco/<%= j.id %>/reativar" style="display:inline">
+                                <button class="secondary btn-icon-label" type="submit">
+                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>
+                                    Reativar
+                                </button>
+                            </form>
+                            <button class="icon-btn danger" type="submit" form="delete-inativa-<%= j.id %>" title="Excluir" aria-label="Excluir <%= j.nome %>">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+                            </button>
+                        </td>
+                    </tr>
+                <% }) %>
+            </tbody>
+        </table>
+    <% } %>
+</div>
+
+<% jogadores.forEach(j => { %>
+    <form id="delete-inativa-<%= j.id %>" method="post" action="/elenco/<%= j.id %>/excluir" data-confirm="Excluir {nome} de vez? Isso apaga o histórico de pagamentos e presenças dela." data-confirm-nome="<%= j.nome %>"></form>
+<% }) %>

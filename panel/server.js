@@ -92,6 +92,7 @@ app.use((req, res, next) => {
     res.locals.usuario = req.session ? req.session.usuario : null;
     res.locals.caminhoAtual = req.path;
     res.locals.logoUrlSidebar = getConfig('logo_url');
+    res.locals.jogadorasInativasCount = db.prepare('SELECT COUNT(*) c FROM jogadores WHERE ativo = 0').get().c;
     next();
 });
 
@@ -447,10 +448,14 @@ app.get('/elenco', requireLogin, (req, res) => {
     const jogadores = db
         .prepare('SELECT * FROM jogadores WHERE ativo = 1 ORDER BY papel DESC, nivel DESC, nome ASC')
         .all();
-    const inativas = db
+    res.render('elenco', { usuario: req.session.usuario, jogadores, ok: req.query.ok });
+});
+
+app.get('/elenco/inativos', requireLogin, (req, res) => {
+    const jogadores = db
         .prepare('SELECT * FROM jogadores WHERE ativo = 0 ORDER BY nome ASC')
         .all();
-    res.render('elenco', { usuario: req.session.usuario, jogadores, inativas, ok: req.query.ok });
+    res.render('elenco-inativos', { usuario: req.session.usuario, jogadores, ok: req.query.ok });
 });
 
 app.post('/elenco', requireLogin, (req, res) => {
