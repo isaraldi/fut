@@ -597,6 +597,9 @@ app.get('/jogo/config', requireLogin, (req, res) => {
         valorMensal: getConfig('valor_mensal'),
         valorAvulso: getConfig('valor_avulso'),
         vagasMaximo: getConfig('jogo_vagas_maximo'),
+        fechamentoAutomatico: getConfig('fechamento_automatico_ativo') === '1',
+        prazoDiaSemana: Number(getConfig('mensalista_prazo_dia_semana')),
+        prazoHora: getConfig('mensalista_prazo_hora'),
         ok: req.query.ok,
     });
 });
@@ -617,6 +620,19 @@ app.post('/jogo/config', requireLogin, (req, res) => {
 
     const vagasMaximo = parseInt(req.body.vagasMaximo, 10);
     setConfig('jogo_vagas_maximo', Number.isFinite(vagasMaximo) && vagasMaximo > 0 ? String(vagasMaximo) : '');
+
+    redirectOk(res, '/jogo/config', 'Configurações salvas!');
+});
+
+app.post('/jogo/config/fechamento-automatico', requireLogin, (req, res) => {
+    setConfig('fechamento_automatico_ativo', req.body.fechamentoAutomatico === 'on' ? '1' : '0');
+
+    const prazoDiaSemana = Number(req.body.prazoDiaSemana);
+    if (prazoDiaSemana >= 0 && prazoDiaSemana <= 6) setConfig('mensalista_prazo_dia_semana', String(prazoDiaSemana));
+
+    const prazoHoraH = String(req.body.prazoHoraH || '18').padStart(2, '0');
+    const prazoHoraM = String(req.body.prazoHoraM || '00').padStart(2, '0');
+    setConfig('mensalista_prazo_hora', `${prazoHoraH}:${prazoHoraM}`);
 
     redirectOk(res, '/jogo/config', 'Configurações salvas!');
 });

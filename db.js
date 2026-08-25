@@ -165,6 +165,16 @@ if (!colunasEnquetes.some((c) => c.name === 'tentativas_desafixar')) {
 if (!colunasEnquetes.some((c) => c.name === 'vagas_maximo')) {
     db.exec('ALTER TABLE enquetes ADD COLUMN vagas_maximo INTEGER');
 }
+// migração leve: enquetes.fechada_automaticamente/prazo_mensalista — controla o fechamento
+// sozinho quando as vagas enchem. fechada_automaticamente distingue de um !fechar manual (só
+// o fechamento automático reage a desistência depois, promovendo a lista de espera ou
+// reabrindo). prazo_mensalista é o prazo travado no momento da criação da enquete
+if (!colunasEnquetes.some((c) => c.name === 'fechada_automaticamente')) {
+    db.exec('ALTER TABLE enquetes ADD COLUMN fechada_automaticamente INTEGER NOT NULL DEFAULT 0');
+}
+if (!colunasEnquetes.some((c) => c.name === 'prazo_mensalista')) {
+    db.exec('ALTER TABLE enquetes ADD COLUMN prazo_mensalista TEXT');
+}
 
 // mensagens_agendadas: recria do zero se ainda for o shape antigo (só data específica) —
 // tabela nova, sem dados em produção, então é mais simples que uma migração incremental
@@ -260,6 +270,9 @@ const DEFAULT_CONFIG = {
     valor_avulso: '', // valor (R$) do avulso — idem
     jogo_vagas_maximo: '', // nº máximo de jogadoras no jogo — vazio = sem limite. Snapshot em enquetes.vagas_maximo na criação
     sincronizar_grupo_pendente: '', // whatsapp_id do grupo que o botão do painel pediu pra sincronizar agora
+    fechamento_automatico_ativo: '0', // '1' = fecha a lista sozinha quando as vagas encherem
+    mensalista_prazo_dia_semana: '2', // prazo pra mensalista confirmar: dia da semana (2 = terça)
+    mensalista_prazo_hora: '18:00', // prazo pra mensalista confirmar: horário
 };
 
 function getConfig(chave) {

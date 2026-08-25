@@ -103,4 +103,55 @@
             <input type="submit" value="Salvar">
         </form>
     </div>
+
+    <div class="card">
+        <h1>Fechamento automático</h1>
+        <p class="hint">
+            Quando as vagas configuradas acima encherem, o bot fecha a lista sozinho, sem
+            precisar de <code>!fechar</code>. Se encher só com mensalistas, fecha na hora
+            (mensalista sempre tem prioridade, esperar não muda o resultado). Se tiver alguma
+            avulsa no meio, o bot espera o prazo abaixo passar antes de fechar — assim ainda dá
+            tempo de uma mensalista confirmar e furar a fila de uma avulsa. Se depois disso
+            alguém desistir, o bot passa a vaga pra próxima da lista de espera sozinho (ou
+            reabre a lista, se não tiver ninguém esperando).
+        </p>
+        <form method="post" action="/jogo/config/fechamento-automatico">
+            <div class="switch-row">
+                <input type="checkbox" id="fechamentoAutomatico" name="fechamentoAutomatico" <%= fechamentoAutomatico ? 'checked' : '' %>>
+                <label for="fechamentoAutomatico">Fechar a lista automaticamente quando as vagas encherem</label>
+            </div>
+            <div class="form-row">
+                <div>
+                    <label>Prazo de confirmação das mensalistas</label>
+                    <select name="prazoDiaSemana">
+                        <option value="0" <%= prazoDiaSemana === 0 ? 'selected' : '' %>>Domingo</option>
+                        <option value="1" <%= prazoDiaSemana === 1 ? 'selected' : '' %>>Segunda-feira</option>
+                        <option value="2" <%= prazoDiaSemana === 2 ? 'selected' : '' %>>Terça-feira</option>
+                        <option value="3" <%= prazoDiaSemana === 3 ? 'selected' : '' %>>Quarta-feira</option>
+                        <option value="4" <%= prazoDiaSemana === 4 ? 'selected' : '' %>>Quinta-feira</option>
+                        <option value="5" <%= prazoDiaSemana === 5 ? 'selected' : '' %>>Sexta-feira</option>
+                        <option value="6" <%= prazoDiaSemana === 6 ? 'selected' : '' %>>Sábado</option>
+                    </select>
+                </div>
+                <div>
+                    <label>Horário do prazo</label>
+                    <div class="time-select">
+                        <select name="prazoHoraH">
+                            <% for (let h = 0; h < 24; h++) { %>
+                                <% const hh = String(h).padStart(2, '0'); %>
+                                <option value="<%= hh %>" <%= prazoHora.split(':')[0] === hh ? 'selected' : '' %>><%= hh %></option>
+                            <% } %>
+                        </select>
+                        <span>:</span>
+                        <select name="prazoHoraM">
+                            <% ['00','15','30','45'].forEach(mm => { %>
+                                <option value="<%= mm %>" <%= prazoHora.split(':')[1] === mm ? 'selected' : '' %>><%= mm %></option>
+                            <% }) %>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <input type="submit" value="Salvar">
+        </form>
+    </div>
 </section>
