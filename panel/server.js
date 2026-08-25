@@ -787,7 +787,7 @@ app.post('/mensagens/:id/excluir', requireLogin, (req, res) => {
 // ---------- LOGS (enquete/mensagem/comprovante) ----------
 
 app.get('/logs', requireLogin, (req, res) => {
-    const tipo = ['enquete', 'mensagem', 'comprovante', 'lista'].includes(req.query.tipo) ? req.query.tipo : null;
+    const tipo = ['enquete', 'mensagem', 'comprovante', 'lista', 'times', 'elenco'].includes(req.query.tipo) ? req.query.tipo : null;
     res.render('logs', {
         usuario: req.session.usuario,
         logs: getLogs(tipo),
