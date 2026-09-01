@@ -28,6 +28,49 @@
 </div>
 
 <div class="card">
+    <h1>Tokens disponíveis</h1>
+    <p class="hint">
+        Tokens que podem ser usados nos templates de mensagem do painel — cada um só é
+        substituído no template indicado na coluna "Onde usar", não em qualquer mensagem.
+    </p>
+    <table>
+        <thead>
+            <tr><th>Token</th><th>Onde usar</th><th>O que vira</th></tr>
+        </thead>
+        <tbody>
+            <% tokens.forEach(t => { %>
+                <tr>
+                    <td><code><%= t.token %></code></td>
+                    <td><%= t.onde %></td>
+                    <td><%= t.descricao %></td>
+                </tr>
+            <% }) %>
+        </tbody>
+    </table>
+</div>
+
+<div class="card">
+    <h1>Formatação de mensagem</h1>
+    <p class="hint">
+        O WhatsApp entende essa formatação em qualquer mensagem mandada pelo bot (título de
+        enquete, mensagens agendadas, fechamento do mensal etc) — é só digitar os símbolos direto
+        no texto.
+    </p>
+    <table>
+        <thead>
+            <tr><th>Pra fazer isso</th><th>Digite assim</th></tr>
+        </thead>
+        <tbody>
+            <tr><td><strong>negrito</strong></td><td><code>*negrito*</code></td></tr>
+            <tr><td><em>itálico</em></td><td><code>_itálico_</code></td></tr>
+            <tr><td><del>riscado</del></td><td><code>~riscado~</code></td></tr>
+            <tr><td><code>monoespaçado</code></td><td><code>```monoespaçado```</code></td></tr>
+            <tr><td>Lista</td><td><code>- item</code> (um por linha)</td></tr>
+        </tbody>
+    </table>
+</div>
+
+<div class="card">
     <h1>Quem pode usar comandos</h1>
     <p class="hint">
         Whitelist por jogadora — evita que qualquer pessoa do grupo mande <code>!fechar</code>

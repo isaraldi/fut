@@ -616,10 +616,24 @@ const COMANDOS_DO_BOT = [
     { comando: '!times', onde: 'Grupo ou DM', descricao: 'Sorteia e manda os times balanceados por nível.' },
 ];
 
+// tokens {chave} usados nos templates de mensagem do painel — cada um só funciona no
+// template indicado em "onde", não em qualquer mensagem
+const TOKENS_DISPONIVEIS = [
+    { token: '{data}', onde: 'Título da enquete (Enquete > Configuração)', descricao: 'Data do próximo jogo, no formato DD/MM.' },
+    { token: '{dia}', onde: 'Título da enquete (Enquete > Configuração)', descricao: 'Dia da semana do jogo por extenso (ex: quarta-feira).' },
+    { token: '{hora}', onde: 'Título da enquete (Enquete > Configuração)', descricao: 'Horário do jogo configurado em Jogo.' },
+    { token: '{mes_anterior}', onde: 'Fechamento do mensal (Mensagens)', descricao: 'Mês que acabou de fechar, formato AAAA-MM (ex: 2026-08).' },
+    { token: '{mes_atual}', onde: 'Fechamento do mensal (Mensagens)', descricao: 'Mês que está começando, formato AAAA-MM (ex: 2026-09).' },
+    { token: '{mensalistas_mes_anterior}', onde: 'Fechamento do mensal (Mensagens)', descricao: 'Lista numerada de quem pagou o mês anterior — as convidadas a renovar.' },
+    { token: '{valor_mensal}', onde: 'Fechamento do mensal (Mensagens)', descricao: 'Valor da mensalidade configurado em Jogo > Valores, formatado em R$.' },
+    { token: '{data_limite_pagamento}', onde: 'Fechamento do mensal (Mensagens)', descricao: 'Dia limite de pagamento configurado ali mesmo, formato DD/MM do mês que está começando (ex: 07/09).' },
+];
+
 app.get('/comandos', requireLogin, (req, res) => {
     res.render('comandos', {
         usuario: req.session.usuario,
         comandos: COMANDOS_DO_BOT,
+        tokens: TOKENS_DISPONIVEIS,
         jogadores: getJogadoresParaPermissao(),
         ok: req.query.ok,
     });
@@ -636,21 +650,7 @@ app.post('/comandos/:id/toggle', requireLogin, (req, res) => {
 
 // ---------- CONFIGURAÇÃO DO JOGO (dia/horário) ----------
 
-// a próxima quinta de fechamento do mensal: a calculada pro mês corrente, ou (se já passou)
-// a do mês seguinte — só pra mostrar no painel, não é usada em nenhuma decisão de negócio
-function proximoFechamentoMensal() {
-    const agora = new Date();
-    const hoje = new Date(agora.getFullYear(), agora.getMonth(), agora.getDate());
-    const candidato = fechamentoMensalDoMes(agora.getFullYear(), agora.getMonth());
-    if (candidato >= hoje) return candidato;
-
-    const proxMesIndex = agora.getMonth() === 11 ? 0 : agora.getMonth() + 1;
-    const anoDoProxMes = agora.getMonth() === 11 ? agora.getFullYear() + 1 : agora.getFullYear();
-    return fechamentoMensalDoMes(anoDoProxMes, proxMesIndex);
-}
-
 app.get('/jogo/config', requireLogin, (req, res) => {
-    const proximoFechamento = proximoFechamentoMensal();
     res.render('jogo-config', {
         usuario: req.session.usuario,
         diaSemana: Number(getConfig('enquete_dia_semana')),
@@ -661,9 +661,6 @@ app.get('/jogo/config', requireLogin, (req, res) => {
         fechamentoAutomatico: getConfig('fechamento_automatico_ativo') === '1',
         prazoDiaSemana: Number(getConfig('mensalista_prazo_dia_semana')),
         prazoHora: getConfig('mensalista_prazo_hora'),
-        fechamentoMensalAtivo: getConfig('fechamento_mensal_ativo') === '1',
-        fechamentoMensalMensagem: getConfig('fechamento_mensal_mensagem'),
-        proximoFechamentoMensalTexto: `${String(proximoFechamento.getDate()).padStart(2, '0')}/${String(proximoFechamento.getMonth() + 1).padStart(2, '0')}/${proximoFechamento.getFullYear()}`,
         ok: req.query.ok,
     });
 });
@@ -697,15 +694,6 @@ app.post('/jogo/config/fechamento-automatico', requireLogin, (req, res) => {
     const prazoHoraH = String(req.body.prazoHoraH || '18').padStart(2, '0');
     const prazoHoraM = String(req.body.prazoHoraM || '00').padStart(2, '0');
     setConfig('mensalista_prazo_hora', `${prazoHoraH}:${prazoHoraM}`);
-
-    redirectOk(res, '/jogo/config', 'Configurações salvas!');
-});
-
-app.post('/jogo/config/fechamento-mensal', requireLogin, (req, res) => {
-    setConfig('fechamento_mensal_ativo', req.body.fechamentoMensalAtivo === 'on' ? '1' : '0');
-
-    const mensagem = String(req.body.fechamentoMensalMensagem || '').trim();
-    if (mensagem) setConfig('fechamento_mensal_mensagem', mensagem);
 
     redirectOk(res, '/jogo/config', 'Configurações salvas!');
 });
@@ -800,13 +788,43 @@ app.post('/enquete/config/opcoes/:id/excluir', requireLogin, (req, res) => {
 
 // ---------- MENSAGENS AGENDADAS ----------
 
+// a próxima quinta de fechamento do mensal: a calculada pro mês corrente, ou (se já passou)
+// a do mês seguinte — só pra mostrar no painel, não é usada em nenhuma decisão de negócio
+function proximoFechamentoMensal() {
+    const agora = new Date();
+    const hoje = new Date(agora.getFullYear(), agora.getMonth(), agora.getDate());
+    const candidato = fechamentoMensalDoMes(agora.getFullYear(), agora.getMonth());
+    if (candidato >= hoje) return candidato;
+
+    const proxMesIndex = agora.getMonth() === 11 ? 0 : agora.getMonth() + 1;
+    const anoDoProxMes = agora.getMonth() === 11 ? agora.getFullYear() + 1 : agora.getFullYear();
+    return fechamentoMensalDoMes(anoDoProxMes, proxMesIndex);
+}
+
 app.get('/mensagens', requireLogin, (req, res) => {
+    const proximoFechamento = proximoFechamentoMensal();
     res.render('mensagens', {
         usuario: req.session.usuario,
         mensagens: getMensagensAgendadas(),
         grupos: getGrupos(),
+        fechamentoMensalAtivo: getConfig('fechamento_mensal_ativo') === '1',
+        fechamentoMensalMensagem: getConfig('fechamento_mensal_mensagem'),
+        pagamentoDiaLimite: getConfig('pagamento_dia_limite'),
+        proximoFechamentoMensalTexto: `${String(proximoFechamento.getDate()).padStart(2, '0')}/${String(proximoFechamento.getMonth() + 1).padStart(2, '0')}/${proximoFechamento.getFullYear()}`,
         ok: req.query.ok,
     });
+});
+
+app.post('/mensagens/fechamento-mensal', requireLogin, (req, res) => {
+    setConfig('fechamento_mensal_ativo', req.body.fechamentoMensalAtivo === 'on' ? '1' : '0');
+
+    const mensagem = String(req.body.fechamentoMensalMensagem || '').trim();
+    if (mensagem) setConfig('fechamento_mensal_mensagem', mensagem);
+
+    const diaLimite = parseInt(req.body.pagamentoDiaLimite, 10);
+    setConfig('pagamento_dia_limite', Number.isFinite(diaLimite) && diaLimite >= 1 && diaLimite <= 31 ? String(diaLimite) : '7');
+
+    redirectOk(res, '/mensagens', 'Configurações salvas!');
 });
 
 app.post('/mensagens', requireLogin, (req, res) => {

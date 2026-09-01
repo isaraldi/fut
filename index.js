@@ -431,9 +431,16 @@ async function checarFechamentoMensal() {
   const mesAnteriorRef = mesAnterior(mesNovo);
   const valorMensal = parseFloat(getConfig('valor_mensal'));
   const pagantes = getMensalistasPagos(mesAnteriorRef);
+
+  const diaLimite = parseInt(getConfig('pagamento_dia_limite'), 10) || 7;
+  const mesNovoNumero = mesNovo.split('-')[1];
+  const dataLimitePagamento = `${String(diaLimite).padStart(2, '0')}/${mesNovoNumero}`;
+
   const template = getConfig('fechamento_mensal_mensagem');
   const texto = template
     .replace(/{mes_anterior}/g, mesAnteriorRef)
+    .replace(/{mes_atual}/g, mesNovo)
+    .replace(/{data_limite_pagamento}/g, dataLimitePagamento)
     .replace('{valor_mensal}', Number.isFinite(valorMensal) ? `R$${valorMensal.toFixed(2)}` : '(valor não configurado)')
     .replace('{mensalistas_mes_anterior}', pagantes.length ? pagantes.map((j, i) => `${i + 1}. ${j.nome}`).join('\n') : 'Ninguém pagou o mês anterior.');
 
