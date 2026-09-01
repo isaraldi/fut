@@ -2,6 +2,45 @@
 // (botões "mandar pro grupo") usam — fica fora de db.js e index.js pra não duplicar entre
 // os dois processos (bot e painel rodam separados, só compartilham o banco)
 
+// o mensal fecha na quinta-feira seguinte à última quarta-feira do mês — normalmente cai
+// dentro do próprio mês, mas se o mês terminar numa quarta-feira a quinta vira dia 1º do mês
+// seguinte (o construtor de Date normaliza esse overflow de dia sozinho)
+function fechamentoMensalDoMes(ano, mesIndex) {
+    const ultimoDia = new Date(ano, mesIndex + 1, 0).getDate();
+    let ultimaQuarta = null;
+    for (let dia = ultimoDia; dia >= 1; dia--) {
+        if (new Date(ano, mesIndex, dia).getDay() === 3) {
+            ultimaQuarta = dia;
+            break;
+        }
+    }
+    return new Date(ano, mesIndex, ultimaQuarta + 1);
+}
+
+// mês (YYYY-MM) que um pagamento feito "agora" deve contar: antes do fechamento do mensal
+// (calculado dentro do próprio mês corrente) conta pro mês corrente; a partir dele (inclusive)
+// já conta pro mês seguinte
+function mesReferenciaAtual(agora = new Date()) {
+    const fechamento = fechamentoMensalDoMes(agora.getFullYear(), agora.getMonth());
+    let ano = agora.getFullYear();
+    let mes = agora.getMonth();
+    if (agora >= fechamento) {
+        mes += 1;
+        if (mes > 11) { mes = 0; ano += 1; }
+    }
+    return `${ano}-${String(mes + 1).padStart(2, '0')}`;
+}
+
+// mês (YYYY-MM) imediatamente anterior a um mês de referência — usado no fechamento do
+// mensal pra achar quem pagou o ciclo que está terminando (mesReferenciaAtual() já devolve
+// o mês novo a partir do dia do fechamento, então "o mês anterior" não é sempre "mês - 1"
+// em relação a hoje: no caso raro de rollover, precisa andar a partir do mês novo mesmo)
+function mesAnterior(mesReferencia) {
+    const [ano, mes] = mesReferencia.split('-').map(Number); // mes: 1-12
+    const data = new Date(ano, mes - 2, 1);
+    return `${data.getFullYear()}-${String(data.getMonth() + 1).padStart(2, '0')}`;
+}
+
 function embaralhar(lista) {
     const copia = [...lista];
     for (let i = copia.length - 1; i > 0; i--) {
@@ -140,4 +179,7 @@ module.exports = {
     montarTextoListaConfirmadas,
     montarTextoListaAtual,
     montarTextoTimes,
+    fechamentoMensalDoMes,
+    mesReferenciaAtual,
+    mesAnterior,
 };

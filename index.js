@@ -19,6 +19,11 @@ const {
   marcarMensagemSemanalEnviada,
   marcarPagamentoMensalista,
   marcarPagamentoAvulso,
+  getMensalistasPagos,
+  criarConviteFechamentoMensal,
+  getConviteFechamentoMensal,
+  registrarRespostaConviteFechamentoMensal,
+  definirPapelJogador,
   getJogadorPorWhatsappId,
   podeUsarComandos,
   getConfirmadosDaEnquete,
@@ -31,7 +36,10 @@ const {
   marcarEnqueteDesafixada,
   registrarTentativaDesafixar,
 } = require('./db');
-const { balancearTimes, montarTextoListaConfirmadas, montarTextoListaAtual, montarTextoTimes } = require('./mensagens-prontas');
+const {
+  balancearTimes, montarTextoListaConfirmadas, montarTextoListaAtual, montarTextoTimes,
+  fechamentoMensalDoMes, mesReferenciaAtual, mesAnterior,
+} = require('./mensagens-prontas');
 
 // 💥 erro não tratado (bug real, não um erro esperado de rede/WhatsApp) — mais seguro encerrar
 // e deixar o Docker/Fly reiniciar o processo do que continuar rodando em estado desconhecido
@@ -74,6 +82,7 @@ client.on('ready', async () => {
       checarReinicioAgendadoDoBot();
       checarSincronizacaoPendente();
       checarFechamentoAutomatico();
+      checarFechamentoMensal();
     }, 60 * 1000);
   }
   await sincronizarGruposConhecidos();
@@ -389,6 +398,92 @@ async function checarMensagensAgendadas() {
   }
 }
 
+// 💰 FECHAMENTO DO MENSAL — roda a cada minuto: no dia em que o mensal fecha (quinta-feira
+// seguinte à última quarta-feira do mês — ver fechamentoMensalDoMes em mensagens-prontas.js),
+// manda a mensagem configurada pro grupo, 1x por dia. Confere tanto o fechamento calculado a
+// partir do mês corrente quanto do mês anterior, porque no caso raro em que o mês anterior
+// termina numa quarta-feira, a quinta de fechamento cai no dia 1º do mês corrente — sem isso,
+// esse fechamento nunca bateria com "hoje" e a mensagem nunca sairia.
+function mesmaData(a, b) {
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+}
+
+async function checarFechamentoMensal() {
+  if (getConfig('fechamento_mensal_ativo') !== '1') return;
+
+  const grupoId = getConfig('enquete_grupo_id');
+  if (!grupoId) return;
+
+  const agora = new Date();
+  const fechamentoDoMesAtual = fechamentoMensalDoMes(agora.getFullYear(), agora.getMonth());
+  const mesAnteriorIndex = agora.getMonth() === 0 ? 11 : agora.getMonth() - 1;
+  const anoDoMesAnterior = agora.getMonth() === 0 ? agora.getFullYear() - 1 : agora.getFullYear();
+  const fechamentoDoMesAnterior = fechamentoMensalDoMes(anoDoMesAnterior, mesAnteriorIndex);
+
+  if (!mesmaData(agora, fechamentoDoMesAtual) && !mesmaData(agora, fechamentoDoMesAnterior)) return;
+
+  const hojeLocal = `${agora.getFullYear()}-${String(agora.getMonth() + 1).padStart(2, '0')}-${String(agora.getDate()).padStart(2, '0')}`;
+  if (getConfig('fechamento_mensal_ultimo_envio') === hojeLocal) return; // já enviada hoje
+
+  // convite pra renovar é sempre sobre quem pagou o ciclo que está terminando, não o que
+  // está começando — mesReferenciaAtual() já devolve o mês novo a partir do dia do fechamento
+  const mesNovo = mesReferenciaAtual(agora);
+  const mesAnteriorRef = mesAnterior(mesNovo);
+  const valorMensal = parseFloat(getConfig('valor_mensal'));
+  const pagantes = getMensalistasPagos(mesAnteriorRef);
+  const template = getConfig('fechamento_mensal_mensagem');
+  const texto = template
+    .replace(/{mes_anterior}/g, mesAnteriorRef)
+    .replace('{valor_mensal}', Number.isFinite(valorMensal) ? `R$${valorMensal.toFixed(2)}` : '(valor não configurado)')
+    .replace('{mensalistas_mes_anterior}', pagantes.length ? pagantes.map((j, i) => `${i + 1}. ${j.nome}`).join('\n') : 'Ninguém pagou o mês anterior.');
+
+  console.log('💰 Fechamento do mensal atingido, enviando mensagem automática...');
+  try {
+    const sent = await client.sendMessage(grupoId, texto);
+    const messageId = sent.id._serialized;
+    for (const jogador of pagantes) {
+      criarConviteFechamentoMensal(jogador.id, messageId, mesAnteriorRef);
+    }
+    setConfig('fechamento_mensal_ultimo_envio', hojeLocal);
+    registrarLog('mensagem', 'sucesso', `Mensagem de fechamento do mensal enviada (${pagantes.length} convidada(s) a renovar — mês ${mesAnteriorRef})`, grupoId);
+    console.log(`💰 Mensagem de fechamento do mensal enviada (${pagantes.length} convidada(s))`);
+  } catch (err) {
+    registrarLog('mensagem', 'erro', `Falha ao enviar mensagem de fechamento do mensal: ${err.message}`, grupoId);
+    console.error('Erro ao enviar mensagem de fechamento do mensal:', err);
+  }
+}
+
+// 👍👎 REAÇÃO NA MENSAGEM DE FECHAMENTO DO MENSAL — 👍 confirma renovação (garante papel
+// mensalista), 👎 libera a vaga (vira avulsa). Só age se a reação for numa mensagem de
+// fechamento de fato e vier de quem foi convidada nela (getConviteFechamentoMensal) — reação
+// de qualquer outra pessoa, em qualquer outra mensagem, é ignorada.
+client.on('message_reaction', async (reaction) => {
+  try {
+    const resposta = reaction.reaction === '👍' ? 'sim' : reaction.reaction === '👎' ? 'nao' : null;
+    if (!resposta) return;
+
+    const messageId = getIdSerialized(reaction.msgId);
+    if (!messageId) return;
+
+    const idCanonico = await resolverIdCanonico(reaction.senderId);
+    const jogador = getJogadorPorWhatsappId(idCanonico);
+    if (!jogador) return;
+
+    const convite = getConviteFechamentoMensal(messageId, jogador.id);
+    if (!convite) return;
+
+    registrarRespostaConviteFechamentoMensal(convite.id, resposta);
+    const papelNovo = resposta === 'sim' ? 'mensalista' : 'avulso';
+    const mudou = definirPapelJogador(jogador.id, papelNovo);
+
+    const resumo = resposta === 'sim' ? 'confirmou renovação — continua mensalista' : 'não renovou — virou avulsa';
+    registrarLog('mensagem', 'sucesso', `${jogador.nome} reagiu ${reaction.reaction} ao fechamento do mensal: ${resumo}${mudou ? '' : ' (sem mudança de papel)'}`);
+    console.log(`💰 ${jogador.nome} ${resumo}`);
+  } catch (err) {
+    console.error('Erro ao processar reação de fechamento do mensal:', err);
+  }
+});
+
 // 🧾 COMPROVANTE DE PAGAMENTO — OCR local (tesseract.js, roda em WASM, sem shell out)
 // lazy + reaproveitado entre chamadas, pra não recarregar o modelo a cada imagem
 let ocrWorkerPromise = null;
@@ -493,7 +588,7 @@ async function processarPossivelComprovante(msg) {
     }
 
     if (tipo === 'mensal') {
-      const mes = new Date().toISOString().slice(0, 7); // mesmo cálculo do painel (mesAtual())
+      const mes = mesReferenciaAtual(); // mês corrente, ou o seguinte se o mensal já fechou
       marcarPagamentoMensalista(jogador.id, mes);
       registrarLog('comprovante', 'sucesso', `Comprovante de ${jogador.nome} reconhecido — mensalidade de ${mes} marcada como paga`, msg.from);
       console.log(`🧾 Comprovante de ${jogador.nome} reconhecido — mensalidade de ${mes} marcada como paga`);

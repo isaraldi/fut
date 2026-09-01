@@ -49,7 +49,10 @@ const {
     definirPermissaoComando,
     reativarJogador,
 } = require('../db');
-const { balancearTimes, montarTextoListaConfirmadas, montarTextoTimes } = require('../mensagens-prontas');
+const {
+    balancearTimes, montarTextoListaConfirmadas, montarTextoTimes,
+    fechamentoMensalDoMes, mesReferenciaAtual,
+} = require('../mensagens-prontas');
 
 const PORT = process.env.PORT || 4000;
 
@@ -102,7 +105,10 @@ app.use(
         secret: process.env.SESSION_SECRET,
         resave: false,
         saveUninitialized: false,
-        cookie: { maxAge: 1000 * 60 * 60 * 12, secure: true, sameSite: 'lax' },
+        // secure só em produção (Dockerfile seta NODE_ENV=production): local roda em HTTP puro,
+        // sem o proxy HTTPS do Fly, e cookie secure nunca seria enviado pelo browser — sessão
+        // nunca persistiria e o CSRF sempre falharia ("Sessão expirada")
+        cookie: { maxAge: 1000 * 60 * 60 * 12, secure: process.env.NODE_ENV === 'production', sameSite: 'lax' },
     }),
 );
 
@@ -150,8 +156,6 @@ function redirectOk(res, caminho, mensagem) {
     const separador = caminho.includes('?') ? '&' : '?';
     res.redirect(caminho + separador + 'ok=' + encodeURIComponent(mensagem));
 }
-
-const mesAtual = () => new Date().toISOString().slice(0, 7); // YYYY-MM
 
 const POSICOES_VALIDAS = ['goleira', 'defesa', 'meio', 'ataque', 'indefinida'];
 const posicaoValida = (p) => (POSICOES_VALIDAS.includes(p) ? p : 'indefinida');
@@ -266,7 +270,7 @@ app.post('/confirmados/enviar-lista', requireLogin, (req, res) => {
 // ---------- HOME (resumo geral) ----------
 
 app.get('/', requireLogin, (req, res) => {
-    const mes = mesAtual();
+    const mes = mesReferenciaAtual();
 
     const proximoJogo = db
         .prepare('SELECT * FROM enquetes ORDER BY id DESC LIMIT 1')
@@ -405,7 +409,7 @@ app.get('/pagamentos', requireLogin, (req, res) => {
 });
 
 app.get('/pagamentos/mensalistas', requireLogin, (req, res) => {
-    const mes = req.query.mes || mesAtual();
+    const mes = req.query.mes || mesReferenciaAtual();
 
     const jogadores = db
         .prepare(
@@ -423,7 +427,7 @@ app.get('/pagamentos/mensalistas', requireLogin, (req, res) => {
 });
 
 app.post('/pagamentos/mensalistas/:jogadorId/toggle', requireLogin, (req, res) => {
-    const mes = req.body.mes || mesAtual();
+    const mes = req.body.mes || mesReferenciaAtual();
     const jogadorId = Number(req.params.jogadorId);
 
     const atual = db
@@ -632,7 +636,21 @@ app.post('/comandos/:id/toggle', requireLogin, (req, res) => {
 
 // ---------- CONFIGURAÇÃO DO JOGO (dia/horário) ----------
 
+// a próxima quinta de fechamento do mensal: a calculada pro mês corrente, ou (se já passou)
+// a do mês seguinte — só pra mostrar no painel, não é usada em nenhuma decisão de negócio
+function proximoFechamentoMensal() {
+    const agora = new Date();
+    const hoje = new Date(agora.getFullYear(), agora.getMonth(), agora.getDate());
+    const candidato = fechamentoMensalDoMes(agora.getFullYear(), agora.getMonth());
+    if (candidato >= hoje) return candidato;
+
+    const proxMesIndex = agora.getMonth() === 11 ? 0 : agora.getMonth() + 1;
+    const anoDoProxMes = agora.getMonth() === 11 ? agora.getFullYear() + 1 : agora.getFullYear();
+    return fechamentoMensalDoMes(anoDoProxMes, proxMesIndex);
+}
+
 app.get('/jogo/config', requireLogin, (req, res) => {
+    const proximoFechamento = proximoFechamentoMensal();
     res.render('jogo-config', {
         usuario: req.session.usuario,
         diaSemana: Number(getConfig('enquete_dia_semana')),
@@ -643,6 +661,9 @@ app.get('/jogo/config', requireLogin, (req, res) => {
         fechamentoAutomatico: getConfig('fechamento_automatico_ativo') === '1',
         prazoDiaSemana: Number(getConfig('mensalista_prazo_dia_semana')),
         prazoHora: getConfig('mensalista_prazo_hora'),
+        fechamentoMensalAtivo: getConfig('fechamento_mensal_ativo') === '1',
+        fechamentoMensalMensagem: getConfig('fechamento_mensal_mensagem'),
+        proximoFechamentoMensalTexto: `${String(proximoFechamento.getDate()).padStart(2, '0')}/${String(proximoFechamento.getMonth() + 1).padStart(2, '0')}/${proximoFechamento.getFullYear()}`,
         ok: req.query.ok,
     });
 });
@@ -676,6 +697,15 @@ app.post('/jogo/config/fechamento-automatico', requireLogin, (req, res) => {
     const prazoHoraH = String(req.body.prazoHoraH || '18').padStart(2, '0');
     const prazoHoraM = String(req.body.prazoHoraM || '00').padStart(2, '0');
     setConfig('mensalista_prazo_hora', `${prazoHoraH}:${prazoHoraM}`);
+
+    redirectOk(res, '/jogo/config', 'Configurações salvas!');
+});
+
+app.post('/jogo/config/fechamento-mensal', requireLogin, (req, res) => {
+    setConfig('fechamento_mensal_ativo', req.body.fechamentoMensalAtivo === 'on' ? '1' : '0');
+
+    const mensagem = String(req.body.fechamentoMensalMensagem || '').trim();
+    if (mensagem) setConfig('fechamento_mensal_mensagem', mensagem);
 
     redirectOk(res, '/jogo/config', 'Configurações salvas!');
 });

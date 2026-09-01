@@ -52,6 +52,20 @@ db.exec(`
         UNIQUE(jogador_id, enquete_id)
     );
 
+    -- um convite por mensalista que pagou o mês anterior, criado junto com a mensagem de
+    -- fechamento do mensal — correlaciona a reação 👍/👎 dela naquela mensagem específica
+    -- com a decisão de continuar (ou não) mensalista
+    CREATE TABLE IF NOT EXISTS fechamento_mensal_convites (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        jogador_id INTEGER NOT NULL REFERENCES jogadores(id) ON DELETE CASCADE,
+        message_id TEXT NOT NULL,
+        mes_anterior TEXT NOT NULL,
+        resposta TEXT CHECK(resposta IN ('sim', 'nao') OR resposta IS NULL),
+        respondido_em TEXT,
+        criado_em TEXT NOT NULL DEFAULT (datetime('now')),
+        UNIQUE(jogador_id, message_id)
+    );
+
     CREATE TABLE IF NOT EXISTS admin_users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         usuario TEXT UNIQUE NOT NULL,
@@ -273,6 +287,9 @@ const DEFAULT_CONFIG = {
     fechamento_automatico_ativo: '0', // '1' = fecha a lista sozinha quando as vagas encherem
     mensalista_prazo_dia_semana: '2', // prazo pra mensalista confirmar: dia da semana (2 = terça)
     mensalista_prazo_hora: '18:00', // prazo pra mensalista confirmar: horário
+    fechamento_mensal_ativo: '0', // '1' = manda a mensagem de fechamento do mensal automaticamente
+    fechamento_mensal_mensagem: 'O mensal de {mes_anterior} fechou! 💰\n\nQuem quer continuar mensalista, reaja 👍 nessa mensagem. Quem não reagir 👍 libera a vaga pra uma nova mensalista.\n\nMensalistas de {mes_anterior}:\n{mensalistas_mes_anterior}\n\nValor da mensalidade: {valor_mensal}',
+    fechamento_mensal_ultimo_envio: '', // data (YYYY-MM-DD) do último envio, evita duplicar no mesmo dia
 };
 
 function getConfig(chave) {
@@ -479,6 +496,53 @@ function marcarPagamentoMensalista(jogadorId, mesReferencia) {
             'INSERT INTO pagamentos (jogador_id, mes_referencia, pago) VALUES (?, ?, 1)',
         ).run(jogadorId, mesReferencia);
     }
+}
+
+// mensalistas que pagaram um mês de referência — base tanto do token {mensalistas_mes_anterior}
+// quanto da lista de convidadas a renovar no fechamento do mensal
+function getMensalistasPagos(mesReferencia) {
+    return db
+        .prepare(
+            `SELECT j.id, j.nome FROM jogadores j
+             JOIN pagamentos p ON p.jogador_id = j.id
+             WHERE j.papel = 'mensalista' AND p.mes_referencia = ? AND p.pago = 1
+             ORDER BY j.nome ASC`,
+        )
+        .all(mesReferencia);
+}
+
+// cria o convite de renovação de uma mensalista pra uma mensagem de fechamento específica —
+// 1 linha por (jogador, mensagem), correlacionada depois pela reação 👍/👎 dela na mensagem
+function criarConviteFechamentoMensal(jogadorId, messageId, mesAnteriorRef) {
+    db.prepare(
+        'INSERT INTO fechamento_mensal_convites (jogador_id, message_id, mes_anterior) VALUES (?, ?, ?)',
+    ).run(jogadorId, messageId, mesAnteriorRef);
+}
+
+// localiza o convite de uma jogadora numa mensagem específica — usado pra confirmar que a
+// reação recebida é realmente sobre a mensagem de fechamento do mensal e sobre uma jogadora
+// que foi de fato convidada (não qualquer reação aleatória de qualquer pessoa no grupo)
+function getConviteFechamentoMensal(messageId, jogadorId) {
+    return db
+        .prepare('SELECT * FROM fechamento_mensal_convites WHERE message_id = ? AND jogador_id = ?')
+        .get(messageId, jogadorId);
+}
+
+function registrarRespostaConviteFechamentoMensal(id, resposta) {
+    db.prepare(
+        `UPDATE fechamento_mensal_convites SET resposta = ?, respondido_em = datetime('now') WHERE id = ?`,
+    ).run(resposta, id);
+}
+
+// muda o papel de uma jogadora e registra no histórico — só escreve/loga se o papel
+// realmente mudou, devolve true nesse caso (idempotente: reagir de novo com o mesmo emoji
+// não gera mudança nem entrada duplicada no histórico)
+function definirPapelJogador(jogadorId, papelNovo) {
+    const atual = db.prepare('SELECT papel FROM jogadores WHERE id = ?').get(jogadorId);
+    if (!atual || atual.papel === papelNovo) return false;
+    db.prepare('UPDATE jogadores SET papel = ? WHERE id = ?').run(papelNovo, jogadorId);
+    registrarMudancaPapel(jogadorId, atual.papel, papelNovo);
+    return true;
 }
 
 // mesma ideia, mas pro pagamento avulso de um jogo específico
@@ -696,6 +760,11 @@ module.exports = {
     excluirMensagemAgendada,
     marcarPagamentoMensalista,
     marcarPagamentoAvulso,
+    getMensalistasPagos,
+    criarConviteFechamentoMensal,
+    getConviteFechamentoMensal,
+    registrarRespostaConviteFechamentoMensal,
+    definirPapelJogador,
     getJogadorPorWhatsappId,
     podeUsarComandos,
     getJogadoresParaPermissao,
