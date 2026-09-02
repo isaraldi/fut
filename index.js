@@ -81,7 +81,6 @@ client.on('ready', async () => {
       checarEnquetesParaDesafixar();
       checarReinicioAgendadoDoBot();
       checarSincronizacaoPendente();
-      checarFechamentoAutomatico();
       checarFechamentoMensal();
     }, 60 * 1000);
   }
@@ -229,21 +228,6 @@ function proximoDiaDeJogo() {
   return { data: `${dd}/${mm}`, dia: NOMES_DIA_SEMANA[diaSemanaAlvo] };
 }
 
-// ⏳ calcula o prazo de confirmação de mensalista (dia da semana + hora configurados) a
-// partir de uma data de referência, e devolve como texto UTC (mesmo formato do datetime('now')
-// do SQLite) — travado no momento da criação da enquete, não muda se o config mudar depois
-function calcularPrazoMensalista(referencia) {
-  const diaSemanaAlvo = Number(getConfig('mensalista_prazo_dia_semana'));
-  const [hora, minuto] = (getConfig('mensalista_prazo_hora') || '18:00').split(':').map(Number);
-  const diaSemana = referencia.getDay();
-  const diff = (diaSemanaAlvo - diaSemana + 7) % 7;
-  const alvo = new Date(
-    referencia.getFullYear(), referencia.getMonth(), referencia.getDate() + diff,
-    hora, minuto, 0, 0,
-  );
-  return alvo.toISOString().slice(0, 19).replace('T', ' ');
-}
-
 // 🗳️ ENQUETE NATIVA + registro no banco pro painel
 // groupId: grupo de destino. msgParaErro: opcional, só usado pra responder erros
 // quando a enquete foi disparada manualmente via !enquete (o envio automático não tem msg).
@@ -279,10 +263,9 @@ async function abrirEnquete(groupId, msgParaErro, origem = 'manual') {
 
   const vagasConfiguradas = parseInt(getConfig('jogo_vagas_maximo'), 10);
   const vagasMaximo = Number.isFinite(vagasConfiguradas) && vagasConfiguradas > 0 ? vagasConfiguradas : null;
-  const prazoMensalista = vagasMaximo ? calcularPrazoMensalista(new Date()) : null;
   db.prepare(
-    'INSERT INTO enquetes (message_id, group_id, titulo, vagas_maximo, prazo_mensalista) VALUES (?, ?, ?, ?, ?)'
-  ).run(sent.id._serialized, groupId, titulo, vagasMaximo, prazoMensalista);
+    'INSERT INTO enquetes (message_id, group_id, titulo, vagas_maximo) VALUES (?, ?, ?, ?)'
+  ).run(sent.id._serialized, groupId, titulo, vagasMaximo);
 
   registrarLog('enquete', 'sucesso', `Enquete "${titulo}" enviada (${origem})`, groupId);
   console.log(`🗳️ Enquete criada: ${titulo}`);
@@ -734,66 +717,6 @@ async function checarEnviosImediatos() {
   }
 }
 
-// 🔒 FECHAMENTO AUTOMÁTICO — roda a cada minuto. Fecha a enquete sozinha quando as vagas
-// enchem: se encheu só com mensalistas, fecha na hora (mensalista sempre tem prioridade,
-// esperar não muda nada); se tem avulsa no meio, espera o prazo de confirmação de mensalista
-// passar antes de fechar — assim ainda dá tempo de uma mensalista furar a fila de uma avulsa
-async function checarFechamentoAutomatico() {
-  if (getConfig('fechamento_automatico_ativo') !== '1') return;
-
-  const enquete = db.prepare('SELECT * FROM enquetes ORDER BY id DESC LIMIT 1').get();
-  if (!enquete || enquete.fechada_em || !enquete.vagas_maximo) return;
-
-  const confirmados = getConfirmadosDaEnquete(enquete.id);
-  if (confirmados.length < enquete.vagas_maximo) return;
-
-  const todosMensalistas = confirmados.every((j) => j.papel === 'mensalista');
-  if (!todosMensalistas) {
-    if (!enquete.prazo_mensalista) return; // sem prazo travado, não arrisca fechar cedo
-    const prazo = new Date(`${enquete.prazo_mensalista.replace(' ', 'T')}Z`);
-    if (new Date() < prazo) return; // ainda dentro do prazo de confirmação da mensalista
-  }
-
-  try {
-    await comTimeoutDeSessao(
-      client.sendMessage(enquete.group_id, montarTextoListaConfirmadas(enquete, confirmados)),
-      30 * 1000,
-      'Fechamento automático da lista',
-    );
-    fecharEnquete(enquete.id);
-    db.prepare('UPDATE enquetes SET fechada_automaticamente = 1 WHERE id = ?').run(enquete.id);
-    registrarLog(
-      'lista', 'sucesso',
-      `Lista fechada automaticamente (${confirmados.length}/${enquete.vagas_maximo} vagas${todosMensalistas ? ', só mensalistas' : ', prazo de mensalista vencido'}) — "${enquete.titulo}"`,
-      enquete.group_id,
-    );
-  } catch (err) {
-    registrarLog('lista', 'erro', `Falha ao fechar lista automaticamente: ${err.message}`, enquete.group_id);
-    console.error('Erro ao fechar lista automaticamente:', err);
-  }
-}
-
-// 🔄 REAGE A DESISTÊNCIA DEPOIS DO FECHAMENTO AUTOMÁTICO — só entra em ação quando a lista foi
-// fechada sozinha (não por !fechar manual, que é decisão final do admin). Se quem desistiu
-// tinha vaga garantida, passa pra próxima da lista de espera; se não tinha ninguém esperando,
-// reabre a enquete pra não deixar vaga sobrando sem ninguém poder confirmar
-async function reagirADesistenciaPosFechamento(enquete, jogadorId) {
-  const confirmadosAgora = getConfirmadosDaEnquete(enquete.id);
-  if (confirmadosAgora.some((j) => j.id === jogadorId)) return; // ainda tem vaga, não desistiu de fato
-
-  const listaDeEspera = getListaDeEsperaDaEnquete(enquete.id);
-  if (listaDeEspera.length > 0) {
-    const texto = `🔄 *Atualização — ${enquete.titulo}*\n\nAlguém confirmada desistiu — a vaga foi passada automaticamente pra próxima da lista de espera.\n\n${montarTextoListaConfirmadas(enquete, confirmadosAgora)}`;
-    await comTimeoutDeSessao(client.sendMessage(enquete.group_id, texto), 30 * 1000, 'Aviso de vaga repassada');
-    registrarLog('lista', 'sucesso', `Vaga repassada automaticamente após desistência — "${enquete.titulo}"`, enquete.group_id);
-  } else {
-    db.prepare('UPDATE enquetes SET fechada_em = NULL, fechada_automaticamente = 0 WHERE id = ?').run(enquete.id);
-    const texto = `🔓 *Lista reaberta — ${enquete.titulo}*\n\nAlguém confirmada desistiu e não tinha ninguém na lista de espera — reabri a lista, ainda dá tempo de confirmar!`;
-    await comTimeoutDeSessao(client.sendMessage(enquete.group_id, texto), 30 * 1000, 'Aviso de lista reaberta');
-    registrarLog('lista', 'aviso', `Lista reaberta automaticamente — desistência sem substituta na espera — "${enquete.titulo}"`, enquete.group_id);
-  }
-}
-
 // 📌 DESAFIXA ENQUETES JÁ FECHADAS — fechar pelo painel só grava no banco (processo sem
 // client do WhatsApp), então o bot confere aqui e desafixa de fato a mensagem no grupo
 const MAX_TENTATIVAS_DESAFIXAR = 5; // ~5 minutos tentando antes de desistir
@@ -906,18 +829,8 @@ client.on('vote_update', async vote => {
     const idCanonico = await resolverIdCanonico(vote.voter);
 
     if (enquete.fechada_em) {
-      if (!enquete.fechada_automaticamente) {
-        console.log(`🔒 Voto ignorado — enquete #${enquete.id} já está com a lista fechada`);
-        return;
-      }
-      // fechamento automático: só reage a desistência de quem já tinha vaga garantida — gente
-      // nova continua de fora, isso não é uma reabertura geral da votação
-      const jogadorExistente = db.prepare('SELECT id FROM jogadores WHERE whatsapp_id = ?').get(idCanonico);
-      const tinhaVaga = jogadorExistente && getConfirmadosDaEnquete(enquete.id).some((j) => j.id === jogadorExistente.id);
-      if (!tinhaVaga) {
-        console.log(`🔒 Voto ignorado — enquete #${enquete.id} fechada automaticamente e ${idCanonico} não tinha vaga garantida`);
-        return;
-      }
+      console.log(`🔒 Voto ignorado — enquete #${enquete.id} já está com a lista fechada`);
+      return;
     }
 
     const contact = await client.getContactById(idCanonico);
@@ -936,9 +849,6 @@ client.on('vote_update', async vote => {
         ).run(enquete.id, jogador.id);
       }
       console.log(`🗳️ ${nome} removeu o voto`);
-      if (enquete.fechada_em && enquete.fechada_automaticamente && jogador) {
-        await reagirADesistenciaPosFechamento(enquete, jogador.id);
-      }
       return;
     }
 
@@ -957,10 +867,6 @@ client.on('vote_update', async vote => {
     `).run(enquete.id, jogadorId, opcaoTexto, papel);
 
     console.log(`🗳️ ${nome} votou: ${opcaoTexto}`);
-
-    if (enquete.fechada_em && enquete.fechada_automaticamente) {
-      await reagirADesistenciaPosFechamento(enquete, jogadorId);
-    }
   } catch (err) {
     console.error('Erro ao processar voto:', err);
   }

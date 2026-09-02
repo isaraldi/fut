@@ -284,9 +284,6 @@ const DEFAULT_CONFIG = {
     valor_avulso: '', // valor (R$) do avulso — idem
     jogo_vagas_maximo: '', // nº máximo de jogadoras no jogo — vazio = sem limite. Snapshot em enquetes.vagas_maximo na criação
     sincronizar_grupo_pendente: '', // whatsapp_id do grupo que o botão do painel pediu pra sincronizar agora
-    fechamento_automatico_ativo: '0', // '1' = fecha a lista sozinha quando as vagas encherem
-    mensalista_prazo_dia_semana: '2', // prazo pra mensalista confirmar: dia da semana (2 = terça)
-    mensalista_prazo_hora: '18:00', // prazo pra mensalista confirmar: horário
     fechamento_mensal_ativo: '0', // '1' = manda a mensagem de fechamento do mensal automaticamente
     fechamento_mensal_mensagem: 'O mensal de {mes_anterior} fechou! 💰\n\nQuem quer continuar mensalista, reaja 👍 nessa mensagem. Quem não reagir 👍 libera a vaga pra uma nova mensalista.\n\nMensalistas de {mes_anterior}:\n{mensalistas_mes_anterior}\n\n*Valor da mensalidade ({mes_atual}):* {valor_mensal}\n*Pague até {data_limite_pagamento}*',
     fechamento_mensal_ultimo_envio: '', // data (YYYY-MM-DD) do último envio, evita duplicar no mesmo dia
