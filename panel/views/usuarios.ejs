@@ -1,0 +1,61 @@
+<div class="page-header">
+    <div>
+        <h1>Usuários</h1>
+        <p>Quem consegue entrar no painel</p>
+    </div>
+</div>
+
+<div class="card">
+    <h1>Novo usuário</h1>
+    <p class="hint">
+        Todo usuário criado aqui tem acesso completo ao painel, igual ao seu — não existe
+        permissão diferenciada por pessoa.
+    </p>
+
+    <% if (typeof erro !== 'undefined' && erro) { %>
+        <p class="erro"><%= erro %></p>
+    <% } %>
+
+    <form method="post" action="/usuarios"><input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <div class="form-row">
+            <div>
+                <label>Usuário</label>
+                <input type="text" name="usuario" required autocomplete="off">
+            </div>
+        </div>
+        <div class="form-row">
+            <div>
+                <label>Senha</label>
+                <input type="password" name="senha" required minlength="6" autocomplete="new-password">
+            </div>
+            <div>
+                <label>Confirmar senha</label>
+                <input type="password" name="confirmarSenha" required minlength="6" autocomplete="new-password">
+            </div>
+        </div>
+        <input type="submit" value="Criar usuário">
+    </form>
+</div>
+
+<div class="card">
+    <h1>Usuários cadastrados (<%= usuarios.length %>)</h1>
+    <table>
+        <thead>
+            <tr><th>Usuário</th><th></th></tr>
+        </thead>
+        <tbody>
+            <% usuarios.forEach(u => { %>
+                <tr>
+                    <td><%= u.usuario %><% if (u.usuario === usuario) { %> <span class="hint">(você)</span><% } %></td>
+                    <td>
+                        <form method="post" action="/usuarios/<%= u.id %>/excluir" style="display:inline" data-confirm="Remover o usuário <%= u.usuario %>? Ele(a) não vai mais conseguir entrar no painel."><input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                            <button class="icon-btn danger" type="submit" title="Remover" aria-label="Remover usuário">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+                            </button>
+                        </form>
+                    </td>
+                </tr>
+            <% }) %>
+        </tbody>
+    </table>
+</div>

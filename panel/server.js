@@ -648,6 +648,62 @@ app.post('/comandos/:id/toggle', requireLogin, (req, res) => {
     redirectOk(res, '/comandos', 'Permissão atualizada!');
 });
 
+// ---------- USUÁRIOS DO PAINEL (login/senha de quem acessa) ----------
+
+app.get('/usuarios', requireLogin, (req, res) => {
+    res.render('usuarios', {
+        usuario: req.session.usuario,
+        usuarios: db.prepare('SELECT id, usuario FROM admin_users ORDER BY usuario ASC').all(),
+        ok: req.query.ok,
+        erro: null,
+    });
+});
+
+app.post('/usuarios', requireLogin, (req, res) => {
+    const usuarioNovo = (req.body.usuario || '').trim();
+    const senha = req.body.senha || '';
+    const confirmarSenha = req.body.confirmarSenha || '';
+
+    const listarErro = (erro) => res.render('usuarios', {
+        usuario: req.session.usuario,
+        usuarios: db.prepare('SELECT id, usuario FROM admin_users ORDER BY usuario ASC').all(),
+        ok: null,
+        erro,
+    });
+
+    if (!usuarioNovo || senha.length < 6) {
+        return listarErro('Preencha o usuário e uma senha com pelo menos 6 caracteres.');
+    }
+    if (senha !== confirmarSenha) {
+        return listarErro('As senhas não coincidem.');
+    }
+    if (db.prepare('SELECT id FROM admin_users WHERE usuario = ?').get(usuarioNovo)) {
+        return listarErro('Já existe um usuário com esse nome.');
+    }
+
+    const hash = bcrypt.hashSync(senha, 10);
+    db.prepare('INSERT INTO admin_users (usuario, senha_hash) VALUES (?, ?)').run(usuarioNovo, hash);
+
+    redirectOk(res, '/usuarios', 'Usuário criado!');
+});
+
+app.post('/usuarios/:id/excluir', requireLogin, (req, res) => {
+    const id = Number(req.params.id);
+    const total = db.prepare('SELECT COUNT(*) AS c FROM admin_users').get().c;
+
+    if (total <= 1) {
+        return res.render('usuarios', {
+            usuario: req.session.usuario,
+            usuarios: db.prepare('SELECT id, usuario FROM admin_users ORDER BY usuario ASC').all(),
+            ok: null,
+            erro: 'Não é possível remover o último usuário — ninguém mais conseguiria entrar no painel.',
+        });
+    }
+
+    db.prepare('DELETE FROM admin_users WHERE id = ?').run(id);
+    redirectOk(res, '/usuarios', 'Usuário removido.');
+});
+
 // ---------- CONFIGURAÇÃO DO JOGO (dia/horário) ----------
 
 app.get('/jogo/config', requireLogin, (req, res) => {
