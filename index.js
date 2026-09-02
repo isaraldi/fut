@@ -366,7 +366,7 @@ async function checarMensagensAgendadas() {
   const unicas = getMensagensUnicasParaEnviar();
   for (const msg of unicas) {
     try {
-      await client.sendMessage(msg.grupo_id, msg.texto);
+      await comTimeoutDeSessao(client.sendMessage(msg.grupo_id, msg.texto), 30 * 1000, 'Envio de mensagem única');
       marcarMensagemEnviada(msg.id);
       registrarLog('mensagem', 'sucesso', `Mensagem única enviada: "${resumoTexto(msg.texto)}"`, msg.grupo_id);
       console.log(`✉️ Mensagem agendada #${msg.id} enviada`);
@@ -387,7 +387,7 @@ async function checarMensagensAgendadas() {
     if (msg.ultimo_envio === hojeLocal) continue; // já enviada hoje, evita duplicar
 
     try {
-      await client.sendMessage(msg.grupo_id, msg.texto);
+      await comTimeoutDeSessao(client.sendMessage(msg.grupo_id, msg.texto), 30 * 1000, 'Envio de mensagem semanal');
       marcarMensagemSemanalEnviada(msg.id, hojeLocal);
       registrarLog('mensagem', 'sucesso', `Mensagem semanal enviada: "${resumoTexto(msg.texto)}"`, msg.grupo_id);
       console.log(`✉️ Mensagem semanal #${msg.id} enviada`);
@@ -446,7 +446,7 @@ async function checarFechamentoMensal() {
 
   console.log('💰 Fechamento do mensal atingido, enviando mensagem automática...');
   try {
-    const sent = await client.sendMessage(grupoId, texto);
+    const sent = await comTimeoutDeSessao(client.sendMessage(grupoId, texto), 30 * 1000, 'Envio do fechamento do mensal');
     const messageId = sent.id._serialized;
     for (const jogador of pagantes) {
       criarConviteFechamentoMensal(jogador.id, messageId, mesAnteriorRef);
@@ -723,7 +723,7 @@ async function checarEnviosImediatos() {
   const pendentes = getEnviosImediatosPendentes();
   for (const envio of pendentes) {
     try {
-      await client.sendMessage(envio.grupo_id, envio.texto);
+      await comTimeoutDeSessao(client.sendMessage(envio.grupo_id, envio.texto), 30 * 1000, 'Envio imediato via painel');
       registrarLog(envio.tipo, 'sucesso', `${envio.tipo === 'lista' ? 'Lista' : 'Times'} enviado(a) via painel`, envio.grupo_id);
     } catch (err) {
       registrarLog(envio.tipo, 'erro', `Falha ao enviar ${envio.tipo} via painel: ${err.message}`, envio.grupo_id);
@@ -755,7 +755,11 @@ async function checarFechamentoAutomatico() {
   }
 
   try {
-    await client.sendMessage(enquete.group_id, montarTextoListaConfirmadas(enquete, confirmados));
+    await comTimeoutDeSessao(
+      client.sendMessage(enquete.group_id, montarTextoListaConfirmadas(enquete, confirmados)),
+      30 * 1000,
+      'Fechamento automático da lista',
+    );
     fecharEnquete(enquete.id);
     db.prepare('UPDATE enquetes SET fechada_automaticamente = 1 WHERE id = ?').run(enquete.id);
     registrarLog(
@@ -780,12 +784,12 @@ async function reagirADesistenciaPosFechamento(enquete, jogadorId) {
   const listaDeEspera = getListaDeEsperaDaEnquete(enquete.id);
   if (listaDeEspera.length > 0) {
     const texto = `🔄 *Atualização — ${enquete.titulo}*\n\nAlguém confirmada desistiu — a vaga foi passada automaticamente pra próxima da lista de espera.\n\n${montarTextoListaConfirmadas(enquete, confirmadosAgora)}`;
-    await client.sendMessage(enquete.group_id, texto);
+    await comTimeoutDeSessao(client.sendMessage(enquete.group_id, texto), 30 * 1000, 'Aviso de vaga repassada');
     registrarLog('lista', 'sucesso', `Vaga repassada automaticamente após desistência — "${enquete.titulo}"`, enquete.group_id);
   } else {
     db.prepare('UPDATE enquetes SET fechada_em = NULL, fechada_automaticamente = 0 WHERE id = ?').run(enquete.id);
     const texto = `🔓 *Lista reaberta — ${enquete.titulo}*\n\nAlguém confirmada desistiu e não tinha ninguém na lista de espera — reabri a lista, ainda dá tempo de confirmar!`;
-    await client.sendMessage(enquete.group_id, texto);
+    await comTimeoutDeSessao(client.sendMessage(enquete.group_id, texto), 30 * 1000, 'Aviso de lista reaberta');
     registrarLog('lista', 'aviso', `Lista reaberta automaticamente — desistência sem substituta na espera — "${enquete.titulo}"`, enquete.group_id);
   }
 }
