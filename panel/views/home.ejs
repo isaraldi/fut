@@ -49,7 +49,7 @@
                 <% ultimosJogos.forEach(j => { %>
                     <tr>
                         <td><%= j.titulo %></td>
-                        <td><%= j.criada_em %></td>
+                        <td><%= formatarDataHora(j.criada_em) %></td>
                         <td><%= j.confirmados %></td>
                         <td>
                             <a href="/jogos/<%= j.id %>" class="icon-btn secondary" title="Ver detalhe" aria-label="Ver detalhe de <%= j.titulo %>">

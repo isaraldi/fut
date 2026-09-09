@@ -14,7 +14,7 @@
         <h1><%= enquete.titulo %></h1>
         <h2><%= totalVotos %> resposta<%= totalVotos === 1 ? '' : 's' %></h2>
         <% if (enquete.fechada_em) { %>
-            <p class="hint">🔒 Lista fechada em <%= enquete.fechada_em %> — novos votos no WhatsApp não contam mais.</p>
+            <p class="hint">🔒 Lista fechada em <%= formatarDataHora(enquete.fechada_em) %> — novos votos no WhatsApp não contam mais.</p>
         <% } %>
         <form method="post" action="/confirmados/enviar-lista"><input type="hidden" name="_csrf" value="<%= csrfToken %>">
             <button type="submit" class="btn-icon-label">

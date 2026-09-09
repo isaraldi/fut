@@ -86,10 +86,21 @@ function jsonParaScript(valor) {
         .replace(/&/g, '\\u0026');
 }
 
+// as colunas *_em do banco (criado_em, alterado_em, fechada_em etc.) são gravadas com
+// datetime('now') do SQLite, que é sempre UTC — sem isso o painel mostra tudo 3h adiantado
+// em relação ao horário de Brasília. Convertemos só na hora de exibir, aqui.
+function formatarDataHora(valorUtc) {
+    if (!valorUtc) return '';
+    const data = new Date(`${valorUtc.replace(' ', 'T')}Z`);
+    if (Number.isNaN(data.getTime())) return valorUtc;
+    return data.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+}
+
 const app = express();
 app.set('trust proxy', 1); // atrás do proxy TLS do Fly — necessário pro cookie "secure" saber que a conexão é https
 app.set('view engine', 'ejs');
 app.locals.jsonParaScript = jsonParaScript;
+app.locals.formatarDataHora = formatarDataHora;
 app.set('views', path.join(__dirname, 'views'));
 app.set('layout', 'layout');
 // CSP desligado: o painel usa <script> inline em várias views sem nonce, e o padrão do
@@ -374,11 +385,14 @@ function textoOpcaoParaPapel(papel) {
 app.post('/jogos/:id/confirmar', requireLogin, (req, res) => {
     const enqueteId = Number(req.params.id);
     const jogadorId = Number(req.body.jogador_id);
-    const papel = req.body.papel === 'mensalista' ? 'mensalista' : 'avulso';
 
     const enquete = db.prepare('SELECT id FROM enquetes WHERE id = ?').get(enqueteId);
-    const jogador = db.prepare('SELECT id, nome FROM jogadores WHERE id = ?').get(jogadorId);
+    const jogador = db.prepare('SELECT id, nome, papel FROM jogadores WHERE id = ?').get(jogadorId);
     if (!enquete || !jogador) return res.redirect('/jogos/' + enqueteId);
+
+    // papel da confirmação segue o papel cadastrado da jogadora (lista de mensalistas em
+    // /elenco), não é mais escolhido na hora — mantém coerência com o pagamento dela
+    const papel = jogador.papel === 'mensalista' ? 'mensalista' : 'avulso';
 
     db.prepare(
         `INSERT INTO votos (enquete_id, jogador_id, opcao, papel)
@@ -493,7 +507,7 @@ app.post('/pagamentos/avulsos/:jogadorId/toggle', requireLogin, (req, res) => {
 
 app.get('/elenco', requireLogin, (req, res) => {
     const jogadores = db
-        .prepare('SELECT * FROM jogadores WHERE ativo = 1 ORDER BY papel DESC, nivel DESC, nome ASC')
+        .prepare('SELECT * FROM jogadores WHERE ativo = 1 ORDER BY nome ASC')
         .all();
     res.render('elenco', { usuario: req.session.usuario, jogadores, ok: req.query.ok });
 });

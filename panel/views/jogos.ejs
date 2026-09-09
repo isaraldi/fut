@@ -17,7 +17,7 @@
                 <% jogos.forEach(j => { %>
                     <tr>
                         <td><%= j.titulo %></td>
-                        <td><%= j.criada_em %></td>
+                        <td><%= formatarDataHora(j.criada_em) %></td>
                         <td><%= j.confirmados %></td>
                         <td><%= j.total_respostas %></td>
                         <td style="white-space:nowrap">

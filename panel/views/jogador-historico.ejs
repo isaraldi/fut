@@ -23,7 +23,7 @@
                     <tr>
                         <td><%= h.papel_anterior ? h.papel_anterior : '(criado)' %></td>
                         <td><span class="badge <%= h.papel_novo %>"><%= h.papel_novo %></span></td>
-                        <td><%= h.alterado_em %></td>
+                        <td><%= formatarDataHora(h.alterado_em) %></td>
                     </tr>
                 <% }) %>
             </tbody>

@@ -25,7 +25,7 @@
             <tbody>
                 <% logs.forEach(l => { %>
                     <tr>
-                        <td style="white-space:nowrap"><%= l.criado_em %></td>
+                        <td style="white-space:nowrap"><%= formatarDataHora(l.criado_em) %></td>
                         <td style="text-transform:capitalize"><%= l.tipo %></td>
                         <td><span class="badge <%= l.nivel %>"><%= l.nivel %></span></td>
                         <td><%= l.grupo_nome || '—' %></td>

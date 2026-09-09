@@ -8,18 +8,12 @@
                 <select name="jogador_id" required>
                     <option value="">Selecione...</option>
                     <% jogadores.forEach(j => { %>
-                        <option value="<%= j.id %>"><%= j.nome %></option>
+                        <option value="<%= j.id %>"><%= j.nome %> (<%= j.papel === 'mensalista' ? 'Mensalista' : 'Avulsa' %>)</option>
                     <% }) %>
                 </select>
             </div>
-            <div>
-                <label>Confirmar como</label>
-                <select name="papel">
-                    <option value="mensalista">Mensalista</option>
-                    <option value="avulso">Avulso</option>
-                </select>
-            </div>
         </div>
+        <p class="hint">O papel (mensalista/avulsa) é o cadastrado em <a href="/elenco">Jogadores</a> — atualize lá se estiver errado.</p>
         <input type="submit" value="Confirmar presença">
     </form>
 </div>
