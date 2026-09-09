@@ -848,11 +848,21 @@ function proximoFechamentoMensal() {
 }
 
 app.get('/mensagens', requireLogin, (req, res) => {
-    const proximoFechamento = proximoFechamentoMensal();
     res.render('mensagens', {
         usuario: req.session.usuario,
         mensagens: getMensagensAgendadas(),
         grupos: getGrupos(),
+        ok: req.query.ok,
+    });
+});
+
+// mensagens que o bot manda sozinho pro grupo (enquete, fechamento do mensal) — templates
+// configuráveis, diferente das mensagens agendadas acima que são conteúdo livre do admin
+app.get('/mensagens/automaticas', requireLogin, (req, res) => {
+    const proximoFechamento = proximoFechamentoMensal();
+    res.render('mensagens-automaticas', {
+        usuario: req.session.usuario,
+        enqueteTituloTemplate: getConfig('enquete_titulo_template'),
         fechamentoMensalAtivo: getConfig('fechamento_mensal_ativo') === '1',
         fechamentoMensalMensagem: getConfig('fechamento_mensal_mensagem'),
         pagamentoDiaLimite: getConfig('pagamento_dia_limite'),
@@ -870,7 +880,7 @@ app.post('/mensagens/fechamento-mensal', requireLogin, (req, res) => {
     const diaLimite = parseInt(req.body.pagamentoDiaLimite, 10);
     setConfig('pagamento_dia_limite', Number.isFinite(diaLimite) && diaLimite >= 1 && diaLimite <= 31 ? String(diaLimite) : '7');
 
-    redirectOk(res, '/mensagens', 'Configurações salvas!');
+    redirectOk(res, '/mensagens/automaticas', 'Configurações salvas!');
 });
 
 app.post('/mensagens', requireLogin, (req, res) => {

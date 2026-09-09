@@ -1,6 +1,7 @@
 <div class="page-header">
     <div>
         <h1>Mensagens agendadas</h1>
+        <p>Mensagens com conteúdo livre, criadas por você. Pra ver e editar as mensagens que o bot manda sozinho (enquete, fechamento do mensal), veja <a href="/mensagens/automaticas">Mensagens automáticas</a>.</p>
     </div>
 </div>
 
@@ -82,51 +83,6 @@
                 </div>
             </div>
             <input type="submit" value="Agendar mensagem" <%= grupos.length === 0 ? 'disabled' : '' %>>
-        </form>
-    </div>
-
-    <div class="card">
-        <h1>Fechamento do mensal</h1>
-        <p class="hint">
-            O mensal fecha sempre na quinta-feira seguinte à última quarta-feira do mês
-            (normalmente ainda dentro do mesmo mês, mas se o mês terminar numa quarta-feira essa
-            quinta cai no dia 1º do mês seguinte). A partir do fechamento, comprovantes e
-            pagamentos passam a contar pro mês seguinte. Próximo fechamento:
-            <strong><%= proximoFechamentoMensalTexto %></strong>.
-        </p>
-        <p class="hint">
-            Se ativado, o bot manda a mensagem abaixo automaticamente pro grupo configurado em
-            Enquete no dia do fechamento, listando quem pagou o mês anterior e dando a chance de
-            renovar: quem reagir 👍 nessa mensagem continua mensalista; quem reagir 👎 vira
-            avulsa na hora, liberando a vaga pra uma nova mensalista. Quem não reagir continua
-            mensalista (sem mudança).
-        </p>
-        <p class="hint">
-            Tokens disponíveis: <code>{mes_anterior}</code> e <code>{mes_atual}</code> (AAAA-MM),
-            <code>{mensalistas_mes_anterior}</code> (lista numerada de quem pagou o mês anterior,
-            as convidadas a renovar), <code>{valor_mensal}</code> e
-            <code>{data_limite_pagamento}</code> (dia configurado abaixo, no formato DD/MM do mês
-            que está começando — ex: 07/09). Pra deixar um trecho em <strong>negrito</strong> no
-            WhatsApp, envolva com asteriscos: <code>*assim*</code>.
-        </p>
-        <form method="post" action="/mensagens/fechamento-mensal"><input type="hidden" name="_csrf" value="<%= csrfToken %>">
-            <div class="switch-row">
-                <input type="checkbox" id="fechamentoMensalAtivo" name="fechamentoMensalAtivo" <%= fechamentoMensalAtivo ? 'checked' : '' %>>
-                <label for="fechamentoMensalAtivo">Mandar mensagem automática no dia do fechamento</label>
-            </div>
-            <div class="form-row">
-                <div>
-                    <label>Dia limite de pagamento (do mês que está começando)</label>
-                    <input type="number" name="pagamentoDiaLimite" min="1" max="31" step="1" value="<%= pagamentoDiaLimite %>">
-                </div>
-            </div>
-            <div class="form-row">
-                <div>
-                    <label>Mensagem</label>
-                    <textarea name="fechamentoMensalMensagem" rows="7"><%= fechamentoMensalMensagem %></textarea>
-                </div>
-            </div>
-            <input type="submit" value="Salvar">
         </form>
     </div>
 
