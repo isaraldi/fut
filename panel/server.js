@@ -30,6 +30,7 @@ const {
     setConfig,
     getGrupos,
     getLogs,
+    contarLogs,
     getEnqueteOpcoes,
     criarMensagemUnica,
     criarMensagemSemanal,
@@ -933,10 +934,17 @@ app.post('/mensagens/:id/excluir', requireLogin, (req, res) => {
 
 app.get('/logs', requireLogin, (req, res) => {
     const tipo = ['enquete', 'mensagem', 'comprovante', 'lista', 'times', 'elenco'].includes(req.query.tipo) ? req.query.tipo : null;
+    const LOGS_POR_PAGINA = 50;
+    const totalLogs = contarLogs(tipo);
+    const totalPaginas = Math.max(1, Math.ceil(totalLogs / LOGS_POR_PAGINA));
+    const pagina = Math.min(Math.max(1, Number(req.query.pagina) || 1), totalPaginas);
+
     res.render('logs', {
         usuario: req.session.usuario,
-        logs: getLogs(tipo),
+        logs: getLogs(tipo, LOGS_POR_PAGINA, (pagina - 1) * LOGS_POR_PAGINA),
         tipo,
+        pagina,
+        totalPaginas,
     });
 });
 

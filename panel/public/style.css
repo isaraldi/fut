@@ -388,6 +388,21 @@ button.danger { background: var(--critical); }
 }
 .filter-pills a:hover { background: var(--bg); color: var(--text); }
 .filter-pills a.active { background: var(--primary); color: white; border-color: var(--primary); }
+
+.pagination { display: flex; align-items: center; justify-content: center; gap: 12px; margin-top: 16px; }
+.pagination a, .pagination span.current {
+    display: inline-block;
+    padding: 6px 14px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-size: 0.85rem;
+    font-weight: 600;
+    text-decoration: none;
+}
+.pagination a:hover { background: var(--bg); }
+.pagination span.disabled { color: var(--muted); opacity: 0.5; pointer-events: none; }
+.pagination span.current { color: var(--muted); border-color: transparent; font-weight: 400; }
 button.danger:hover { filter: brightness(0.9); }
 
 button.edit-toggle.active, button.edit-toggle.active:hover { background: var(--primary-wash); color: var(--primary); border-color: transparent; }

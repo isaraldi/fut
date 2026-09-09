@@ -34,5 +34,23 @@
                 <% }) %>
             </tbody>
         </table>
+        <% if (totalPaginas > 1) { %>
+            <%
+                const linkPagina = (p) => `/logs?pagina=${p}${tipo ? `&tipo=${tipo}` : ''}`;
+            %>
+            <div class="pagination">
+                <% if (pagina > 1) { %>
+                    <a href="<%= linkPagina(pagina - 1) %>">&larr; Anterior</a>
+                <% } else { %>
+                    <span class="disabled">&larr; Anterior</span>
+                <% } %>
+                <span class="current">Página <%= pagina %> de <%= totalPaginas %></span>
+                <% if (pagina < totalPaginas) { %>
+                    <a href="<%= linkPagina(pagina + 1) %>">Próxima &rarr;</a>
+                <% } else { %>
+                    <span class="disabled">Próxima &rarr;</span>
+                <% } %>
+            </div>
+        <% } %>
     <% } %>
 </div>

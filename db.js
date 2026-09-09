@@ -316,19 +316,26 @@ function registrarLog(tipo, nivel, mensagem, grupoId = null) {
     ).run();
 }
 
-function getLogs(tipo, limite = 200) {
+function getLogs(tipo, limite = 200, offset = 0) {
     const query = tipo
         ? db.prepare(
               `SELECT l.*, g.nome AS grupo_nome FROM logs l
                LEFT JOIN grupos g ON g.whatsapp_id = l.grupo_id
-               WHERE l.tipo = ? ORDER BY l.id DESC LIMIT ?`,
+               WHERE l.tipo = ? ORDER BY l.id DESC LIMIT ? OFFSET ?`,
           )
         : db.prepare(
               `SELECT l.*, g.nome AS grupo_nome FROM logs l
                LEFT JOIN grupos g ON g.whatsapp_id = l.grupo_id
-               ORDER BY l.id DESC LIMIT ?`,
+               ORDER BY l.id DESC LIMIT ? OFFSET ?`,
           );
-    return tipo ? query.all(tipo, limite) : query.all(limite);
+    return tipo ? query.all(tipo, limite, offset) : query.all(limite, offset);
+}
+
+function contarLogs(tipo) {
+    const query = tipo
+        ? db.prepare('SELECT COUNT(*) AS c FROM logs WHERE tipo = ?')
+        : db.prepare('SELECT COUNT(*) AS c FROM logs');
+    return (tipo ? query.get(tipo) : query.get()).c;
 }
 
 // fila de "manda isso pro grupo assim que puder" — usada pelos botões do painel (que roda num
@@ -737,6 +744,7 @@ module.exports = {
     getGrupos,
     registrarLog,
     getLogs,
+    contarLogs,
     criarEnvioImediato,
     getEnviosImediatosPendentes,
     removerEnvioImediato,
