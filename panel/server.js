@@ -376,11 +376,10 @@ app.post('/jogos/:id/excluir', requireLogin, (req, res) => {
 });
 
 // confirma manualmente uma jogadora que não respondeu (ou respondeu errado) a enquete no WhatsApp;
-// reaproveita o texto da opção configurada pro papel escolhido, pra ficar igual a um voto de verdade
-function textoOpcaoParaPapel(papel) {
-    const opcao = getEnqueteOpcoes().find((o) => o.papel === papel);
-    if (opcao) return opcao.texto;
-    return papel === 'mensalista' ? 'Eu vou (MENSALISTAS)' : 'Eu quero (AVULSAS)';
+// reaproveita o texto de uma opção que conta como confirmada, pra ficar igual a um voto de verdade
+function textoOpcaoConfirmada() {
+    const opcao = getEnqueteOpcoes().find((o) => o.conta === 1);
+    return opcao ? opcao.texto : 'Confirmada manualmente';
 }
 
 app.post('/jogos/:id/confirmar', requireLogin, (req, res) => {
@@ -402,7 +401,7 @@ app.post('/jogos/:id/confirmar', requireLogin, (req, res) => {
              opcao = excluded.opcao,
              papel = excluded.papel,
              votado_em = datetime('now')`,
-    ).run(enqueteId, jogadorId, textoOpcaoParaPapel(papel), papel);
+    ).run(enqueteId, jogadorId, textoOpcaoConfirmada(), papel);
 
     redirectOk(res, '/jogos/' + enqueteId, `${jogador.nome} confirmada manualmente!`);
 });
@@ -800,7 +799,7 @@ app.post('/enquete/config/titulo', requireLogin, (req, res) => {
 });
 
 app.post('/enquete/config/opcoes', requireLogin, (req, res) => {
-    const { texto, papel } = req.body;
+    const { texto, conta } = req.body;
     if (!texto || !texto.trim()) return res.redirect('/enquete/config');
 
     const proximaOrdem = db
@@ -808,28 +807,20 @@ app.post('/enquete/config/opcoes', requireLogin, (req, res) => {
         .get().n;
 
     db.prepare(
-        'INSERT INTO enquete_opcoes (texto, papel, ordem) VALUES (?, ?, ?)',
-    ).run(
-        texto.trim(),
-        papel === 'mensalista' || papel === 'avulso' ? papel : null,
-        proximaOrdem,
-    );
+        'INSERT INTO enquete_opcoes (texto, conta, ordem) VALUES (?, ?, ?)',
+    ).run(texto.trim(), conta === '1' ? 1 : 0, proximaOrdem);
 
     redirectOk(res, '/enquete/config', 'Opção adicionada!');
 });
 
 app.post('/enquete/config/opcoes/:id', requireLogin, (req, res) => {
-    const { texto, papel } = req.body;
+    const { texto, conta } = req.body;
     const id = Number(req.params.id);
     if (!texto || !texto.trim()) return res.redirect('/enquete/config');
 
     db.prepare(
-        'UPDATE enquete_opcoes SET texto = ?, papel = ? WHERE id = ?',
-    ).run(
-        texto.trim(),
-        papel === 'mensalista' || papel === 'avulso' ? papel : null,
-        id,
-    );
+        'UPDATE enquete_opcoes SET texto = ?, conta = ? WHERE id = ?',
+    ).run(texto.trim(), conta === '1' ? 1 : 0, id);
 
     redirectOk(res, '/enquete/config', 'Opção salva!');
 });

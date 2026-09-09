@@ -854,8 +854,13 @@ client.on('vote_update', async vote => {
 
     const opcaoTexto = vote.selectedOptions.map(o => o.name).join(', ');
     const opcaoConfig = getEnqueteOpcoes().find(o => o.texto === opcaoTexto);
-    const papel = opcaoConfig ? opcaoConfig.papel : null; // null = não conta como confirmado
-    const jogadorId = upsertJogador(idCanonico, nome, papel, telefone);
+    const contaComoConfirmado = !!(opcaoConfig && opcaoConfig.conta);
+
+    // papel da confirmação segue sempre o cadastro da jogadora (lista de mensalistas em
+    // /elenco) — não é mais decidido pela opção da enquete escolhida no voto
+    const jogadorId = upsertJogador(idCanonico, nome, null, telefone);
+    const jogadorCadastrado = db.prepare('SELECT papel FROM jogadores WHERE id = ?').get(jogadorId);
+    const papel = contaComoConfirmado ? jogadorCadastrado.papel : null;
 
     db.prepare(`
       INSERT INTO votos (enquete_id, jogador_id, opcao, papel)

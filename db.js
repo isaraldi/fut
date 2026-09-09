@@ -80,7 +80,7 @@ db.exec(`
     CREATE TABLE IF NOT EXISTS enquete_opcoes (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         texto TEXT NOT NULL,
-        papel TEXT CHECK(papel IN ('mensalista', 'avulso') OR papel IS NULL),
+        conta INTEGER NOT NULL DEFAULT 0 CHECK(conta IN (0, 1)),
         ordem INTEGER NOT NULL DEFAULT 0
     );
 
@@ -258,15 +258,35 @@ if (schemaLogsElenco && !schemaLogsElenco.sql.includes("'elenco'")) {
     `);
 }
 
+// migração leve: enquete_opcoes.papel (mensalista/avulso escolhido na hora do voto) vira
+// enquete_opcoes.conta (0/1) — o papel da confirmação agora sempre segue o cadastro da
+// jogadora em /elenco, a opção da enquete só diz se conta como presença ou não
+const schemaOpcoes = db
+    .prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'enquete_opcoes'")
+    .get();
+if (schemaOpcoes && schemaOpcoes.sql.includes('papel')) {
+    db.exec(`
+        CREATE TABLE enquete_opcoes_novo (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            texto TEXT NOT NULL,
+            conta INTEGER NOT NULL DEFAULT 0 CHECK(conta IN (0, 1)),
+            ordem INTEGER NOT NULL DEFAULT 0
+        );
+        INSERT INTO enquete_opcoes_novo (id, texto, conta, ordem)
+            SELECT id, texto, CASE WHEN papel IS NOT NULL THEN 1 ELSE 0 END, ordem FROM enquete_opcoes;
+        DROP TABLE enquete_opcoes;
+        ALTER TABLE enquete_opcoes_novo RENAME TO enquete_opcoes;
+    `);
+}
+
 // seed das opções padrão (mesmas que já estavam fixas no código)
 const totalOpcoes = db.prepare('SELECT COUNT(*) AS c FROM enquete_opcoes').get().c;
 if (totalOpcoes === 0) {
     const inserirOpcao = db.prepare(
-        'INSERT INTO enquete_opcoes (texto, papel, ordem) VALUES (?, ?, ?)',
+        'INSERT INTO enquete_opcoes (texto, conta, ordem) VALUES (?, ?, ?)',
     );
-    inserirOpcao.run('Eu vou (MENSALISTAS)', 'mensalista', 0);
-    inserirOpcao.run('Não vou (MENSALISTAS)', null, 1);
-    inserirOpcao.run('Eu quero (AVULSAS)', 'avulso', 2);
+    inserirOpcao.run('Eu vou', 1, 0);
+    inserirOpcao.run('Não vou', 0, 1);
 }
 
 const DEFAULT_CONFIG = {

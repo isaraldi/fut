@@ -111,14 +111,17 @@
                     <input type="text" name="texto" required>
                 </div>
                 <div>
-                    <label>Conta como</label>
-                    <select name="papel">
-                        <option value="">Não conta como confirmado (ex: "não vou")</option>
-                        <option value="mensalista">Mensalista</option>
-                        <option value="avulso">Avulso</option>
+                    <label>Conta como confirmada?</label>
+                    <select name="conta">
+                        <option value="1">Sim (ex: "eu vou")</option>
+                        <option value="0">Não (ex: "não vou")</option>
                     </select>
                 </div>
             </div>
+            <p class="hint">
+                O papel da confirmação (mensalista/avulsa) segue sempre o cadastro da jogadora em
+                <a href="/elenco">Jogadores</a> — não depende mais de qual opção ela escolhe aqui.
+            </p>
             <input type="submit" value="Adicionar opção">
         </form>
     </div>
@@ -131,17 +134,16 @@
         <% } else { %>
             <table>
                 <thead>
-                    <tr><th>Texto</th><th>Conta como</th><th></th></tr>
+                    <tr><th>Texto</th><th>Conta como confirmada?</th><th></th></tr>
                 </thead>
                 <tbody>
                     <% opcoes.forEach(o => { %>
                         <tr>
                             <td><input type="text" name="texto" form="opcao-<%= o.id %>" value="<%= o.texto %>" required></td>
                             <td>
-                                <select name="papel" form="opcao-<%= o.id %>">
-                                    <option value="" <%= !o.papel ? 'selected' : '' %>>Não conta</option>
-                                    <option value="mensalista" <%= o.papel === 'mensalista' ? 'selected' : '' %>>Mensalista</option>
-                                    <option value="avulso" <%= o.papel === 'avulso' ? 'selected' : '' %>>Avulso</option>
+                                <select name="conta" form="opcao-<%= o.id %>">
+                                    <option value="1" <%= o.conta === 1 ? 'selected' : '' %>>Sim</option>
+                                    <option value="0" <%= o.conta === 0 ? 'selected' : '' %>>Não</option>
                                 </select>
                             </td>
                             <td style="white-space:nowrap">
