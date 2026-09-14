@@ -110,16 +110,17 @@ async function reiniciarSessaoWhatsapp() {
 // evita depender do timeout padrão do Puppeteer (~3min) pra perceber que travou
 function comTimeoutDeSessao(promise, ms, rotulo) {
   promise.catch(() => {}); // se a sessão for reiniciada, a promise original ainda pode rejeitar sozinha depois; evita unhandled rejection
-  return Promise.race([
-    promise,
-    new Promise((_, reject) => {
-      setTimeout(() => {
-        console.error(`⚠️ ${rotulo} travou (sem resposta em ${ms / 1000}s) — reiniciando sessão do WhatsApp...`);
-        reiniciarSessaoWhatsapp().catch((err) => console.error('Falha ao reiniciar sessão do WhatsApp:', err));
-        reject(new Error(`${rotulo} travou (sessão do WhatsApp reiniciada)`));
-      }, ms);
-    }),
-  ]);
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => {
+      console.error(`⚠️ ${rotulo} travou (sem resposta em ${ms / 1000}s) — reiniciando sessão do WhatsApp...`);
+      reiniciarSessaoWhatsapp().catch((err) => console.error('Falha ao reiniciar sessão do WhatsApp:', err));
+      reject(new Error(`${rotulo} travou (sessão do WhatsApp reiniciada)`));
+    }, ms);
+  });
+  // limpa o timer assim que a promise original resolver (sucesso ou erro), senão ele dispara
+  // de qualquer jeito ms depois e reinicia a sessão à toa — mesmo quando não travou de verdade
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
 }
 
 // reinicia a sessão 1x por dia, de madrugada, antes que dias de uptime a deixem instável
