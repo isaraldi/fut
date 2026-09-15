@@ -23,6 +23,7 @@ const {
   criarConviteFechamentoMensal,
   getConviteFechamentoMensal,
   registrarRespostaConviteFechamentoMensal,
+  getConvitesFechamentoMensalExpirados,
   definirPapelJogador,
   getJogadorPorWhatsappId,
   podeUsarComandos,
@@ -82,6 +83,7 @@ client.on('ready', async () => {
       checarReinicioAgendadoDoBot();
       checarSincronizacaoPendente();
       checarFechamentoMensal();
+      checarConvitesFechamentoMensalExpirados();
     }, 60 * 1000);
   }
   await sincronizarGruposConhecidos();
@@ -409,12 +411,21 @@ async function checarFechamentoMensal() {
   const hojeLocal = `${agora.getFullYear()}-${String(agora.getMonth() + 1).padStart(2, '0')}-${String(agora.getDate()).padStart(2, '0')}`;
   if (getConfig('fechamento_mensal_ultimo_envio') === hojeLocal) return; // já enviada hoje
 
+  // usa >= (não ===), igual o envio automático da enquete: se o horário configurado passar
+  // batido (processo reiniciando, sessão travada etc.) tenta de novo nos minutos seguintes
+  // em vez de esperar até o próximo fechamento
+  const [horaAlvo, minutoAlvo] = (getConfig('fechamento_mensal_hora') || '00:00').split(':').map(Number);
+  const minutosAgora = agora.getHours() * 60 + agora.getMinutes();
+  const minutosAlvo = horaAlvo * 60 + minutoAlvo;
+  if (minutosAgora < minutosAlvo) return;
+
   // convite pra renovar é sempre sobre quem pagou o ciclo que está terminando, não o que
   // está começando — mesReferenciaAtual() já devolve o mês novo a partir do dia do fechamento
   const mesNovo = mesReferenciaAtual(agora);
   const mesAnteriorRef = mesAnterior(mesNovo);
   const valorMensal = parseFloat(getConfig('valor_mensal'));
   const pagantes = getMensalistasPagos(mesAnteriorRef);
+  const prazoHoras = parseInt(getConfig('fechamento_mensal_prazo_horas'), 10) || 36;
 
   const diaLimite = parseInt(getConfig('pagamento_dia_limite'), 10) || 7;
   const mesNovoNumero = mesNovo.split('-')[1];
@@ -425,6 +436,7 @@ async function checarFechamentoMensal() {
     .replace(/{mes_anterior}/g, mesAnteriorRef)
     .replace(/{mes_atual}/g, mesNovo)
     .replace(/{data_limite_pagamento}/g, dataLimitePagamento)
+    .replace(/{fechamento_mensal_prazo_horas}/g, String(prazoHoras))
     .replace('{valor_mensal}', Number.isFinite(valorMensal) ? `R$${valorMensal.toFixed(2)}` : '(valor não configurado)')
     .replace('{mensalistas_mes_anterior}', pagantes.length ? pagantes.map((j, i) => `${i + 1}. ${j.nome}`).join('\n') : 'Ninguém pagou o mês anterior.');
 
@@ -441,6 +453,25 @@ async function checarFechamentoMensal() {
   } catch (err) {
     registrarLog('mensagem', 'erro', `Falha ao enviar mensagem de fechamento do mensal: ${err.message}`, grupoId);
     console.error('Erro ao enviar mensagem de fechamento do mensal:', err);
+  }
+}
+
+// ⏰⬇️ EXPIRAÇÃO DO PRAZO DE RENOVAÇÃO — quem não reagiu à mensagem de fechamento do mensal
+// dentro do prazo configurado (padrão 36h) vira avulsa automaticamente, liberando a vaga.
+// Uma reação tardia (depois de já ter expirado) ainda é aceita normalmente pelo handler de
+// 'message_reaction' — o convite não fica "travado" só porque expirou uma vez.
+async function checarConvitesFechamentoMensalExpirados() {
+  const prazoHoras = parseInt(getConfig('fechamento_mensal_prazo_horas'), 10) || 36;
+  const expirados = getConvitesFechamentoMensalExpirados(prazoHoras);
+
+  for (const convite of expirados) {
+    registrarRespostaConviteFechamentoMensal(convite.id, 'nao');
+    const mudou = definirPapelJogador(convite.jogador_id, 'avulso');
+    registrarLog(
+      'mensagem', 'sucesso',
+      `${convite.jogador_nome} não reagiu ao fechamento do mensal em ${prazoHoras}h — virou avulsa automaticamente${mudou ? '' : ' (sem mudança de papel)'}`,
+    );
+    console.log(`💰⏰ ${convite.jogador_nome} não reagiu em ${prazoHoras}h — virou avulsa automaticamente`);
   }
 }
 

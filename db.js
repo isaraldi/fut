@@ -311,8 +311,10 @@ const DEFAULT_CONFIG = {
     jogo_vagas_maximo: '', // nº máximo de jogadoras no jogo — vazio = sem limite. Snapshot em enquetes.vagas_maximo na criação
     sincronizar_grupo_pendente: '', // whatsapp_id do grupo que o botão do painel pediu pra sincronizar agora
     fechamento_mensal_ativo: '0', // '1' = manda a mensagem de fechamento do mensal automaticamente
-    fechamento_mensal_mensagem: 'O mensal de {mes_anterior} fechou! 💰\n\nQuem quer continuar mensalista, reaja 👍 nessa mensagem. Quem não reagir 👍 libera a vaga pra uma nova mensalista.\n\nMensalistas de {mes_anterior}:\n{mensalistas_mes_anterior}\n\n*Valor da mensalidade ({mes_atual}):* {valor_mensal}\n*Pague até {data_limite_pagamento}*',
+    fechamento_mensal_mensagem: 'O mensal de {mes_anterior} fechou! 💰\n\nQuem quer continuar mensalista, reaja 👍 nessa mensagem. Quem não reagir em até {fechamento_mensal_prazo_horas}h vira avulsa automaticamente, liberando a vaga pra uma nova mensalista.\n\nMensalistas de {mes_anterior}:\n{mensalistas_mes_anterior}\n\n*Valor da mensalidade ({mes_atual}):* {valor_mensal}\n*Pague até {data_limite_pagamento}*',
     fechamento_mensal_ultimo_envio: '', // data (YYYY-MM-DD) do último envio, evita duplicar no mesmo dia
+    fechamento_mensal_hora: '00:00', // horário de envio da mensagem de fechamento (0h = manda assim que o dia do fechamento vira, comportamento original antes de virar configurável)
+    fechamento_mensal_prazo_horas: '36', // prazo (em horas, a partir do envio) pra reagir antes de virar avulsa automaticamente
     pagamento_dia_limite: '7', // dia do mês (1-31) até quando a mensalidade deve ser paga — token {data_limite_pagamento}
     lista_confirmada_mensagem: TEMPLATE_LISTA_CONFIRMADA_PADRAO, // !fechar / painel "Confirmados → Enviar lista"
     lista_atual_mensagem: TEMPLATE_LISTA_ATUAL_PADRAO, // !lista
@@ -569,6 +571,18 @@ function registrarRespostaConviteFechamentoMensal(id, resposta) {
     ).run(resposta, id);
 }
 
+// convites ainda sem resposta cujo prazo pra reagir já passou — quem não reagiu a tempo
+// vira avulsa automaticamente (ver checarConvitesFechamentoMensalExpirados em index.js)
+function getConvitesFechamentoMensalExpirados(prazoHoras) {
+    return db
+        .prepare(
+            `SELECT c.*, j.nome AS jogador_nome FROM fechamento_mensal_convites c
+             JOIN jogadores j ON j.id = c.jogador_id
+             WHERE c.resposta IS NULL AND c.criado_em <= datetime('now', ?)`,
+        )
+        .all(`-${prazoHoras} hours`);
+}
+
 // muda o papel de uma jogadora e registra no histórico — só escreve/loga se o papel
 // realmente mudou, devolve true nesse caso (idempotente: reagir de novo com o mesmo emoji
 // não gera mudança nem entrada duplicada no histórico)
@@ -800,6 +814,7 @@ module.exports = {
     criarConviteFechamentoMensal,
     getConviteFechamentoMensal,
     registrarRespostaConviteFechamentoMensal,
+    getConvitesFechamentoMensalExpirados,
     definirPapelJogador,
     getJogadorPorWhatsappId,
     podeUsarComandos,

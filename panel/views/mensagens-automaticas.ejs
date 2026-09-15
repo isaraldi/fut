@@ -105,17 +105,20 @@
         </p>
         <p class="hint">
             Se ativado, o bot manda a mensagem abaixo automaticamente pro grupo configurado em
-            Enquete no dia do fechamento, listando quem pagou o mês anterior e dando a chance de
-            renovar: quem reagir 👍 nessa mensagem continua mensalista; quem reagir 👎 vira
-            avulsa na hora, liberando a vaga pra uma nova mensalista. Quem não reagir continua
-            mensalista (sem mudança).
+            Enquete, no horário configurado abaixo do dia do fechamento, listando quem pagou o
+            mês anterior e dando a chance de renovar: quem reagir 👍 nessa mensagem continua
+            mensalista; quem reagir 👎 vira avulsa na hora, liberando a vaga pra uma nova
+            mensalista. Quem não reagir dentro do prazo configurado abaixo vira avulsa
+            automaticamente — uma reação tardia (depois de já ter expirado) ainda é aceita
+            normalmente e desfaz essa mudança.
         </p>
         <p class="hint">
             Tokens disponíveis: <code>{mes_anterior}</code> e <code>{mes_atual}</code> (AAAA-MM),
             <code>{mensalistas_mes_anterior}</code> (lista numerada de quem pagou o mês anterior,
-            as convidadas a renovar), <code>{valor_mensal}</code> e
+            as convidadas a renovar), <code>{valor_mensal}</code>,
             <code>{data_limite_pagamento}</code> (dia configurado abaixo, no formato DD/MM do mês
-            que está começando — ex: 07/09). Pra deixar um trecho em <strong>negrito</strong> no
+            que está começando — ex: 07/09) e <code>{fechamento_mensal_prazo_horas}</code> (prazo
+            configurado abaixo, em horas). Pra deixar um trecho em <strong>negrito</strong> no
             WhatsApp, envolva com asteriscos: <code>*assim*</code>.
         </p>
         <form method="post" action="/mensagens/fechamento-mensal"><input type="hidden" name="_csrf" value="<%= csrfToken %>">
@@ -124,6 +127,27 @@
                 <label for="fechamentoMensalAtivo">Mandar mensagem automática no dia do fechamento</label>
             </div>
             <div class="form-row">
+                <div>
+                    <label>Horário do envio</label>
+                    <div class="time-select">
+                        <select name="fechamentoMensalHoraH">
+                            <% for (let h = 0; h < 24; h++) { %>
+                                <% const hh = String(h).padStart(2, '0'); %>
+                                <option value="<%= hh %>" <%= fechamentoMensalHora.split(':')[0] === hh ? 'selected' : '' %>><%= hh %></option>
+                            <% } %>
+                        </select>
+                        <span>:</span>
+                        <select name="fechamentoMensalHoraM">
+                            <% ['00','15','30','45'].forEach(mm => { %>
+                                <option value="<%= mm %>" <%= fechamentoMensalHora.split(':')[1] === mm ? 'selected' : '' %>><%= mm %></option>
+                            <% }) %>
+                        </select>
+                    </div>
+                </div>
+                <div>
+                    <label>Prazo pra reagir (horas)</label>
+                    <input type="number" name="fechamentoMensalPrazoHoras" min="1" step="1" value="<%= fechamentoMensalPrazoHoras %>">
+                </div>
                 <div>
                     <label>Dia limite de pagamento (do mês que está começando)</label>
                     <input type="number" name="pagamentoDiaLimite" min="1" max="31" step="1" value="<%= pagamentoDiaLimite %>">

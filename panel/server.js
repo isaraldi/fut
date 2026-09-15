@@ -641,6 +641,7 @@ const TOKENS_DISPONIVEIS = [
     { token: '{mensalistas_mes_anterior}', onde: 'Fechamento do mensal (Mensagens)', descricao: 'Lista numerada de quem pagou o mês anterior — as convidadas a renovar.' },
     { token: '{valor_mensal}', onde: 'Fechamento do mensal (Mensagens)', descricao: 'Valor da mensalidade configurado em Jogo > Valores, formatado em R$.' },
     { token: '{data_limite_pagamento}', onde: 'Fechamento do mensal (Mensagens)', descricao: 'Dia limite de pagamento configurado ali mesmo, formato DD/MM do mês que está começando (ex: 07/09).' },
+    { token: '{fechamento_mensal_prazo_horas}', onde: 'Fechamento do mensal (Mensagens)', descricao: 'Prazo (em horas) configurado ali mesmo pra reagir antes de virar avulsa automaticamente (ex: 36).' },
     { token: '{titulo}', onde: 'Lista fechada, Lista atual, Lista de espera, Times (Mensagens > Msgs. automáticas)', descricao: 'Título da enquete do jogo.' },
     { token: '{lista}', onde: 'Lista fechada, Lista atual, Lista de espera (Mensagens > Msgs. automáticas)', descricao: 'Bloco com as seções Mensalistas/Avulsas (ou os nomes, na lista de espera), numeradas.' },
     { token: '{total}', onde: 'Lista fechada, Lista atual (Mensagens > Msgs. automáticas)', descricao: 'Texto com a contagem de confirmadas (ex: "12 confirmadas").' },
@@ -871,6 +872,8 @@ app.get('/mensagens/automaticas', requireLogin, (req, res) => {
         usuario: req.session.usuario,
         fechamentoMensalAtivo: getConfig('fechamento_mensal_ativo') === '1',
         fechamentoMensalMensagem: getConfig('fechamento_mensal_mensagem'),
+        fechamentoMensalHora: getConfig('fechamento_mensal_hora'),
+        fechamentoMensalPrazoHoras: getConfig('fechamento_mensal_prazo_horas'),
         pagamentoDiaLimite: getConfig('pagamento_dia_limite'),
         proximoFechamentoMensalTexto: `${String(proximoFechamento.getDate()).padStart(2, '0')}/${String(proximoFechamento.getMonth() + 1).padStart(2, '0')}/${proximoFechamento.getFullYear()}`,
         listaConfirmadaMensagem: getConfig('lista_confirmada_mensagem'),
@@ -889,6 +892,13 @@ app.post('/mensagens/fechamento-mensal', requireLogin, (req, res) => {
 
     const diaLimite = parseInt(req.body.pagamentoDiaLimite, 10);
     setConfig('pagamento_dia_limite', Number.isFinite(diaLimite) && diaLimite >= 1 && diaLimite <= 31 ? String(diaLimite) : '7');
+
+    const horaH = String(req.body.fechamentoMensalHoraH || '00').padStart(2, '0');
+    const horaM = String(req.body.fechamentoMensalHoraM || '00').padStart(2, '0');
+    setConfig('fechamento_mensal_hora', `${horaH}:${horaM}`);
+
+    const prazoHoras = parseInt(req.body.fechamentoMensalPrazoHoras, 10);
+    setConfig('fechamento_mensal_prazo_horas', Number.isFinite(prazoHoras) && prazoHoras >= 1 ? String(prazoHoras) : '36');
 
     redirectOk(res, '/mensagens/automaticas', 'Configurações salvas!');
 });
