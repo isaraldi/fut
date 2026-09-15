@@ -125,52 +125,76 @@ function montarSecoesDeConfirmadas(confirmados) {
     return texto;
 }
 
-// mensagem oficial de fechamento — só quem realmente tem vaga garantida entra aqui
-function montarTextoListaConfirmadas(enquete, confirmados) {
-    let texto = `📋 *Lista fechada — ${enquete.titulo}*\n\n`;
-
-    if (confirmados.length === 0) {
-        texto += 'Ninguém confirmado ainda.';
-        return texto;
+function aplicarTokens(template, tokens) {
+    let texto = template;
+    for (const [token, valor] of Object.entries(tokens)) {
+        texto = texto.split(`{${token}}`).join(valor);
     }
-
-    texto += montarSecoesDeConfirmadas(confirmados);
-    texto += `Total: ${confirmados.length} confirmada${confirmados.length === 1 ? '' : 's'}`;
-    texto += '\n\n🔒 Lista fechada — votos depois disso não contam mais.';
     return texto;
 }
 
+// templates padrão — usados quando a config no banco (editável em Mensagens > Msgs.
+// automáticas) ainda não foi preenchida; ficam aqui (não em db.js) pra o texto default
+// continuar ao lado de quem monta as mensagens
+const TEMPLATE_LISTA_CONFIRMADA_PADRAO = '📋 *Lista fechada — {titulo}*\n\n{lista}Total: {total}\n\n🔒 Lista fechada — votos depois disso não contam mais.';
+const TEMPLATE_LISTA_ATUAL_PADRAO = '📋 *Lista atual — {titulo}*\n\n{lista}Total: {total}{espera}\n\nEssa lista ainda pode mudar — a enquete continua aberta.';
+const TEMPLATE_LISTA_ESPERA_PADRAO = '⏳ *Lista de espera — {titulo}*\n\n{lista}\nSó entram se algum dos confirmados sair da lista.';
+const TEMPLATE_TIMES_PADRAO = '⚽ *Times — {titulo}*\n\n🔵 *Time A:*\n{time_a}\n🔴 *Time B:*\n{time_b}';
+
+// mensagem oficial de fechamento — só quem realmente tem vaga garantida entra aqui
+function montarTextoListaConfirmadas(enquete, confirmados, template = TEMPLATE_LISTA_CONFIRMADA_PADRAO) {
+    if (confirmados.length === 0) {
+        return `📋 *Lista fechada — ${enquete.titulo}*\n\nNinguém confirmado ainda.`;
+    }
+
+    return aplicarTokens(template, {
+        titulo: enquete.titulo,
+        lista: montarSecoesDeConfirmadas(confirmados),
+        total: `${confirmados.length} confirmada${confirmados.length === 1 ? '' : 's'}`,
+    });
+}
+
 // prévia da enquete ainda aberta — mostra confirmadas E lista de espera, sem fechar nada
-function montarTextoListaAtual(enquete, confirmados, listaDeEspera = []) {
-    let texto = `📋 *Lista atual — ${enquete.titulo}*\n\n`;
-
+function montarTextoListaAtual(enquete, confirmados, listaDeEspera = [], template = TEMPLATE_LISTA_ATUAL_PADRAO) {
     if (confirmados.length === 0 && listaDeEspera.length === 0) {
-        texto += 'Ninguém confirmado ainda.';
-        return texto;
+        return `📋 *Lista atual — ${enquete.titulo}*\n\nNinguém confirmado ainda.`;
     }
 
-    texto += montarSecoesDeConfirmadas(confirmados);
-    texto += `Total: ${confirmados.length} confirmada${confirmados.length === 1 ? '' : 's'}`;
-
+    let espera = '';
     if (listaDeEspera.length > 0) {
-        texto += `\n\n⏳ *Lista de espera (${listaDeEspera.length}):*\n`;
-        listaDeEspera.forEach((j, i) => { texto += `${i + 1}. ${j.nome}\n`; });
-        texto += '\nSó entra se algum dos confirmados sair da lista.';
+        espera = `\n\n⏳ *Lista de espera (${listaDeEspera.length}):*\n`;
+        listaDeEspera.forEach((j, i) => { espera += `${i + 1}. ${j.nome}\n`; });
+        espera += '\nSó entra se algum dos confirmados sair da lista.';
     }
 
-    texto += '\n\nEssa lista ainda pode mudar — a enquete continua aberta.';
-    return texto;
+    return aplicarTokens(template, {
+        titulo: enquete.titulo,
+        lista: montarSecoesDeConfirmadas(confirmados),
+        total: `${confirmados.length} confirmada${confirmados.length === 1 ? '' : 's'}`,
+        espera,
+    });
+}
+
+// só quem ficou de fora por causa do limite de vagas
+function montarTextoListaEspera(enquete, listaDeEspera, template = TEMPLATE_LISTA_ESPERA_PADRAO) {
+    let lista = '';
+    listaDeEspera.forEach((j, i) => { lista += `${i + 1}. ${j.nome}\n`; });
+
+    return aplicarTokens(template, {
+        titulo: enquete.titulo,
+        lista,
+    });
 }
 
 // nomesTimeA/nomesTimeB: arrays de string — usado tanto com jogadores completos ({nome: ...})
 // quanto com nomes já extraídos (ex: vindos de inputs hidden do formulário do painel)
-function montarTextoTimes(tituloJogo, nomesTimeA, nomesTimeB) {
-    let texto = `⚽ *Times — ${tituloJogo}*\n\n`;
-    texto += '🔵 *Time A:*\n';
-    nomesTimeA.forEach((nome) => { texto += `- ${nome}\n`; });
-    texto += '\n🔴 *Time B:*\n';
-    nomesTimeB.forEach((nome) => { texto += `- ${nome}\n`; });
-    return texto;
+function montarTextoTimes(tituloJogo, nomesTimeA, nomesTimeB, template = TEMPLATE_TIMES_PADRAO) {
+    let timeA = '';
+    nomesTimeA.forEach((nome) => { timeA += `- ${nome}\n`; });
+    let timeB = '';
+    nomesTimeB.forEach((nome) => { timeB += `- ${nome}\n`; });
+
+    return aplicarTokens(template, { titulo: tituloJogo, time_a: timeA, time_b: timeB });
 }
 
 module.exports = {
@@ -178,8 +202,13 @@ module.exports = {
     balancearTimes,
     montarTextoListaConfirmadas,
     montarTextoListaAtual,
+    montarTextoListaEspera,
     montarTextoTimes,
     fechamentoMensalDoMes,
     mesReferenciaAtual,
     mesAnterior,
+    TEMPLATE_LISTA_CONFIRMADA_PADRAO,
+    TEMPLATE_LISTA_ATUAL_PADRAO,
+    TEMPLATE_LISTA_ESPERA_PADRAO,
+    TEMPLATE_TIMES_PADRAO,
 };

@@ -1,25 +1,97 @@
 <div class="page-header">
     <div>
         <h1>Mensagens automáticas</h1>
-        <p>Mensagens que o bot manda sozinho pro grupo, sem precisar de comando ou clique. Pra mensagens de conteúdo livre agendadas por você, veja <a href="/mensagens">Mensagens agendadas</a>.</p>
+        <p>Mensagens que o bot manda sozinho pro grupo, ou como resposta a comandos como <code>!lista</code>, <code>!espera</code> e <code>!times</code>. Pra mensagens de conteúdo livre agendadas por você, veja <a href="/mensagens">Mensagens agendadas</a>. O título da enquete é configurado em <a href="/enquete/config">Enquete → Configuração</a>.</p>
     </div>
 </div>
 
 <section class="section">
     <div class="card">
-        <h1>Enquete</h1>
+        <h1>Lista fechada</h1>
         <p class="hint">
-            Título usado toda vez que a enquete é aberta — automaticamente no dia/horário
-            configurado, ou na hora com <code>!enquete</code>/"Enviar enquete agora". Dia da
-            semana, horário de envio e as opções da enquete ficam em
-            <a href="/enquete/config">Configurações → Enquete</a>.
+            Mandada quando a lista fecha — via <code>!fechar</code> no WhatsApp, ou pelo botão
+            "Enviar lista" na página <a href="/confirmados">Confirmados</a>. A partir daí, novos
+            votos na enquete deixam de contar.
         </p>
         <p class="hint">
-            Tokens disponíveis: <code>{data}</code> (ex: 05/08), <code>{dia}</code> (ex: quarta-feira)
-            e <code>{hora}</code> (ex: 20:00) — vêm da <a href="/jogo/config">configuração do jogo</a>.
+            Tokens disponíveis: <code>{titulo}</code>, <code>{lista}</code> (seções Mensalistas/Avulsas
+            já numeradas) e <code>{total}</code> (ex: "12 confirmadas"). Se ninguém confirmou, o bot
+            manda "Ninguém confirmado ainda." em vez desse template.
         </p>
-        <p><code><%= enqueteTituloTemplate %></code></p>
-        <p><a href="/enquete/config">Editar título da enquete &rarr;</a></p>
+        <form method="post" action="/mensagens/lista-confirmada"><input type="hidden" name="_csrf" value="<%= csrfToken %>">
+            <div class="form-row">
+                <div>
+                    <label>Mensagem</label>
+                    <textarea name="mensagem" rows="6"><%= listaConfirmadaMensagem %></textarea>
+                </div>
+            </div>
+            <input type="submit" value="Salvar">
+        </form>
+    </div>
+
+    <div class="card">
+        <h1>Lista atual</h1>
+        <p class="hint">
+            Mandada pelo comando <code>!lista</code> — uma prévia de quem está confirmado e quem
+            está na espera, sem fechar a enquete. Pode ser pedida quantas vezes quiser.
+        </p>
+        <p class="hint">
+            Tokens disponíveis: <code>{titulo}</code>, <code>{lista}</code>, <code>{total}</code> e
+            <code>{espera}</code> (bloco da lista de espera já formatado, vazio se não tiver
+            ninguém esperando). Se não tiver ninguém confirmado nem esperando, o bot manda
+            "Ninguém confirmado ainda." em vez desse template.
+        </p>
+        <form method="post" action="/mensagens/lista-atual"><input type="hidden" name="_csrf" value="<%= csrfToken %>">
+            <div class="form-row">
+                <div>
+                    <label>Mensagem</label>
+                    <textarea name="mensagem" rows="6"><%= listaAtualMensagem %></textarea>
+                </div>
+            </div>
+            <input type="submit" value="Salvar">
+        </form>
+    </div>
+
+    <div class="card">
+        <h1>Lista de espera</h1>
+        <p class="hint">
+            Mandada pelo comando <code>!espera</code> — só quem ficou de fora por causa do limite
+            de vagas. Se ninguém estiver esperando, o bot responde direto "Ninguém na lista de
+            espera agora." sem usar esse template.
+        </p>
+        <p class="hint">
+            Tokens disponíveis: <code>{titulo}</code> e <code>{lista}</code> (nomes numerados).
+        </p>
+        <form method="post" action="/mensagens/lista-espera"><input type="hidden" name="_csrf" value="<%= csrfToken %>">
+            <div class="form-row">
+                <div>
+                    <label>Mensagem</label>
+                    <textarea name="mensagem" rows="5"><%= listaEsperaMensagem %></textarea>
+                </div>
+            </div>
+            <input type="submit" value="Salvar">
+        </form>
+    </div>
+
+    <div class="card">
+        <h1>Times sorteados</h1>
+        <p class="hint">
+            Mandada pelo comando <code>!times</code>, ou pelo botão "Enviar times" na página
+            <a href="/times">Times</a> — sorteio balanceado por nível.
+        </p>
+        <p class="hint">
+            Tokens disponíveis: <code>{titulo}</code>, <code>{time_a}</code> e <code>{time_b}</code>
+            (nomes de cada time, um por linha).
+        </p>
+        <form method="post" action="/mensagens/times"><input type="hidden" name="_csrf" value="<%= csrfToken %>">
+            <div class="form-row">
+                <div>
+                    <label>Mensagem</label>
+                    <textarea name="mensagem" rows="6"><%= timesMensagem %></textarea>
+                </div>
+            </div>
+            <input type="submit" value="Salvar">
+        </form>
     </div>
 
     <div class="card">

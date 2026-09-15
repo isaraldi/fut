@@ -1,5 +1,11 @@
 const path = require('path');
 const Database = require('better-sqlite3');
+const {
+    TEMPLATE_LISTA_CONFIRMADA_PADRAO,
+    TEMPLATE_LISTA_ATUAL_PADRAO,
+    TEMPLATE_LISTA_ESPERA_PADRAO,
+    TEMPLATE_TIMES_PADRAO,
+} = require('./mensagens-prontas');
 
 const db = new Database(path.join(__dirname, 'data', 'fut.db'));
 db.pragma('journal_mode = WAL');
@@ -308,6 +314,10 @@ const DEFAULT_CONFIG = {
     fechamento_mensal_mensagem: 'O mensal de {mes_anterior} fechou! 💰\n\nQuem quer continuar mensalista, reaja 👍 nessa mensagem. Quem não reagir 👍 libera a vaga pra uma nova mensalista.\n\nMensalistas de {mes_anterior}:\n{mensalistas_mes_anterior}\n\n*Valor da mensalidade ({mes_atual}):* {valor_mensal}\n*Pague até {data_limite_pagamento}*',
     fechamento_mensal_ultimo_envio: '', // data (YYYY-MM-DD) do último envio, evita duplicar no mesmo dia
     pagamento_dia_limite: '7', // dia do mês (1-31) até quando a mensalidade deve ser paga — token {data_limite_pagamento}
+    lista_confirmada_mensagem: TEMPLATE_LISTA_CONFIRMADA_PADRAO, // !fechar / painel "Confirmados → Enviar lista"
+    lista_atual_mensagem: TEMPLATE_LISTA_ATUAL_PADRAO, // !lista
+    lista_espera_mensagem: TEMPLATE_LISTA_ESPERA_PADRAO, // !espera
+    times_mensagem: TEMPLATE_TIMES_PADRAO, // !times / painel "Times"
 };
 
 function getConfig(chave) {

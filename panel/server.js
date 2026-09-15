@@ -272,7 +272,7 @@ app.post('/confirmados/enviar-lista', requireLogin, (req, res) => {
     if (!enquete) return res.redirect('/confirmados');
 
     const confirmados = getConfirmadosDaEnquete(enquete.id);
-    const texto = montarTextoListaConfirmadas(enquete, confirmados);
+    const texto = montarTextoListaConfirmadas(enquete, confirmados, getConfig('lista_confirmada_mensagem'));
     criarEnvioImediato(grupoId, texto, 'lista');
     fecharEnquete(enquete.id); // novos votos passam a ser ignorados; o bot desafixa a enquete no próximo minuto
 
@@ -641,6 +641,12 @@ const TOKENS_DISPONIVEIS = [
     { token: '{mensalistas_mes_anterior}', onde: 'Fechamento do mensal (Mensagens)', descricao: 'Lista numerada de quem pagou o mês anterior — as convidadas a renovar.' },
     { token: '{valor_mensal}', onde: 'Fechamento do mensal (Mensagens)', descricao: 'Valor da mensalidade configurado em Jogo > Valores, formatado em R$.' },
     { token: '{data_limite_pagamento}', onde: 'Fechamento do mensal (Mensagens)', descricao: 'Dia limite de pagamento configurado ali mesmo, formato DD/MM do mês que está começando (ex: 07/09).' },
+    { token: '{titulo}', onde: 'Lista fechada, Lista atual, Lista de espera, Times (Mensagens > Msgs. automáticas)', descricao: 'Título da enquete do jogo.' },
+    { token: '{lista}', onde: 'Lista fechada, Lista atual, Lista de espera (Mensagens > Msgs. automáticas)', descricao: 'Bloco com as seções Mensalistas/Avulsas (ou os nomes, na lista de espera), numeradas.' },
+    { token: '{total}', onde: 'Lista fechada, Lista atual (Mensagens > Msgs. automáticas)', descricao: 'Texto com a contagem de confirmadas (ex: "12 confirmadas").' },
+    { token: '{espera}', onde: 'Lista atual (Mensagens > Msgs. automáticas)', descricao: 'Bloco da lista de espera, já formatado — vazio se não tiver ninguém esperando.' },
+    { token: '{time_a}', onde: 'Times (Mensagens > Msgs. automáticas)', descricao: 'Nomes do Time A, um por linha.' },
+    { token: '{time_b}', onde: 'Times (Mensagens > Msgs. automáticas)', descricao: 'Nomes do Time B, um por linha.' },
 ];
 
 app.get('/comandos', requireLogin, (req, res) => {
@@ -856,17 +862,21 @@ app.get('/mensagens', requireLogin, (req, res) => {
     });
 });
 
-// mensagens que o bot manda sozinho pro grupo (enquete, fechamento do mensal) — templates
-// configuráveis, diferente das mensagens agendadas acima que são conteúdo livre do admin
+// mensagens que o bot manda sozinho pro grupo, ou como resposta a comandos (!lista, !espera,
+// !times, fechamento do mensal) — templates configuráveis, diferente das mensagens agendadas
+// acima que são conteúdo livre do admin. O título da enquete fica em /enquete/config, não aqui.
 app.get('/mensagens/automaticas', requireLogin, (req, res) => {
     const proximoFechamento = proximoFechamentoMensal();
     res.render('mensagens-automaticas', {
         usuario: req.session.usuario,
-        enqueteTituloTemplate: getConfig('enquete_titulo_template'),
         fechamentoMensalAtivo: getConfig('fechamento_mensal_ativo') === '1',
         fechamentoMensalMensagem: getConfig('fechamento_mensal_mensagem'),
         pagamentoDiaLimite: getConfig('pagamento_dia_limite'),
         proximoFechamentoMensalTexto: `${String(proximoFechamento.getDate()).padStart(2, '0')}/${String(proximoFechamento.getMonth() + 1).padStart(2, '0')}/${proximoFechamento.getFullYear()}`,
+        listaConfirmadaMensagem: getConfig('lista_confirmada_mensagem'),
+        listaAtualMensagem: getConfig('lista_atual_mensagem'),
+        listaEsperaMensagem: getConfig('lista_espera_mensagem'),
+        timesMensagem: getConfig('times_mensagem'),
         ok: req.query.ok,
     });
 });
@@ -881,6 +891,30 @@ app.post('/mensagens/fechamento-mensal', requireLogin, (req, res) => {
     setConfig('pagamento_dia_limite', Number.isFinite(diaLimite) && diaLimite >= 1 && diaLimite <= 31 ? String(diaLimite) : '7');
 
     redirectOk(res, '/mensagens/automaticas', 'Configurações salvas!');
+});
+
+app.post('/mensagens/lista-confirmada', requireLogin, (req, res) => {
+    const mensagem = String(req.body.mensagem || '').trim();
+    if (mensagem) setConfig('lista_confirmada_mensagem', mensagem);
+    redirectOk(res, '/mensagens/automaticas', 'Mensagem salva!');
+});
+
+app.post('/mensagens/lista-atual', requireLogin, (req, res) => {
+    const mensagem = String(req.body.mensagem || '').trim();
+    if (mensagem) setConfig('lista_atual_mensagem', mensagem);
+    redirectOk(res, '/mensagens/automaticas', 'Mensagem salva!');
+});
+
+app.post('/mensagens/lista-espera', requireLogin, (req, res) => {
+    const mensagem = String(req.body.mensagem || '').trim();
+    if (mensagem) setConfig('lista_espera_mensagem', mensagem);
+    redirectOk(res, '/mensagens/automaticas', 'Mensagem salva!');
+});
+
+app.post('/mensagens/times', requireLogin, (req, res) => {
+    const mensagem = String(req.body.mensagem || '').trim();
+    if (mensagem) setConfig('times_mensagem', mensagem);
+    redirectOk(res, '/mensagens/automaticas', 'Mensagem salva!');
 });
 
 app.post('/mensagens', requireLogin, (req, res) => {
@@ -982,7 +1016,7 @@ app.post('/times/enviar', requireLogin, (req, res) => {
     const nomesTimeB = [].concat(req.body.timeB || []);
     if (nomesTimeA.length === 0 && nomesTimeB.length === 0) return res.redirect('/times');
 
-    const texto = montarTextoTimes(tituloJogo, nomesTimeA, nomesTimeB);
+    const texto = montarTextoTimes(tituloJogo, nomesTimeA, nomesTimeB, getConfig('times_mensagem'));
     criarEnvioImediato(grupoId, texto, 'times');
 
     redirectOk(res, '/times', 'Times enviados! Pode levar até 1 minuto pra aparecer no grupo.');

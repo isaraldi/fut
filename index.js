@@ -37,7 +37,7 @@ const {
   registrarTentativaDesafixar,
 } = require('./db');
 const {
-  balancearTimes, montarTextoListaConfirmadas, montarTextoListaAtual, montarTextoTimes,
+  balancearTimes, montarTextoListaConfirmadas, montarTextoListaAtual, montarTextoListaEspera, montarTextoTimes,
   fechamentoMensalDoMes, mesReferenciaAtual, mesAnterior,
 } = require('./mensagens-prontas');
 
@@ -619,7 +619,7 @@ async function enviarListaDeConfirmadas(msg) {
   }
 
   const confirmados = getConfirmadosDaEnquete(enquete.id);
-  const texto = montarTextoListaConfirmadas(enquete, confirmados);
+  const texto = montarTextoListaConfirmadas(enquete, confirmados, getConfig('lista_confirmada_mensagem'));
 
   await msg.reply(texto);
   fecharEnquete(enquete.id); // a partir daqui, novos votos na enquete são ignorados
@@ -640,7 +640,7 @@ async function enviarListaAtual(msg) {
 
   const confirmados = getConfirmadosDaEnquete(enquete.id);
   const listaDeEspera = getListaDeEsperaDaEnquete(enquete.id);
-  const texto = montarTextoListaAtual(enquete, confirmados, listaDeEspera);
+  const texto = montarTextoListaAtual(enquete, confirmados, listaDeEspera, getConfig('lista_atual_mensagem'));
 
   await msg.reply(texto);
   registrarLog(
@@ -662,9 +662,7 @@ async function enviarListaDeEspera(msg) {
     return msg.reply('⏳ Ninguém na lista de espera agora.');
   }
 
-  let texto = `⏳ *Lista de espera — ${enquete.titulo}*\n\n`;
-  listaDeEspera.forEach((j, i) => { texto += `${i + 1}. ${j.nome}\n`; });
-  texto += '\nSó entram se algum dos confirmados sair da lista.';
+  const texto = montarTextoListaEspera(enquete, listaDeEspera, getConfig('lista_espera_mensagem'));
 
   await msg.reply(texto);
   registrarLog(
@@ -691,6 +689,7 @@ async function enviarTimesSorteados(msg) {
     enquete.titulo,
     times.timeA.map((j) => j.nome),
     times.timeB.map((j) => j.nome),
+    getConfig('times_mensagem'),
   );
 
   await msg.reply(texto);
