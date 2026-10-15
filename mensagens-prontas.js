@@ -136,6 +136,7 @@ function montarPlanoDeTimes(jogadores, porTime = 5) {
 }
 
 const LETRAS_TIMES = ['A', 'B', 'C'];
+const BOLINHAS_TIMES = ['🔵', '🔴', '🟢']; // mesmas cores dos blocos de times na mensagem
 
 // ordem de rodízio, sorteada. 3 times: o que está esperando entra no lugar do que está há mais
 // rodadas seguidas em campo (empate é sorteado). 2 times + reservas: reservas entram no lugar de quem está há mais tempo
@@ -151,8 +152,8 @@ function montarRodizio(times, reservas, minutos = 10, duracao = 60) {
         for (let r = 0; r < total; r++) {
             seguidas[emCampo1]++;
             seguidas[emCampo2]++;
-            const faixa = `${r * passo}–${(r + 1) * passo} min`;
-            linhas.push(`${r + 1}) ${faixa}: Time ${LETRAS_TIMES[emCampo1]} × Time ${LETRAS_TIMES[emCampo2]} (Time ${LETRAS_TIMES[espera]} espera)`);
+            const time = (t) => `${BOLINHAS_TIMES[t]} Time ${LETRAS_TIMES[t]}`;
+            linhas.push(`*${r + 1}) ${r * passo}–${(r + 1) * passo} min*\n${time(emCampo1)} × ${time(emCampo2)}\n${time(espera)} espera ⏸️\n`);
             // sai quem está há mais rodadas seguidas em campo; empate é sorteado
             let sai;
             if (seguidas[emCampo1] === seguidas[emCampo2]) sai = Math.random() < 0.5 ? emCampo1 : emCampo2;
@@ -187,8 +188,8 @@ function montarRodizio(times, reservas, minutos = 10, duracao = 60) {
                 timeDaVez = 1 - timeDaVez;
             }
             if (trocas.length === 0) break;
-            linhas.push(`${r * passo} min: ` + trocas.map(({ saindo, entrando }) =>
-                `${entrando.nome} entra no lugar de ${saindo.jogador.nome} (Time ${LETRAS_TIMES[saindo.time]})`).join('; '));
+            linhas.push(`*${r * passo} min*\n` + trocas.map(({ saindo, entrando }) =>
+                `${BOLINHAS_TIMES[saindo.time]} ${entrando.nome} entra no lugar de ${saindo.jogador.nome}`).join('\n') + '\n');
             trocas.forEach(({ saindo, entrando }) => {
                 banco.push(saindo.jogador);
                 emCampo = emCampo.map((e) => (e === saindo ? { jogador: entrando, time: saindo.time, desde: r } : e));
@@ -197,7 +198,7 @@ function montarRodizio(times, reservas, minutos = 10, duracao = 60) {
     }
 
     if (linhas.length === 0) return '';
-    return `🔁 *Rodízio (a cada ${passo} min):*\n${linhas.join('\n')}\n`;
+    return `🔁 *Rodízio (a cada ${passo} min)*\n\n${linhas.join('\n')}`;
 }
 
 // tira acento/maiúscula pra comparar nomes digitados à mão (!faltam ana, bia)
