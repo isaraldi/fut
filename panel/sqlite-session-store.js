@@ -1,6 +1,6 @@
 const { Store } = require('express-session');
 
-// guarda a sessão do painel no mesmo banco sqlite (que já vive no volume persistente do Fly),
+// guarda a sessão do painel no mesmo banco sqlite (que já vive no volume persistente do Docker),
 // pra login não cair toda vez que o processo reinicia (MemoryStore, o padrão do express-session,
 // perde tudo a cada restart)
 class SqliteSessionStore extends Store {

@@ -30,6 +30,6 @@ RUN mkdir -p /app/data /app/.wwebjs_auth /app/.wwebjs_cache \
 EXPOSE 4000
 
 # segue rodando como root (usuário padrão da imagem) porque o entrypoint precisa dele pra
-# ajustar a dono do volume persistente do Fly antes de derrubar privilégio pro usuário "node"
+# ajustar a dono do volume persistente do Docker antes de derrubar privilégio pro usuário "node"
 # (ver docker-entrypoint.sh) — não roda o bot/painel de fato como root
 CMD ["/app/docker-entrypoint.sh"]

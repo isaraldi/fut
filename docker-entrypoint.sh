@@ -5,7 +5,7 @@ if [ -d /app/storage ]; then
   rm -rf /app/data /app/.wwebjs_auth
   ln -sfn /app/storage/data /app/data
   ln -sfn /app/storage/.wwebjs_auth /app/.wwebjs_auth
-  # o volume do Fly é montado como dono root; ajusta pro usuário sem privilégios antes de
+  # o volume do Docker é montado como dono root; ajusta pro usuário sem privilégios antes de
   # rodar o bot/painel de fato (evita rodar o Chromium/Node como root dentro do container)
   chown -R node:node /app/storage
 fi

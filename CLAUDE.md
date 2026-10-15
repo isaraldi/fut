@@ -13,8 +13,8 @@ There is no build step, linter, or test suite configured (`npm test` is a placeh
 - `npm install` — runs `patch-package` automatically via `postinstall` (see whatsapp-web.js patch below).
 - `node index.js` — runs the WhatsApp bot (prints a QR code to the terminal on first run; session persists via `LocalAuth` in `.wwebjs_auth/`).
 - `node panel/server.js` — runs the admin web panel (Express + EJS) on `PORT` (default 4000).
-- In production (Docker/Fly) both run together via `docker-entrypoint.sh`, which `wait -n`s on both — if either process dies, the other is killed too and the container restarts.
-- Deploy: `fly deploy` (app `fut-whatsapp-bot`, region `gru`). It builds the Docker image from the local working tree directly — no need to commit/push first.
+- In production (local Docker container) both run together via `docker-entrypoint.sh`, which `wait -n`s on both — if either process dies, the other is killed too and the container restarts.
+- Deploy: production is a local Docker container named `fut` (image `fut-bot`, built from this `Dockerfile`), not Fly.io anymore. It publishes `127.0.0.1:4000->4000`, runs with `--restart unless-stopped`, and mounts the named volume `fut_data` at `/app/storage`. The env vars below are passed to the container at `docker run` time (not baked into the image). There is no compose file; to ship a change, rebuild the image and recreate the container with the same options (check them with `docker inspect fut` first). The panel is reached from outside through Tailscale, which runs on the Windows host (not inside WSL/the container) and proxies to `127.0.0.1:4000`, terminating HTTPS. `fly.toml` is a leftover from the old Fly setup and is not used.
 
 ### Required env vars (`.env`, not committed)
 
@@ -29,9 +29,9 @@ There is no build step, linter, or test suite configured (`npm test` is a placeh
 - `db.js` — the shared data layer (better-sqlite3, synchronous). Both processes require it directly and call its exported functions; there is no API boundary between bot and panel, just this shared module. Table set includes `jogadores` (players), `enquetes`/`votos`/`enquete_opcoes` (polls), `pagamentos`/`pagamentos_avulsos` (payments), `configuracoes` (key/value config), `logs`, `mensagens_agendadas`, `papel_historico`, `sessions`, `grupos`, `avaliacoes`.
 - `mensagens-prontas.js` — pure text/formatting helpers shared by both processes: team balancing (`balancearTimes`) and building the WhatsApp message text for confirmed lists / team lineups.
 
-### Persistence on Fly.io
+### Persistence (Docker volume)
 
-`fly.toml` mounts a volume at `/app/storage`. `docker-entrypoint.sh` symlinks `/app/data` and `/app/.wwebjs_auth` into it before starting anything, so the SQLite DB and the WhatsApp login session survive deploys and restarts. Don't assume `/app/data` or `/app/.wwebjs_auth` are ephemeral — writes there are persistent in production.
+The `fut_data` Docker volume is mounted at `/app/storage`. `docker-entrypoint.sh` symlinks `/app/data` and `/app/.wwebjs_auth` into it before starting anything, so the SQLite DB and the WhatsApp login session survive deploys and restarts. Don't assume `/app/data` or `/app/.wwebjs_auth` are ephemeral — writes there are persistent in production.
 
 ### Config lives in the DB, not in code
 
@@ -59,7 +59,7 @@ Both `index.js` and `panel/server.js` force `process.env.TZ = 'America/Sao_Paulo
 
 ### Non-root container
 
-The Dockerfile installs `gosu`; `docker-entrypoint.sh` runs as root only long enough to symlink/`chown` the Fly volume (`/app/storage`), then drops to the unprivileged `node` user (via `gosu node`) to actually run `index.js`, `panel/server.js`, and the Chromium instance underneath. New processes/services started from the entrypoint must follow the same pattern — don't add a bare `node ...` line there without the `gosu node` prefix, or it'll run as root.
+The Dockerfile installs `gosu`; `docker-entrypoint.sh` runs as root only long enough to symlink/`chown` the volume (`/app/storage`), then drops to the unprivileged `node` user (via `gosu node`) to actually run `index.js`, `panel/server.js`, and the Chromium instance underneath. New processes/services started from the entrypoint must follow the same pattern — don't add a bare `node ...` line there without the `gosu node` prefix, or it'll run as root.
 
 ### CSRF protection is manual, per-form
 
@@ -71,4 +71,4 @@ The Dockerfile installs `gosu`; `docker-entrypoint.sh` runs as root only long en
 
 ### Secure session cookie needs the proxy headers
 
-The session cookie is `secure: true` + `sameSite: 'lax'`, and `app.set('trust proxy', 1)` is set so Express trusts Fly's `X-Forwarded-Proto` header to know the original request was HTTPS. `fly.toml`'s port-80 listener also sets `force_https = true`. If any of these three pieces (trust proxy, force_https, secure cookie) is removed independently of the others, login can silently break (server won't set the session cookie at all if it doesn't believe the connection is secure).
+The session cookie is `secure: true` in production (`NODE_ENV=production`, set by the Dockerfile) + `sameSite: 'lax'`, and `app.set('trust proxy', 1)` is set so Express trusts the tunnel/proxy's `X-Forwarded-Proto` header to know the original request was HTTPS. If trust proxy is removed, or the proxy in front stops sending that header, login can silently break (server won't set the session cookie at all if it doesn't believe the connection is secure).
