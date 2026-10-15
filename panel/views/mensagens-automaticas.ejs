@@ -1,11 +1,28 @@
 <div class="page-header">
     <div>
         <h1>Mensagens automáticas</h1>
-        <p>Mensagens que o bot manda sozinho pro grupo, ou como resposta a comandos como <code>!lista</code>, <code>!espera</code> e <code>!times</code>. Pra mensagens de conteúdo livre agendadas por você, veja <a href="/mensagens">Mensagens agendadas</a>. O título da enquete é configurado em <a href="/enquete/config">Enquete → Configuração</a>.</p>
+        <p>Mensagens que o bot manda sozinho pro grupo, ou como resposta a comandos como <code>!lista</code>, <code>!espera</code> e <code>!times</code>. Pra mensagens de conteúdo livre agendadas por você, veja <a href="/mensagens">Mensagens agendadas</a>.</p>
     </div>
 </div>
 
+<% const nomesDia = ['domingo','segunda-feira','terça-feira','quarta-feira','quinta-feira','sexta-feira','sábado']; %>
 <section class="section">
+    <div class="card">
+        <h1>Enquete de presença</h1>
+        <p class="hint">
+            A mensagem que o bot manda pro grupo pra confirmarem presença é uma <strong>enquete nativa
+            do WhatsApp</strong> (título + opções), não um texto livre — por isso é configurada em
+            <a href="/enquete/config">Enquete → Configuração</a>, onde ficam o grupo, o título e as opções.
+        </p>
+        <p class="hint">
+            Envio automático:
+            <strong><%= enqueteAutoEnviar ? `ligado — toda ${nomesDia[enqueteEnvioDiaSemana]} às ${enqueteEnvioHora}` : 'desligado' %></strong>.<br>
+            Título: <code><%= enqueteTituloTemplate %></code><br>
+            Opções: <%= enqueteOpcoes.map(o => o.texto).join(' · ') %>
+        </p>
+        <a href="/enquete/config">Editar enquete →</a>
+    </div>
+
     <div class="card">
         <h1>Lista fechada</h1>
         <p class="hint">

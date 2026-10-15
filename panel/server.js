@@ -2,7 +2,7 @@ process.env.TZ = 'America/Sao_Paulo'; // mesmo fuso do bot, pra data/hora bater 
 
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
 
-// 💥 erro não tratado (bug real) — mais seguro encerrar e deixar o Docker/Fly reiniciar o
+// 💥 erro não tratado (bug real) — mais seguro encerrar e deixar o Docker reiniciar o
 // processo (que reinicia o bot junto, ver docker-entrypoint.sh) do que seguir em estado desconhecido
 process.on('unhandledRejection', (motivo) => {
     console.error('🔥 unhandledRejection não tratada — encerrando processo:', motivo);
@@ -32,6 +32,8 @@ const {
     getLogs,
     contarLogs,
     getEnqueteOpcoes,
+    getAusentesDaEnquete,
+    setAusentesDaEnquete,
     criarMensagemUnica,
     criarMensagemSemanal,
     atualizarMensagemUnica,
@@ -51,7 +53,7 @@ const {
     reativarJogador,
 } = require('../db');
 const {
-    balancearTimes, montarTextoListaConfirmadas, montarTextoTimes,
+    montarPlanoDeTimes, montarRodizio, montarTextoListaConfirmadas, montarTextoTimes,
     fechamentoMensalDoMes, mesReferenciaAtual,
 } = require('../mensagens-prontas');
 
@@ -98,7 +100,7 @@ function formatarDataHora(valorUtc) {
 }
 
 const app = express();
-app.set('trust proxy', 1); // atrás do proxy TLS do Fly — necessário pro cookie "secure" saber que a conexão é https
+app.set('trust proxy', 1); // atrás do proxy/túnel que termina o TLS — necessário pro cookie "secure" saber que a conexão é https
 app.set('view engine', 'ejs');
 app.locals.jsonParaScript = jsonParaScript;
 app.locals.formatarDataHora = formatarDataHora;
@@ -118,7 +120,7 @@ app.use(
         resave: false,
         saveUninitialized: false,
         // secure só em produção (Dockerfile seta NODE_ENV=production): local roda em HTTP puro,
-        // sem o proxy HTTPS do Fly, e cookie secure nunca seria enviado pelo browser — sessão
+        // sem o proxy HTTPS, e cookie secure nunca seria enviado pelo browser — sessão
         // nunca persistiria e o CSRF sempre falharia ("Sessão expirada")
         cookie: { maxAge: 1000 * 60 * 60 * 12, secure: process.env.NODE_ENV === 'production', sameSite: 'lax' },
     }),
@@ -627,7 +629,8 @@ const COMANDOS_DO_BOT = [
     { comando: '!fechar', onde: 'Grupo ou DM', descricao: 'Fecha a enquete: manda quem realmente vai jogar (respeitando o limite de vagas) e trava novos votos.' },
     { comando: '!lista', onde: 'Grupo ou DM', descricao: 'Mostra a lista atual — confirmadas e lista de espera — sem fechar a enquete. Pode repetir quantas vezes quiser.' },
     { comando: '!espera', onde: 'Grupo ou DM', descricao: 'Mostra só quem está na lista de espera agora.' },
-    { comando: '!times', onde: 'Grupo ou DM', descricao: 'Sorteia e manda os times balanceados por nível.' },
+    { comando: '!times', onde: 'Grupo ou DM', descricao: 'Sorteia e manda os times balanceados por nível (3 times se couber, senão 2 + reservas, com a ordem de rodízio). Em modo manual, avisa pra usar o painel.' },
+    { comando: '!faltam Ana, Bia', onde: 'Grupo ou DM', descricao: 'Marca quem confirmou mas não chegou, pra ficar fora do sorteio de times. Cada uso substitui a lista anterior; "!faltam" sozinho mostra a lista e "!faltam ninguém" limpa.' },
 ];
 
 // tokens {chave} usados nos templates de mensagem do painel — cada um só funciona no
@@ -648,6 +651,9 @@ const TOKENS_DISPONIVEIS = [
     { token: '{espera}', onde: 'Lista atual (Mensagens > Msgs. automáticas)', descricao: 'Bloco da lista de espera, já formatado — vazio se não tiver ninguém esperando.' },
     { token: '{time_a}', onde: 'Times (Mensagens > Msgs. automáticas)', descricao: 'Nomes do Time A, um por linha.' },
     { token: '{time_b}', onde: 'Times (Mensagens > Msgs. automáticas)', descricao: 'Nomes do Time B, um por linha.' },
+    { token: '{time_c}', onde: 'Times (Mensagens > Msgs. automáticas)', descricao: 'Bloco "Time C" já formatado (vazio se o jogo tem só 2 times).' },
+    { token: '{reservas}', onde: 'Times (Mensagens > Msgs. automáticas)', descricao: 'Bloco "Reservas" já formatado (vazio se não tem reservas).' },
+    { token: '{rodizio}', onde: 'Times (Mensagens > Msgs. automáticas)', descricao: 'Ordem de rodízio/substituição já formatada. Blocos que o template não menciona são adicionados no fim automaticamente.' },
 ];
 
 app.get('/comandos', requireLogin, (req, res) => {
@@ -735,6 +741,10 @@ app.get('/jogo/config', requireLogin, (req, res) => {
         valorMensal: getConfig('valor_mensal'),
         valorAvulso: getConfig('valor_avulso'),
         vagasMaximo: getConfig('jogo_vagas_maximo'),
+        porTime: getConfig('jogo_jogadoras_por_time'),
+        timesModo: getConfig('jogo_times_modo'),
+        rodizioMinutos: getConfig('jogo_rodizio_minutos'),
+        duracaoMinutos: getConfig('jogo_duracao_minutos'),
         ok: req.query.ok,
     });
 });
@@ -757,6 +767,18 @@ app.post('/jogo/config', requireLogin, (req, res) => {
     setConfig('jogo_vagas_maximo', Number.isFinite(vagasMaximo) && vagasMaximo > 0 ? String(vagasMaximo) : '');
 
     redirectOk(res, '/jogo/config', 'Configurações salvas!');
+});
+
+app.post('/jogo/config/times', requireLogin, (req, res) => {
+    const inteiro = (valor, padrao, minimo) => {
+        const n = parseInt(valor, 10);
+        return String(Number.isFinite(n) && n >= minimo ? n : padrao);
+    };
+    setConfig('jogo_jogadoras_por_time', inteiro(req.body.porTime, 5, 1));
+    setConfig('jogo_times_modo', req.body.timesModo === 'manual' ? 'manual' : 'automatico');
+    setConfig('jogo_rodizio_minutos', inteiro(req.body.rodizioMinutos, 10, 1));
+    setConfig('jogo_duracao_minutos', inteiro(req.body.duracaoMinutos, 60, 1));
+    redirectOk(res, '/jogo/config', 'Configurações de times salvas!');
 });
 
 // ---------- CONFIGURAÇÃO DA ENQUETE (envio automático + título + opções) ----------
@@ -876,6 +898,11 @@ app.get('/mensagens/automaticas', requireLogin, (req, res) => {
         fechamentoMensalPrazoHoras: getConfig('fechamento_mensal_prazo_horas'),
         pagamentoDiaLimite: getConfig('pagamento_dia_limite'),
         proximoFechamentoMensalTexto: `${String(proximoFechamento.getDate()).padStart(2, '0')}/${String(proximoFechamento.getMonth() + 1).padStart(2, '0')}/${proximoFechamento.getFullYear()}`,
+        enqueteAutoEnviar: getConfig('enquete_auto_enviar') === '1',
+        enqueteEnvioDiaSemana: Number(getConfig('enquete_envio_dia_semana')),
+        enqueteEnvioHora: getConfig('enquete_envio_hora'),
+        enqueteTituloTemplate: getConfig('enquete_titulo_template'),
+        enqueteOpcoes: getEnqueteOpcoes(),
         listaConfirmadaMensagem: getConfig('lista_confirmada_mensagem'),
         listaAtualMensagem: getConfig('lista_atual_mensagem'),
         listaEsperaMensagem: getConfig('lista_espera_mensagem'),
@@ -995,24 +1022,63 @@ app.get('/logs', requireLogin, (req, res) => {
 
 // ---------- SORTEIO INTELIGENTE DE TIMES ----------
 
+const DESTINOS_TIMES = ['A', 'B', 'C', 'reserva', 'ausente'];
+
+function configDeTimes() {
+    return {
+        porTime: parseInt(getConfig('jogo_jogadoras_por_time'), 10),
+        minutos: parseInt(getConfig('jogo_rodizio_minutos'), 10),
+        duracao: parseInt(getConfig('jogo_duracao_minutos'), 10),
+    };
+}
+
 app.get('/times', requireLogin, (req, res) => {
     const enquete = db
         .prepare('SELECT * FROM enquetes ORDER BY id DESC LIMIT 1')
         .get();
 
     const confirmados = enquete ? getConfirmadosDaEnquete(enquete.id) : [];
+    const ausentesIds = enquete ? getAusentesDaEnquete(enquete.id) : [];
+    const presentes = confirmados.filter((j) => !ausentesIds.includes(j.id));
 
-    let times = null;
-    if (confirmados.length >= 2) {
-        times = balancearTimes(confirmados);
+    // destino sugerido de cada confirmada (editável no formulário antes de mandar)
+    const destinos = {};
+    ausentesIds.forEach((id) => { destinos[id] = 'ausente'; });
+    let plano = null;
+    if (presentes.length >= 2) {
+        plano = montarPlanoDeTimes(presentes, configDeTimes().porTime);
+        plano.times.forEach((time, t) => time.forEach((j) => { destinos[j.id] = DESTINOS_TIMES[t]; }));
+        plano.reservas.forEach((j) => { destinos[j.id] = 'reserva'; });
     }
 
     res.render('times', {
         usuario: req.session.usuario,
         enquete,
         confirmados,
-        times,
+        plano,
+        destinos,
+        modoManual: getConfig('jogo_times_modo') === 'manual',
+        ok: req.query.ok,
     });
+});
+
+// lê os selects "dest_<id>" do formulário: { A: [...], B: [...], C: [...], reserva: [...], ausente: [...] }
+function agruparPorDestino(confirmados, body) {
+    const grupos = { A: [], B: [], C: [], reserva: [], ausente: [] };
+    confirmados.forEach((j) => {
+        const destino = DESTINOS_TIMES.includes(body[`dest_${j.id}`]) ? body[`dest_${j.id}`] : 'reserva';
+        grupos[destino].push(j);
+    });
+    return grupos;
+}
+
+// só salva as faltas e volta pro sorteio, que passa a ignorar quem faltou
+app.post('/times/ausentes', requireLogin, (req, res) => {
+    const enquete = db.prepare('SELECT * FROM enquetes ORDER BY id DESC LIMIT 1').get();
+    if (!enquete) return res.redirect('/times');
+    const grupos = agruparPorDestino(getConfirmadosDaEnquete(enquete.id), req.body);
+    setAusentesDaEnquete(enquete.id, grupos.ausente.map((j) => j.id));
+    redirectOk(res, '/times', 'Faltas salvas — sorteio refeito sem elas.');
 });
 
 app.post('/times/enviar', requireLogin, (req, res) => {
@@ -1021,12 +1087,23 @@ app.post('/times/enviar', requireLogin, (req, res) => {
         return redirectOk(res, '/times', 'Configure o grupo de destino em Configurações → Enquete antes de mandar.');
     }
 
-    const tituloJogo = req.body.tituloJogo || 'Times';
-    const nomesTimeA = [].concat(req.body.timeA || []);
-    const nomesTimeB = [].concat(req.body.timeB || []);
-    if (nomesTimeA.length === 0 && nomesTimeB.length === 0) return res.redirect('/times');
+    const enquete = db.prepare('SELECT * FROM enquetes ORDER BY id DESC LIMIT 1').get();
+    if (!enquete) return res.redirect('/times');
 
-    const texto = montarTextoTimes(tituloJogo, nomesTimeA, nomesTimeB, getConfig('times_mensagem'));
+    const grupos = agruparPorDestino(getConfirmadosDaEnquete(enquete.id), req.body);
+    setAusentesDaEnquete(enquete.id, grupos.ausente.map((j) => j.id));
+
+    const times = [grupos.A, grupos.B, grupos.C].filter((time, t) => t < 2 || time.length > 0);
+    if (grupos.A.length === 0 && grupos.B.length === 0) return res.redirect('/times');
+
+    const { minutos, duracao } = configDeTimes();
+    const texto = montarTextoTimes(
+        enquete.titulo,
+        times.map((time) => time.map((j) => j.nome)),
+        grupos.reserva.map((j) => j.nome),
+        montarRodizio(times, grupos.reserva, minutos, duracao),
+        getConfig('times_mensagem'),
+    );
     criarEnvioImediato(grupoId, texto, 'times');
 
     redirectOk(res, '/times', 'Times enviados! Pode levar até 1 minuto pra aparecer no grupo.');

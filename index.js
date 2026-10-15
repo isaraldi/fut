@@ -10,6 +10,8 @@ const {
   db,
   upsertJogador,
   getConfig,
+  getAusentesDaEnquete,
+  setAusentesDaEnquete,
   setConfig,
   upsertGrupo,
   getEnqueteOpcoes,
@@ -38,12 +40,12 @@ const {
   registrarTentativaDesafixar,
 } = require('./db');
 const {
-  balancearTimes, montarTextoListaConfirmadas, montarTextoListaAtual, montarTextoListaEspera, montarTextoTimes,
+  montarPlanoDeTimes, montarRodizio, acharPorNomes, montarTextoListaConfirmadas, montarTextoListaAtual, montarTextoListaEspera, montarTextoTimes,
   fechamentoMensalDoMes, mesReferenciaAtual, mesAnterior,
 } = require('./mensagens-prontas');
 
 // 💥 erro não tratado (bug real, não um erro esperado de rede/WhatsApp) — mais seguro encerrar
-// e deixar o Docker/Fly reiniciar o processo do que continuar rodando em estado desconhecido
+// e deixar o Docker reiniciar o processo do que continuar rodando em estado desconhecido
 process.on('unhandledRejection', (motivo) => {
   console.error('🔥 unhandledRejection não tratada — encerrando processo:', motivo);
   process.exit(1);
@@ -711,16 +713,24 @@ async function enviarTimesSorteados(msg) {
     return msg.reply('⚽ Nenhuma enquete foi aberta ainda, não tem confirmados pra sortear.');
   }
 
-  const confirmados = getConfirmadosDaEnquete(enquete.id);
+  if (getConfig('jogo_times_modo') === 'manual') {
+    return msg.reply('⚽ Os times estão em modo manual — monte e envie pelo painel (Times).');
+  }
+
+  const ausentesIds = getAusentesDaEnquete(enquete.id);
+  const confirmados = getConfirmadosDaEnquete(enquete.id).filter((j) => !ausentesIds.includes(j.id));
   if (confirmados.length < 2) {
     return msg.reply('⚽ Confirmados de menos pra sortear times (mínimo 2).');
   }
 
-  const times = balancearTimes(confirmados);
+  const minutos = parseInt(getConfig('jogo_rodizio_minutos'), 10);
+  const duracao = parseInt(getConfig('jogo_duracao_minutos'), 10);
+  const { times, reservas } = montarPlanoDeTimes(confirmados, parseInt(getConfig('jogo_jogadoras_por_time'), 10));
   const texto = montarTextoTimes(
     enquete.titulo,
-    times.timeA.map((j) => j.nome),
-    times.timeB.map((j) => j.nome),
+    times.map((time) => time.map((j) => j.nome)),
+    reservas.map((j) => j.nome),
+    montarRodizio(times, reservas, minutos, duracao),
     getConfig('times_mensagem'),
   );
 
@@ -730,6 +740,42 @@ async function enviarTimesSorteados(msg) {
     `Times sorteados e enviados (${confirmados.length} confirmada(s)) — "${enquete.titulo}"`,
     msg.from.endsWith('@g.us') ? msg.from : null,
   );
+}
+
+// 🙋 !faltam Ana, Bia — avisa quem confirmou mas não vai aparecer (ou ainda não chegou), pra elas
+// ficarem fora do sorteio de times. Cada uso SUBSTITUI a lista (quem chegou é só tirar do comando);
+// "!faltam" sozinho mostra a lista atual e "!faltam ninguém" limpa.
+async function registrarFaltas(msg, argumentos) {
+  const enquete = db.prepare('SELECT * FROM enquetes ORDER BY id DESC LIMIT 1').get();
+  if (!enquete) return msg.reply('⚽ Nenhuma enquete foi aberta ainda.');
+
+  const confirmados = getConfirmadosDaEnquete(enquete.id);
+  const texto = argumentos.trim();
+
+  if (!texto) {
+    const ausentes = confirmados.filter((j) => getAusentesDaEnquete(enquete.id).includes(j.id));
+    return msg.reply(ausentes.length > 0
+      ? `🙋 Faltando: ${ausentes.map((j) => j.nome).join(', ')}.`
+      : '🙋 Ninguém marcada como faltando. Use: !faltam Ana, Bia');
+  }
+
+  if (['ninguem', 'ninguém', 'limpar'].includes(texto.toLowerCase())) {
+    setAusentesDaEnquete(enquete.id, []);
+    registrarLog('times', 'sucesso', 'Lista de faltas limpa', msg.from.endsWith('@g.us') ? msg.from : null);
+    return msg.reply('🙋 Lista de faltas limpa — todas as confirmadas entram no sorteio.');
+  }
+
+  const { achadas, naoEncontradas, ambiguas } = acharPorNomes(confirmados, texto);
+  setAusentesDaEnquete(enquete.id, achadas.map((j) => j.id));
+
+  let resposta = achadas.length > 0
+    ? `🙋 Faltando: ${achadas.map((j) => j.nome).join(', ')}. Sobram ${confirmados.length - achadas.length} pra jogar.`
+    : '🙋 Ninguém marcada como faltando.';
+  if (naoEncontradas.length > 0) resposta += `\n⚠️ Não achei entre as confirmadas: ${naoEncontradas.join(', ')}.`;
+  if (ambiguas.length > 0) resposta += `\n⚠️ Mais de uma bate com: ${ambiguas.join(', ')} — use o nome completo.`;
+
+  registrarLog('times', 'sucesso', `Faltas marcadas: ${achadas.map((j) => j.nome).join(', ') || 'nenhuma'}`, msg.from.endsWith('@g.us') ? msg.from : null);
+  return msg.reply(resposta);
 }
 
 // 📤 FILA DE ENVIO IMEDIATO — botões "mandar pro grupo" do painel caem aqui, já que o painel
@@ -831,6 +877,12 @@ client.on('message', async msg => {
   if (text === '!times') {
     if (!(await remetenteAutorizado(msg))) return negarComando(msg);
     return enviarTimesSorteados(msg);
+  }
+
+  // funciona em grupo OU em DM direto com o bot
+  if (text === '!faltam' || text.startsWith('!faltam ')) {
+    if (!(await remetenteAutorizado(msg))) return negarComando(msg);
+    return registrarFaltas(msg, msg.body.trim().slice('!faltam'.length));
   }
 
   // roda em paralelo, sem travar o resto do handler (OCR pode levar alguns segundos)

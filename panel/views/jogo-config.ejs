@@ -77,6 +77,45 @@
     </div>
 
     <div class="card">
+        <h1>Times</h1>
+        <p class="hint">
+            Quantas jogadoras formam um time. Se confirmarem pelo menos 3 times completos
+            (ex: 15 com 5 por time), saem 3 times que revezam; com menos que isso, saem 2 times
+            completos e quem sobrar fica de reserva (quem sobra de 3 times também vira reserva).
+            Abaixo de 2 times completos, divide tudo igualmente em 2. A ordem de rodízio é sorteada.
+        </p>
+        <p class="hint">
+            <strong>Automático:</strong> o comando <code>!times</code> sorteia e já manda pro grupo.
+            <strong>Manual:</strong> <code>!times</code> não faz nada — você monta e envia pela página
+            <a href="/times">Times</a> do painel.
+        </p>
+        <form method="post" action="/jogo/config/times"><input type="hidden" name="_csrf" value="<%= csrfToken %>">
+            <div class="form-row">
+                <div>
+                    <label>Jogadoras por time</label>
+                    <input type="number" name="porTime" step="1" min="1" value="<%= porTime %>">
+                </div>
+                <div>
+                    <label>Formação dos times</label>
+                    <select name="timesModo">
+                        <option value="automatico" <%= timesModo !== 'manual' ? 'selected' : '' %>>Automática</option>
+                        <option value="manual" <%= timesModo === 'manual' ? 'selected' : '' %>>Manual (pelo painel)</option>
+                    </select>
+                </div>
+                <div>
+                    <label>Trocar a cada (minutos)</label>
+                    <input type="number" name="rodizioMinutos" step="1" min="1" value="<%= rodizioMinutos %>">
+                </div>
+                <div>
+                    <label>Duração do jogo (minutos)</label>
+                    <input type="number" name="duracaoMinutos" step="1" min="1" value="<%= duracaoMinutos %>">
+                </div>
+            </div>
+            <input type="submit" value="Salvar">
+        </form>
+    </div>
+
+    <div class="card">
         <h1>Valores</h1>
         <p class="hint">
             Ao receber um comprovante de pagamento no grupo, o bot lê o valor nele por OCR e

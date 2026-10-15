@@ -56,53 +56,175 @@ function embaralhar(lista) {
 // gente demais numa mesma posição, sem nunca sobrepor uma diferença clara de nível
 const PESO_POSICAO = 0.5;
 
-function balancearTimes(jogadores) {
+// balanceia `jogadores` em `nTimes` times. `limite` (opcional) é o tamanho máximo de cada time;
+// sem ele, divide o mais igual possível (ceil(n / nTimes)). Mantém as chaves legadas
+// timeA/timeB/somaA/somaB pra quem ainda usa o formato de 2 times.
+function balancearTimes(jogadores, nTimes = 2, limite = null) {
     const embaralhados = embaralhar(jogadores);
+    const tamanhoMax = limite || Math.ceil(jogadores.length / nTimes);
 
-    const timeA = [];
-    const timeB = [];
-    let somaA = 0;
-    let somaB = 0;
-    const posicoesA = {};
-    const posicoesB = {};
+    const times = Array.from({ length: nTimes }, () => []);
+    const somas = new Array(nTimes).fill(0);
+    const posicoes = Array.from({ length: nTimes }, () => ({}));
 
-    // regra dura: no máximo 1 goleira por time. As duas de maior nível (uma pra cada time)
-    // ficam garantidas; se sobrar uma terceira goleira confirmada, não tem como respeitar
-    // a regra dos dois lados, então ela entra no balanceamento normal como os demais
+    const colocar = (indice, jogador) => {
+        times[indice].push(jogador);
+        somas[indice] += jogador.nivel;
+        const pos = jogador.posicao && jogador.posicao !== 'indefinida' ? jogador.posicao : null;
+        if (pos) posicoes[indice][pos] = (posicoes[indice][pos] || 0) + 1;
+    };
+
+    // time de menor custo (soma de nível + penalidade de posição repetida) que ainda tem vaga
+    const melhorTime = (jogador) => {
+        const pos = jogador.posicao && jogador.posicao !== 'indefinida' ? jogador.posicao : null;
+        let melhor = -1;
+        let melhorCusto = Infinity;
+        for (let t = 0; t < nTimes; t++) {
+            if (times[t].length >= tamanhoMax) continue;
+            const custo = somas[t] + (pos ? (posicoes[t][pos] || 0) * PESO_POSICAO : 0);
+            if (custo < melhorCusto) { melhorCusto = custo; melhor = t; }
+        }
+        return melhor;
+    };
+
+    // regra dura: no máximo 1 goleira por time. As de maior nível (uma pra cada time)
+    // ficam garantidas; se sobrar goleira além do nº de times, não tem como respeitar
+    // a regra, então ela entra no balanceamento normal como os demais
     const goleiras = embaralhados.filter((j) => j.posicao === 'goleira').sort((a, b) => b.nivel - a.nivel);
     const outros = embaralhados.filter((j) => j.posicao !== 'goleira');
 
-    goleiras.slice(0, 2).forEach((jogador) => {
-        if (somaA <= somaB) {
-            timeA.push(jogador);
-            somaA += jogador.nivel;
-            posicoesA.goleira = (posicoesA.goleira || 0) + 1;
-        } else {
-            timeB.push(jogador);
-            somaB += jogador.nivel;
-            posicoesB.goleira = (posicoesB.goleira || 0) + 1;
-        }
+    goleiras.slice(0, nTimes).forEach((jogador) => {
+        const t = melhorTime(jogador);
+        if (t >= 0) colocar(t, jogador);
     });
 
-    const restantes = embaralhar([...goleiras.slice(2), ...outros]).sort((a, b) => b.nivel - a.nivel);
-
+    const restantes = embaralhar([...goleiras.slice(nTimes), ...outros]).sort((a, b) => b.nivel - a.nivel);
     for (const jogador of restantes) {
-        const posicao = jogador.posicao && jogador.posicao !== 'indefinida' ? jogador.posicao : null;
-        const custoA = somaA + (posicao ? (posicoesA[posicao] || 0) * PESO_POSICAO : 0);
-        const custoB = somaB + (posicao ? (posicoesB[posicao] || 0) * PESO_POSICAO : 0);
+        const t = melhorTime(jogador);
+        colocar(t >= 0 ? t : somas.indexOf(Math.min(...somas)), jogador);
+    }
 
-        if (custoA <= custoB) {
-            timeA.push(jogador);
-            somaA += jogador.nivel;
-            if (posicao) posicoesA[posicao] = (posicoesA[posicao] || 0) + 1;
-        } else {
-            timeB.push(jogador);
-            somaB += jogador.nivel;
-            if (posicao) posicoesB[posicao] = (posicoesB[posicao] || 0) + 1;
+    return { times, somas, timeA: times[0], timeB: times[1], somaA: somas[0], somaB: somas[1] };
+}
+
+// decide quantos times formar e quem fica de reserva. `jogadores` chega na ordem de confirmação:
+// - >= 3 * porTime  -> 3 times completos (que revezam); o excedente (últimas a confirmar) é reserva
+// - >= 2 * porTime  -> 2 times completos + reservas
+// - menos que isso  -> 2 times divididos igualmente, sem reservas
+function montarPlanoDeTimes(jogadores, porTime = 5) {
+    const tamanho = Number.isFinite(porTime) && porTime >= 1 ? porTime : 5;
+    const n = jogadores.length;
+
+    let nTimes;
+    let titulares;
+    let reservas = [];
+    if (n >= 3 * tamanho) {
+        nTimes = 3;
+        titulares = jogadores.slice(0, 3 * tamanho);
+        reservas = jogadores.slice(3 * tamanho);
+    } else if (n >= 2 * tamanho) {
+        nTimes = 2;
+        titulares = jogadores.slice(0, 2 * tamanho);
+        reservas = jogadores.slice(2 * tamanho);
+    } else {
+        nTimes = 2;
+        titulares = jogadores;
+    }
+
+    const { times, somas } = balancearTimes(titulares, nTimes, nTimes === 2 && reservas.length === 0 ? null : tamanho);
+    return { times, somas, reservas };
+}
+
+const LETRAS_TIMES = ['A', 'B', 'C'];
+
+// ordem de rodízio, sorteada. 3 times: o que está esperando entra no lugar do que está há mais
+// rodadas seguidas em campo (empate é sorteado). 2 times + reservas: reservas entram no lugar de quem está há mais tempo
+// em campo (1 por intervalo; com 2+ reservas, 1 por time por intervalo ou mais). Goleiras ficam fora do rodízio (não trocam de lugar).
+function montarRodizio(times, reservas, minutos = 10, duracao = 60) {
+    const passo = Number.isFinite(minutos) && minutos >= 1 ? minutos : 10;
+    const total = Math.max(1, Math.floor((Number.isFinite(duracao) && duracao >= passo ? duracao : 60) / passo));
+    const linhas = [];
+
+    if (times.length === 3) {
+        let [emCampo1, emCampo2, espera] = embaralhar([0, 1, 2]);
+        const seguidas = [0, 0, 0]; // rodadas seguidas em campo de cada time
+        for (let r = 0; r < total; r++) {
+            seguidas[emCampo1]++;
+            seguidas[emCampo2]++;
+            const faixa = `${r * passo}–${(r + 1) * passo} min`;
+            linhas.push(`${r + 1}) ${faixa}: Time ${LETRAS_TIMES[emCampo1]} × Time ${LETRAS_TIMES[emCampo2]} (Time ${LETRAS_TIMES[espera]} espera)`);
+            // sai quem está há mais rodadas seguidas em campo; empate é sorteado
+            let sai;
+            if (seguidas[emCampo1] === seguidas[emCampo2]) sai = Math.random() < 0.5 ? emCampo1 : emCampo2;
+            else sai = seguidas[emCampo1] > seguidas[emCampo2] ? emCampo1 : emCampo2;
+            const fica = sai === emCampo1 ? emCampo2 : emCampo1;
+            seguidas[sai] = 0;
+            [emCampo1, emCampo2, espera] = [fica, espera, sai];
+        }
+    } else if (times.length === 2 && reservas.length > 0) {
+        let banco = embaralhar(reservas.filter((j) => j.posicao !== 'goleira'));
+        // posições em campo: { jogador, time, desde }
+        let emCampo = [];
+        times.forEach((time, t) => time.forEach((j) => {
+            if (j.posicao !== 'goleira') emCampo.push({ jogador: j, time: t, desde: 0 });
+        }));
+        // 1 reserva só: troca 1 por intervalo. 2+ (pelo menos 1 por time): troca 1 por time por
+        // intervalo, e com mais reservas ainda, mais trocas — sempre em número par, metade de cada time
+        const trocasPorIntervalo = banco.length >= 2 ? 2 * Math.floor(banco.length / 2) : 1;
+        for (let r = 1; r < total && banco.length > 0; r++) {
+            const trocas = [];
+            const saindoAgora = [];
+            let timeDaVez = Math.random() < 0.5 ? 0 : 1;
+            for (let k = 0; k < trocasPorIntervalo && banco.length > 0; k++) {
+                const disponiveis = emCampo.filter((e) => !saindoAgora.includes(e));
+                const doTime = disponiveis.filter((e) => e.time === timeDaVez);
+                const base = doTime.length > 0 ? doTime : disponiveis;
+                if (base.length === 0) break;
+                const menorDesde = Math.min(...base.map((e) => e.desde));
+                const saindo = embaralhar(base.filter((e) => e.desde === menorDesde))[0];
+                saindoAgora.push(saindo);
+                trocas.push({ saindo, entrando: banco.shift() });
+                timeDaVez = 1 - timeDaVez;
+            }
+            if (trocas.length === 0) break;
+            linhas.push(`${r * passo} min: ` + trocas.map(({ saindo, entrando }) =>
+                `${entrando.nome} entra no lugar de ${saindo.jogador.nome} (Time ${LETRAS_TIMES[saindo.time]})`).join('; '));
+            trocas.forEach(({ saindo, entrando }) => {
+                banco.push(saindo.jogador);
+                emCampo = emCampo.map((e) => (e === saindo ? { jogador: entrando, time: saindo.time, desde: r } : e));
+            });
         }
     }
 
-    return { timeA, timeB, somaA, somaB };
+    if (linhas.length === 0) return '';
+    return `🔁 *Rodízio (a cada ${passo} min):*\n${linhas.join('\n')}\n`;
+}
+
+// tira acento/maiúscula pra comparar nomes digitados à mão (!faltam ana, bia)
+function normalizarNome(texto) {
+    return String(texto).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+}
+
+// casa nomes digitados (separados por vírgula, "e" ou quebra de linha) com as confirmadas.
+// Nome exato ganha; senão aceita um começo/trecho que só bata com UMA confirmada.
+function acharPorNomes(confirmados, texto) {
+    const pedidos = String(texto).split(/,|\n|;| e /i).map(normalizarNome).filter(Boolean);
+    const achadas = [];
+    const naoEncontradas = [];
+    const ambiguas = [];
+    for (const pedido of pedidos) {
+        let candidatas = confirmados.filter((j) => normalizarNome(j.nome) === pedido);
+        if (candidatas.length === 0) candidatas = confirmados.filter((j) => normalizarNome(j.nome).startsWith(pedido));
+        if (candidatas.length === 0) candidatas = confirmados.filter((j) => normalizarNome(j.nome).includes(pedido));
+        if (candidatas.length === 1) {
+            if (!achadas.some((a) => a.id === candidatas[0].id)) achadas.push(candidatas[0]);
+        } else if (candidatas.length === 0) {
+            naoEncontradas.push(pedido);
+        } else {
+            ambiguas.push(pedido);
+        }
+    }
+    return { achadas, naoEncontradas, ambiguas };
 }
 
 // monta as seções "Mensalistas (n)" / "Avulsas (n)" — a ordem de cada lista é a mesma
@@ -139,7 +261,7 @@ function aplicarTokens(template, tokens) {
 const TEMPLATE_LISTA_CONFIRMADA_PADRAO = '📋 *Lista fechada — {titulo}*\n\n{lista}Total: {total}\n\n🔒 Lista fechada — votos depois disso não contam mais.';
 const TEMPLATE_LISTA_ATUAL_PADRAO = '📋 *Lista atual — {titulo}*\n\n{lista}Total: {total}{espera}\n\nEssa lista ainda pode mudar — a enquete continua aberta.';
 const TEMPLATE_LISTA_ESPERA_PADRAO = '⏳ *Lista de espera — {titulo}*\n\n{lista}\nSó entram se algum dos confirmados sair da lista.';
-const TEMPLATE_TIMES_PADRAO = '⚽ *Times — {titulo}*\n\n🔵 *Time A:*\n{time_a}\n🔴 *Time B:*\n{time_b}';
+const TEMPLATE_TIMES_PADRAO = '⚽ *Times — {titulo}*\n\n🔵 *Time A:*\n{time_a}\n🔴 *Time B:*\n{time_b}{time_c}{reservas}{rodizio}';
 
 // mensagem oficial de fechamento — só quem realmente tem vaga garantida entra aqui
 function montarTextoListaConfirmadas(enquete, confirmados, template = TEMPLATE_LISTA_CONFIRMADA_PADRAO) {
@@ -186,20 +308,36 @@ function montarTextoListaEspera(enquete, listaDeEspera, template = TEMPLATE_LIST
     });
 }
 
-// nomesTimeA/nomesTimeB: arrays de string — usado tanto com jogadores completos ({nome: ...})
-// quanto com nomes já extraídos (ex: vindos de inputs hidden do formulário do painel)
-function montarTextoTimes(tituloJogo, nomesTimeA, nomesTimeB, template = TEMPLATE_TIMES_PADRAO) {
-    let timeA = '';
-    nomesTimeA.forEach((nome) => { timeA += `- ${nome}\n`; });
-    let timeB = '';
-    nomesTimeB.forEach((nome) => { timeB += `- ${nome}\n`; });
+// nomesPorTime: array de arrays de string (2 ou 3 times) — usado tanto com nomes de jogadores
+// quanto com nomes vindos de inputs do painel. reservas: array de string. rodizioTexto: bloco já
+// montado por montarRodizio ('' = sem rodízio). Blocos extras (Time C, reservas, rodízio) que o
+// template salvo no painel não menciona são anexados no fim, pra não sumirem de templates antigos.
+function montarTextoTimes(tituloJogo, nomesPorTime, reservas = [], rodizioTexto = '', template = TEMPLATE_TIMES_PADRAO) {
+    const lista = (nomes) => nomes.map((nome) => `- ${nome}\n`).join('');
+    const blocoTimeC = nomesPorTime[2] ? `\n🟢 *Time C:*\n${lista(nomesPorTime[2])}` : '';
+    const blocoReservas = reservas.length > 0 ? `\n🪑 *Reservas:*\n${lista(reservas)}` : '';
+    const blocoRodizio = rodizioTexto ? `\n${rodizioTexto}` : '';
 
-    return aplicarTokens(template, { titulo: tituloJogo, time_a: timeA, time_b: timeB });
+    let texto = aplicarTokens(template, {
+        titulo: tituloJogo,
+        time_a: lista(nomesPorTime[0] || []),
+        time_b: lista(nomesPorTime[1] || []),
+        time_c: blocoTimeC,
+        reservas: blocoReservas,
+        rodizio: blocoRodizio,
+    });
+    if (blocoTimeC && !template.includes('{time_c}')) texto += blocoTimeC;
+    if (blocoReservas && !template.includes('{reservas}')) texto += blocoReservas;
+    if (blocoRodizio && !template.includes('{rodizio}')) texto += blocoRodizio;
+    return texto;
 }
 
 module.exports = {
     embaralhar,
     balancearTimes,
+    montarPlanoDeTimes,
+    montarRodizio,
+    acharPorNomes,
     montarTextoListaConfirmadas,
     montarTextoListaAtual,
     montarTextoListaEspera,

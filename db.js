@@ -320,7 +320,26 @@ const DEFAULT_CONFIG = {
     lista_atual_mensagem: TEMPLATE_LISTA_ATUAL_PADRAO, // !lista
     lista_espera_mensagem: TEMPLATE_LISTA_ESPERA_PADRAO, // !espera
     times_mensagem: TEMPLATE_TIMES_PADRAO, // !times / painel "Times"
+    jogo_jogadoras_por_time: '5', // jogadoras por time — 3 times se couber (3x), senão 2 times + reservas
+    jogo_times_modo: 'automatico', // 'automatico' = !times sorteia e manda direto; 'manual' = só pelo painel (Times)
+    jogo_rodizio_minutos: '10', // intervalo entre trocas do rodízio
+    jogo_duracao_minutos: '60', // duração total do jogo, define quantas trocas aparecem no rodízio
+    times_ausentes: '', // JSON {enquete_id, ids}: confirmadas que avisaram que faltam (!faltam) — ficam fora do sorteio
 };
+
+// ausentes (!faltam / painel Times) valem só pra enquete em que foram marcadas
+function getAusentesDaEnquete(enqueteId) {
+    try {
+        const dado = JSON.parse(getConfig('times_ausentes') || 'null');
+        return dado && dado.enquete_id === enqueteId && Array.isArray(dado.ids) ? dado.ids : [];
+    } catch (err) {
+        return [];
+    }
+}
+
+function setAusentesDaEnquete(enqueteId, ids) {
+    setConfig('times_ausentes', JSON.stringify({ enquete_id: enqueteId, ids }));
+}
 
 function getConfig(chave) {
     const row = db
@@ -784,6 +803,8 @@ module.exports = {
     upsertJogador,
     getConfig,
     setConfig,
+    getAusentesDaEnquete,
+    setAusentesDaEnquete,
     upsertGrupo,
     getGrupos,
     registrarLog,
