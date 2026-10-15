@@ -47,6 +47,9 @@ const {
     getAvaliacoesDaEnquete,
     registrarAvaliacao,
     criarEnvioImediato,
+    PUBLICOS_JOGADORAS,
+    getDestinatariasPorPublico,
+    enfileirarMensagemJogadora,
     fecharEnquete,
     getJogadoresParaPermissao,
     definirPermissaoComando,
@@ -881,8 +884,31 @@ app.get('/mensagens', requireLogin, (req, res) => {
         usuario: req.session.usuario,
         mensagens: getMensagensAgendadas(),
         grupos: getGrupos(),
+        publicosJogadoras: Object.entries(PUBLICOS_JOGADORAS).map(([chave, titulo]) => ({
+            chave,
+            titulo,
+            destinatarias: getDestinatariasPorPublico(chave),
+        })),
+        mensagemJogadorasTexto: getConfig('mensagem_jogadoras_texto'),
         ok: req.query.ok,
     });
+});
+
+// mensagem privada (DM) pras jogadoras de um público — o painel só enfileira, o bot manda
+app.post('/mensagens/jogadoras', requireLogin, (req, res) => {
+    const texto = String(req.body.texto || '').trim();
+    const publico = req.body.publico;
+    if (!texto || !PUBLICOS_JOGADORAS[publico]) return res.redirect('/mensagens');
+
+    setConfig('mensagem_jogadoras_texto', texto);
+    const destinatarias = getDestinatariasPorPublico(publico);
+    const comNumero = destinatarias.filter((j) => j.whatsapp_id || j.telefone);
+    comNumero.forEach((j) => enfileirarMensagemJogadora(j.id, texto.replace(/{nome}/g, j.nome)));
+
+    const semNumero = destinatarias.length - comNumero.length;
+    redirectOk(res, '/mensagens', comNumero.length === 0
+        ? 'Nenhuma jogadora nesse público (ou sem número cadastrado) — nada foi enviado.'
+        : `${comNumero.length} mensagem(ns) na fila${semNumero > 0 ? ` (${semNumero} sem número, ignorada(s))` : ''}. O bot envia aos poucos, com pausa entre cada uma — veja o resultado em Logs.`);
 });
 
 // mensagens que o bot manda sozinho pro grupo, ou como resposta a comandos (!lista, !espera,
@@ -954,9 +980,15 @@ app.post('/mensagens/times', requireLogin, (req, res) => {
     redirectOk(res, '/mensagens/automaticas', 'Mensagem salva!');
 });
 
+// destino válido de agendamento: um grupo (id do WhatsApp) ou "jogadoras:<público>" (DM individual)
+function destinoAgendamentoValido(grupoId) {
+    if (!grupoId) return false;
+    return grupoId.startsWith('jogadoras:') ? Boolean(PUBLICOS_JOGADORAS[grupoId.slice('jogadoras:'.length)]) : true;
+}
+
 app.post('/mensagens', requireLogin, (req, res) => {
     const { grupoId, texto, tipo, data, diaSemana, horaH, horaM } = req.body;
-    if (!grupoId || !texto || !texto.trim()) {
+    if (!destinoAgendamentoValido(grupoId) || !texto || !texto.trim()) {
         return res.redirect('/mensagens');
     }
 
@@ -978,7 +1010,7 @@ app.post('/mensagens', requireLogin, (req, res) => {
 app.post('/mensagens/:id/editar', requireLogin, (req, res) => {
     const id = Number(req.params.id);
     const { grupoId, texto, tipo, data, diaSemana, horaH, horaM } = req.body;
-    if (!grupoId || !texto || !texto.trim()) {
+    if (!destinoAgendamentoValido(grupoId) || !texto || !texto.trim()) {
         return res.redirect('/mensagens');
     }
 

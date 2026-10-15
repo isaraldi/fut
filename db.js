@@ -127,6 +127,14 @@ db.exec(`
         criado_em TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
+    -- mensagens privadas (DM) pras jogadoras, enfileiradas pelo painel e enviadas pelo bot
+    CREATE TABLE IF NOT EXISTS mensagens_jogadoras_pendentes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        jogador_id INTEGER NOT NULL REFERENCES jogadores(id) ON DELETE CASCADE,
+        texto TEXT NOT NULL,
+        criado_em TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
     CREATE TABLE IF NOT EXISTS avaliacoes (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         enquete_id INTEGER NOT NULL REFERENCES enquetes(id) ON DELETE CASCADE,
@@ -324,6 +332,7 @@ const DEFAULT_CONFIG = {
     jogo_times_modo: 'automatico', // 'automatico' = !times sorteia e manda direto; 'manual' = só pelo painel (Times)
     jogo_rodizio_minutos: '10', // intervalo entre trocas do rodízio
     jogo_duracao_minutos: '60', // duração total do jogo, define quantas trocas aparecem no rodízio
+    mensagem_jogadoras_texto: '', // último texto usado em Mensagens > "Mandar mensagem pras jogadoras" (só pra já vir preenchido)
     times_ausentes: '', // JSON {enquete_id, ids}: confirmadas que avisaram que faltam (!faltam) — ficam fora do sorteio
 };
 
@@ -396,6 +405,67 @@ function criarEnvioImediato(grupoId, texto, tipo) {
     db.prepare(
         'INSERT INTO envios_imediatos (grupo_id, texto, tipo) VALUES (?, ?, ?)',
     ).run(grupoId, texto, tipo);
+}
+
+// públicos disponíveis pra "mandar mensagem pras jogadoras" (DM individual)
+const PUBLICOS_JOGADORAS = {
+    renovaram: 'Mensalistas que renovaram (👍 no último fechamento do mensal)',
+    mensalistas: 'Todas as mensalistas',
+    avulsas_confirmadas: 'Avulsas confirmadas no jogo atual',
+};
+
+function getDestinatariasPorPublico(publico) {
+    if (publico === 'renovaram') {
+        const ultimo = db.prepare('SELECT message_id FROM fechamento_mensal_convites ORDER BY id DESC LIMIT 1').get();
+        if (!ultimo) return [];
+        return db
+            .prepare(
+                `SELECT j.id, j.nome, j.whatsapp_id, j.telefone FROM fechamento_mensal_convites c
+                 JOIN jogadores j ON j.id = c.jogador_id
+                 WHERE c.message_id = ? AND c.resposta = 'sim' AND j.ativo = 1
+                 ORDER BY j.nome`,
+            )
+            .all(ultimo.message_id);
+    }
+    if (publico === 'mensalistas') {
+        return db
+            .prepare(
+                `SELECT id, nome, whatsapp_id, telefone FROM jogadores
+                 WHERE papel = 'mensalista' AND ativo = 1 ORDER BY nome`,
+            )
+            .all();
+    }
+    if (publico === 'avulsas_confirmadas') {
+        const enquete = db.prepare('SELECT id FROM enquetes ORDER BY id DESC LIMIT 1').get();
+        if (!enquete) return [];
+        const ids = getConfirmadosDaEnquete(enquete.id).filter((j) => j.papel === 'avulso').map((j) => j.id);
+        if (ids.length === 0) return [];
+        return db
+            .prepare(
+                `SELECT id, nome, whatsapp_id, telefone FROM jogadores
+                 WHERE id IN (${ids.map(() => '?').join(',')}) ORDER BY nome`,
+            )
+            .all(...ids);
+    }
+    return [];
+}
+
+function enfileirarMensagemJogadora(jogadorId, texto) {
+    db.prepare('INSERT INTO mensagens_jogadoras_pendentes (jogador_id, texto) VALUES (?, ?)').run(jogadorId, texto);
+}
+
+function getMensagensJogadorasPendentes() {
+    return db
+        .prepare(
+            `SELECT m.id, m.texto, j.nome, j.whatsapp_id, j.telefone
+             FROM mensagens_jogadoras_pendentes m JOIN jogadores j ON j.id = m.jogador_id
+             ORDER BY m.id ASC`,
+        )
+        .all();
+}
+
+function removerMensagemJogadora(id) {
+    db.prepare('DELETE FROM mensagens_jogadoras_pendentes WHERE id = ?').run(id);
 }
 
 function getEnviosImediatosPendentes() {
@@ -811,6 +881,11 @@ module.exports = {
     getLogs,
     contarLogs,
     criarEnvioImediato,
+    PUBLICOS_JOGADORAS,
+    getDestinatariasPorPublico,
+    enfileirarMensagemJogadora,
+    getMensagensJogadorasPendentes,
+    removerMensagemJogadora,
     getEnviosImediatosPendentes,
     removerEnvioImediato,
     fecharEnquete,

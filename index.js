@@ -33,6 +33,10 @@ const {
   getListaDeEsperaDaEnquete,
   registrarLog,
   getEnviosImediatosPendentes,
+  getMensagensJogadorasPendentes,
+  getDestinatariasPorPublico,
+  enfileirarMensagemJogadora,
+  removerMensagemJogadora,
   removerEnvioImediato,
   fecharEnquete,
   getEnquetesFechadasNaoDesafixadas,
@@ -82,6 +86,7 @@ client.on('ready', async () => {
       checarEnvioManualDeEnqueteViaPainel();
       checarMensagensAgendadas();
       checarEnviosImediatos();
+      checarMensagensParaJogadoras();
       checarEnquetesParaDesafixar();
       checarReinicioAgendadoDoBot();
       checarSincronizacaoPendente();
@@ -355,7 +360,7 @@ async function checarMensagensAgendadas() {
   const unicas = getMensagensUnicasParaEnviar();
   for (const msg of unicas) {
     try {
-      await comTimeoutDeSessao(client.sendMessage(msg.grupo_id, msg.texto), 30 * 1000, 'Envio de mensagem única');
+      await enviarMensagemAgendada(msg, 'Envio de mensagem única');
       marcarMensagemEnviada(msg.id);
       registrarLog('mensagem', 'sucesso', `Mensagem única enviada: "${resumoTexto(msg.texto)}"`, msg.grupo_id);
       console.log(`✉️ Mensagem agendada #${msg.id} enviada`);
@@ -376,7 +381,7 @@ async function checarMensagensAgendadas() {
     if (msg.ultimo_envio === hojeLocal) continue; // já enviada hoje, evita duplicar
 
     try {
-      await comTimeoutDeSessao(client.sendMessage(msg.grupo_id, msg.texto), 30 * 1000, 'Envio de mensagem semanal');
+      await enviarMensagemAgendada(msg, 'Envio de mensagem semanal');
       marcarMensagemSemanalEnviada(msg.id, hojeLocal);
       registrarLog('mensagem', 'sucesso', `Mensagem semanal enviada: "${resumoTexto(msg.texto)}"`, msg.grupo_id);
       console.log(`✉️ Mensagem semanal #${msg.id} enviada`);
@@ -793,6 +798,67 @@ async function checarEnviosImediatos() {
       removerEnvioImediato(envio.id);
     }
   }
+}
+
+// manda uma mensagem agendada: pra um grupo (grupo_id é o id do grupo) ou, quando grupo_id é
+// "jogadoras:<público>", como DM individual pra cada jogadora do público — o público é
+// resolvido só na hora do envio (quem renovou/confirmou pode mudar entre agendar e enviar)
+async function enviarMensagemAgendada(msg, descricao) {
+  if (!msg.grupo_id.startsWith('jogadoras:')) {
+    return comTimeoutDeSessao(client.sendMessage(msg.grupo_id, msg.texto), 30 * 1000, descricao);
+  }
+
+  const publico = msg.grupo_id.slice('jogadoras:'.length);
+  const destinatarias = getDestinatariasPorPublico(publico).filter((j) => j.whatsapp_id || j.telefone);
+  if (destinatarias.length === 0) {
+    registrarLog('mensagem', 'aviso', `Mensagem agendada #${msg.id} pro público "${publico}": ninguém pra enviar no momento`);
+    return;
+  }
+  destinatarias.forEach((j) => enfileirarMensagemJogadora(j.id, msg.texto.replace(/{nome}/g, j.nome)));
+  checarMensagensParaJogadoras().catch((err) => console.error('Erro ao enviar DMs agendadas:', err));
+}
+
+// 💌 MENSAGENS PRIVADAS PRAS JOGADORAS — enfileiradas pelo painel (Mensagens > "Mandar mensagem
+// pras jogadoras"); o bot manda uma DM por jogadora, com pausa entre elas pra não parecer spam.
+// Falha de uma não trava as outras, e nada é reenviado (a fila é esvaziada de qualquer jeito).
+let enviandoMensagensJogadoras = false;
+async function checarMensagensParaJogadoras() {
+  if (enviandoMensagensJogadoras) return;
+  const pendentes = getMensagensJogadorasPendentes();
+  if (pendentes.length === 0) return;
+
+  enviandoMensagensJogadoras = true;
+  let enviadas = 0;
+  const falhas = [];
+  try {
+    for (const item of pendentes) {
+      try {
+        const telefone = item.telefone ? `${String(item.telefone).replace(/\D/g, '')}@c.us` : null;
+        const destino = item.whatsapp_id || telefone;
+        if (!destino) throw new Error('sem número cadastrado');
+        try {
+          await comTimeoutDeSessao(client.sendMessage(destino, item.texto), 30 * 1000, 'Envio de DM pra jogadora');
+        } catch (err) {
+          if (!telefone || telefone === destino) throw err;
+          await comTimeoutDeSessao(client.sendMessage(telefone, item.texto), 30 * 1000, 'Envio de DM pra jogadora');
+        }
+        enviadas++;
+      } catch (err) {
+        falhas.push(`${item.nome} (${err.message})`);
+        console.error(`Erro ao mandar DM pra ${item.nome}:`, err);
+      } finally {
+        removerMensagemJogadora(item.id);
+      }
+      await new Promise((resolve) => setTimeout(resolve, 3000 + Math.random() * 3000));
+    }
+  } finally {
+    enviandoMensagensJogadoras = false;
+  }
+
+  registrarLog(
+    'mensagem', falhas.length > 0 ? 'aviso' : 'sucesso',
+    `Mensagem privada: ${enviadas} enviada(s)${falhas.length > 0 ? `, ${falhas.length} falha(s): ${falhas.join('; ')}` : ''}`,
+  );
 }
 
 // 📌 DESAFIXA ENQUETES JÁ FECHADAS — fechar pelo painel só grava no banco (processo sem

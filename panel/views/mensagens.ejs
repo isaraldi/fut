@@ -7,10 +7,48 @@
 
 <section class="section">
     <div class="card">
+        <h1>Mandar mensagem pras jogadoras</h1>
+        <p class="hint">
+            Manda uma mensagem <strong>privada</strong> (no direto, não no grupo) pra cada jogadora do público
+            escolhido — por exemplo, depois que as mensalistas renovam no fechamento do mensal, ou
+            pras avulsas que confirmaram o jogo. Use <code>{nome}</code> no texto pra colocar o nome
+            de cada uma. O bot envia uma por vez, com uma pausa entre elas, então pode levar alguns
+            minutos; o resultado aparece em <a href="/logs">Logs</a>. Pra mandar numa data/horário, use <strong>Agendar mensagem</strong> abaixo e escolha o público em "Destino".
+        </p>
+        <form method="post" action="/mensagens/jogadoras" data-confirm="Enviar essa mensagem no privado pra cada jogadora do público escolhido?"><input type="hidden" name="_csrf" value="<%= csrfToken %>">
+            <div class="form-row">
+                <div>
+                    <label>Para quem</label>
+                    <select name="publico">
+                        <% publicosJogadoras.forEach(p => { %>
+                            <option value="<%= p.chave %>"><%= p.titulo %> — <%= p.destinatarias.length %></option>
+                        <% }) %>
+                    </select>
+                </div>
+            </div>
+            <div>
+                <label>Mensagem</label>
+                <textarea name="texto" rows="5" required placeholder="Oi, {nome}! ..."><%= mensagemJogadorasTexto %></textarea>
+            </div>
+            <% publicosJogadoras.forEach(p => { %>
+                <details style="margin:8px 0">
+                    <summary><%= p.titulo %>: <%= p.destinatarias.length %> jogadora(s)</summary>
+                    <p class="hint"><%= p.destinatarias.length ? p.destinatarias.map(j => j.nome + (j.whatsapp_id || j.telefone ? '' : ' (sem número)')).join(', ') : 'Ninguém por enquanto.' %></p>
+                </details>
+            <% }) %>
+            <input type="submit" value="Enviar no privado">
+        </form>
+    </div>
+</section>
+
+<section class="section">
+    <div class="card">
         <h1>Agendar mensagem</h1>
         <p class="hint">
-            O bot manda a mensagem sozinho no grupo escolhido (checagem a cada minuto) — numa data
-            específica (só uma vez) ou toda semana, no mesmo dia e horário.
+            O bot manda a mensagem sozinho no grupo escolhido, ou no privado de cada jogadora de um
+            público (checagem a cada minuto) — numa data específica (só uma vez) ou toda semana, no
+            mesmo dia e horário. Nos públicos de jogadoras, quem faz parte dele é decidido na hora
+            do envio, não na hora de agendar.
         </p>
         <% if (grupos.length === 0) { %>
             <p class="hint">
@@ -21,12 +59,19 @@
         <form method="post" action="/mensagens" class="form-mensagem"><input type="hidden" name="_csrf" value="<%= csrfToken %>">
             <div class="form-row">
                 <div>
-                    <label>Grupo de destino</label>
-                    <select name="grupoId" required <%= grupos.length === 0 ? 'disabled' : '' %>>
-                        <option value="" selected disabled>Selecione um grupo</option>
-                        <% grupos.forEach(g => { %>
-                            <option value="<%= g.whatsapp_id %>"><%= g.nome %></option>
-                        <% }) %>
+                    <label>Destino</label>
+                    <select name="grupoId" required>
+                        <option value="" selected disabled>Selecione um grupo ou público</option>
+                        <optgroup label="Grupos">
+                            <% grupos.forEach(g => { %>
+                                <option value="<%= g.whatsapp_id %>"><%= g.nome %></option>
+                            <% }) %>
+                        </optgroup>
+                        <optgroup label="Mensagem privada (uma por jogadora; aceita {nome})">
+                            <% publicosJogadoras.forEach(p => { %>
+                                <option value="jogadoras:<%= p.chave %>"><%= p.titulo %></option>
+                            <% }) %>
+                        </optgroup>
                     </select>
                 </div>
             </div>
@@ -82,7 +127,7 @@
                     </div>
                 </div>
             </div>
-            <input type="submit" value="Agendar mensagem" <%= grupos.length === 0 ? 'disabled' : '' %>>
+            <input type="submit" value="Agendar mensagem">
         </form>
     </div>
 
@@ -93,13 +138,14 @@
         <% } else { %>
             <table>
                 <thead>
-                    <tr><th>Grupo</th><th>Mensagem</th><th>Quando</th><th>Status</th><th></th></tr>
+                    <tr><th>Destino</th><th>Mensagem</th><th>Quando</th><th>Status</th><th></th></tr>
                 </thead>
                 <tbody>
                     <% const NOMES_DIA_SEMANA = ['domingo', 'segunda-feira', 'terça-feira', 'quarta-feira', 'quinta-feira', 'sexta-feira', 'sábado']; %>
                     <% mensagens.forEach(m => { %>
                         <tr>
-                            <td><%= m.grupo_nome || m.grupo_id %></td>
+                            <% const publicoDaLinha = publicosJogadoras.find(p => 'jogadoras:' + p.chave === m.grupo_id); %>
+                            <td><%= m.grupo_nome || (publicoDaLinha ? '💌 ' + publicoDaLinha.titulo : m.grupo_id) %></td>
                             <td style="max-width:320px;white-space:pre-wrap"><%= m.texto %></td>
                             <td style="white-space:nowrap">
                                 <% if (m.tipo === 'semanal') { %>
@@ -137,11 +183,18 @@
                                     <p class="hint">Editar reagenda essa mensagem — se já tinha sido enviada, volta pra pendente.</p>
                                     <div class="form-row">
                                         <div>
-                                            <label>Grupo de destino</label>
+                                            <label>Destino</label>
                                             <select name="grupoId" required>
-                                                <% grupos.forEach(g => { %>
-                                                    <option value="<%= g.whatsapp_id %>" <%= g.whatsapp_id === m.grupo_id ? 'selected' : '' %>><%= g.nome %></option>
-                                                <% }) %>
+                                                <optgroup label="Grupos">
+                                                    <% grupos.forEach(g => { %>
+                                                        <option value="<%= g.whatsapp_id %>" <%= g.whatsapp_id === m.grupo_id ? 'selected' : '' %>><%= g.nome %></option>
+                                                    <% }) %>
+                                                </optgroup>
+                                                <optgroup label="Mensagem privada (uma por jogadora; aceita {nome})">
+                                                    <% publicosJogadoras.forEach(p => { %>
+                                                        <option value="jogadoras:<%= p.chave %>" <%= 'jogadoras:' + p.chave === m.grupo_id ? 'selected' : '' %>><%= p.titulo %></option>
+                                                    <% }) %>
+                                                </optgroup>
                                             </select>
                                         </div>
                                     </div>
