@@ -642,7 +642,7 @@ async function processarPossivelComprovante(msg) {
       // reação é só feedback visual, não crítico
     }
   } catch (err) {
-    registrarLog('comprovante', 'erro', `Erro ao processar possível comprovante: ${err.message}`, msg.from);
+    registrarLog('comprovante', 'erro', `Erro ao processar possível comprovante: ${err && err.message ? err.message : String(err)}`, msg.from);
     console.error('Erro ao processar possível comprovante:', err);
   } finally {
     if (caminhoTemp) fs.unlink(caminhoTemp, () => {});
@@ -953,7 +953,9 @@ client.on('message', async msg => {
 
   // roda em paralelo, sem travar o resto do handler (OCR pode levar alguns segundos)
   // funciona em grupo OU em DM direto com o bot
-  if (msg.hasMedia && msg.type === 'image') {
+  // status (stories) dos contatos também chegam como mensagem com imagem, mas não são comprovante
+  // e o download deles falha — ignorar antes de tentar evita centenas de erros falsos nos logs
+  if (msg.hasMedia && msg.type === 'image' && !msg.fromMe && !msg.isStatus && msg.from !== 'status@broadcast') {
     processarPossivelComprovante(msg).catch((err) =>
       console.error('Erro ao processar possível comprovante:', err),
     );
