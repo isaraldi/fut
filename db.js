@@ -159,10 +159,45 @@ db.transaction(() => {
         prioridade: 'INTEGER NOT NULL DEFAULT 1',
         ordem: 'INTEGER',
         aprovada: 'INTEGER NOT NULL DEFAULT 0',
+        expirada: 'INTEGER NOT NULL DEFAULT 0',
     })) {
         if (!colunasConvites.some(c => c.name === nome)) db.exec(`ALTER TABLE fechamento_mensal_convites ADD COLUMN ${nome} ${definicao}`);
     }
 }).immediate();
+
+const colunasVotosLista = db.prepare('PRAGMA table_info(votos)').all();
+if (!colunasVotosLista.some(c => c.name === 'ordem_manual')) {
+    db.exec('ALTER TABLE votos ADD COLUMN ordem_manual INTEGER');
+}
+db.exec(`CREATE TABLE IF NOT EXISTS listas_importacoes (
+    message_id TEXT PRIMARY KEY,
+    grupo_id TEXT NOT NULL,
+    autor_id TEXT NOT NULL,
+    enquete_id INTEGER NOT NULL REFERENCES enquetes(id) ON DELETE CASCADE,
+    dados TEXT NOT NULL,
+    estado TEXT NOT NULL DEFAULT 'pendente',
+    criado_em INTEGER NOT NULL,
+    expira_em INTEGER NOT NULL
+)`);
+
+// Último estado remoto e proteção de ajustes manuais, inclusive votos removidos.
+db.exec(`CREATE TABLE IF NOT EXISTS whatsapp_interacoes (
+    tipo TEXT NOT NULL,
+    message_id TEXT NOT NULL,
+    jogador_id INTEGER NOT NULL REFERENCES jogadores(id) ON DELETE CASCADE,
+    conteudo TEXT,
+    evento_em INTEGER,
+    manual_em INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (tipo, message_id, jogador_id)
+)`);
+
+function marcarVotoManual(enqueteId, jogadorId, agora = Date.now()) {
+    const enquete = db.prepare('SELECT message_id FROM enquetes WHERE id = ?').get(enqueteId);
+    if (!enquete) return;
+    db.prepare(`INSERT INTO whatsapp_interacoes (tipo, message_id, jogador_id, manual_em)
+        VALUES ('voto', ?, ?, ?) ON CONFLICT(tipo, message_id, jogador_id)
+        DO UPDATE SET manual_em = excluded.manual_em`).run(enquete.message_id, jogadorId, agora);
+}
 
 // migração leve: jogadores.posicao (times criados antes desse recurso não têm a coluna)
 const colunasJogadores = db.prepare('PRAGMA table_info(jogadores)').all();
@@ -322,6 +357,7 @@ if (totalOpcoes === 0) {
 }
 
 const DEFAULT_CONFIG = {
+    lista_importacao_prazo_minutos: '10',
     enquete_titulo_template: 'JOGO DE {dia} - {data}',
     elenco_auto_incluir_grupo: '0',
     enquete_dia_semana: '4', // dia do jogo e base do fechamento: 0=domingo ... 6=sábado
@@ -699,17 +735,18 @@ function expirarRenovacoesMensais(agora = Date.now()) {
             WHERE message_id = ? AND prioridade = 1 AND resposta IS NULL`).all(ciclo.message_id);
         for (const c of pendentes) {
             registrarRespostaConviteFechamentoMensal(c.id, 'nao');
+            db.prepare('UPDATE fechamento_mensal_convites SET expirada = 1 WHERE id = ?').run(c.id);
             definirPapelJogador(c.jogador_id, 'avulso');
             registrarLog('mensagem', 'sucesso', `Jogadora ${c.jogador_id}: prazo de renovação encerrado — virou avulsa.`);
         }
     }).immediate();
 }
 
-function responderChamadaMensal(messageId, jogadorId, resposta, agora = Date.now()) {
+function responderChamadaMensal(messageId, jogadorId, resposta, agora = Date.now(), recuperada = false) {
     return db.transaction(() => {
-        expirarRenovacoesMensais(agora);
         const ciclo = getCicloMensalAtual();
         if (!ciclo || ciclo.message_id !== messageId) return false;
+        expirarRenovacoesMensais(agora);
         const jogadora = db.prepare('SELECT * FROM jogadores WHERE id = ? AND ativo = 1').get(jogadorId);
         if (!jogadora) return false;
         let convite = getConviteFechamentoMensal(messageId, jogadorId);
@@ -719,13 +756,27 @@ function responderChamadaMensal(messageId, jogadorId, resposta, agora = Date.now
                 VALUES (?, ?, ?, 0)`).run(jogadorId, messageId, ciclo.mes_anterior);
             convite = getConviteFechamentoMensal(messageId, jogadorId);
         }
-        if (convite.resposta === resposta) return true; // repetição não muda posição/horário
-        const prioridade = convite.prioridade === 1 && convite.resposta === null && agora < ciclo.prazo_em;
+        if (convite.resposta === resposta) {
+            // Uma desistência recebida depois da expiração não pode parecer só prazo vencido.
+            if (convite.expirada && resposta === 'nao') {
+                db.prepare('UPDATE fechamento_mensal_convites SET expirada = 0, prioridade = 0 WHERE id = ?').run(convite.id);
+            }
+            return true; // repetição não muda posição/horário
+        }
+        const prioridade = convite.prioridade === 1 &&
+            (convite.resposta === null || (recuperada && convite.expirada === 1)) && agora < ciclo.prazo_em;
         const ordem = resposta === 'sim' && !prioridade
             ? db.prepare('SELECT COALESCE(MAX(ordem), 0) + 1 AS n FROM fechamento_mensal_convites').get().n : convite.ordem;
         db.prepare(`UPDATE fechamento_mensal_convites SET resposta = ?, prioridade = ?, ordem = ?,
-            aprovada = 0, respondido_em = ? WHERE id = ?`).run(resposta, prioridade ? 1 : 0, ordem,
+            aprovada = 0, expirada = 0, respondido_em = ? WHERE id = ?`).run(resposta, prioridade ? 1 : 0, ordem,
                 new Date(agora).toISOString().slice(0, -1), convite.id);
+        if (resposta === 'sim' && !prioridade) {
+            const fila = db.prepare(`SELECT id FROM fechamento_mensal_convites
+                WHERE message_id = ? AND prioridade = 0 AND resposta = 'sim'
+                ORDER BY julianday(respondido_em), id`).all(messageId);
+            const ordenar = db.prepare('UPDATE fechamento_mensal_convites SET ordem = ? WHERE id = ?');
+            fila.forEach((item, i) => ordenar.run(i + 1, item.id));
+        }
         if (resposta === 'nao') definirPapelJogador(jogadorId, 'avulso');
         else if (prioridade) definirPapelJogador(jogadorId, 'mensalista');
         registrarLog('mensagem', 'sucesso', `${jogadora.nome}: ${resposta === 'nao' ? 'desistiu do mensal' : prioridade ? 'renovou o mensal' : 'entrou na fila do mensal'}.`);
@@ -839,7 +890,7 @@ function getPapelHistorico(jogadorId) {
 function separarConfirmadosPorVagas(enqueteId) {
     const todos = db
         .prepare(
-            `SELECT j.id, j.nome, j.nivel, j.posicao, v.papel, v.votado_em
+            `SELECT j.id, j.nome, j.nivel, j.posicao, v.papel, v.votado_em, v.ordem_manual
              FROM votos v
              JOIN jogadores j ON j.id = v.jogador_id
              WHERE v.enquete_id = ? AND v.papel IS NOT NULL`,
@@ -850,7 +901,13 @@ function separarConfirmadosPorVagas(enqueteId) {
         db.prepare('SELECT vagas_maximo FROM enquetes WHERE id = ?').get(enqueteId) || {};
 
     const porNome = (a, b) => a.nome.localeCompare(b.nome, 'pt-BR');
-    const porOrdemDeChegada = (a, b) => a.votado_em.localeCompare(b.votado_em);
+    const porOrdemDeChegada = (a, b) => {
+        const manualA = Number.isInteger(a.ordem_manual);
+        const manualB = Number.isInteger(b.ordem_manual);
+        if (manualA && manualB) return a.ordem_manual - b.ordem_manual;
+        if (manualA !== manualB) return manualA ? -1 : 1;
+        return a.votado_em.localeCompare(b.votado_em);
+    };
 
     // exibição: mensalistas sempre em ordem alfabética; avulsas sempre por ordem de
     // confirmação na enquete (e a lista de espera herda essa mesma ordem, automaticamente)
@@ -973,7 +1030,20 @@ db.transaction(() => {
     }
 }).immediate();
 
+// Identifica expirações antigas sem confundi-las com uma desistência dentro do prazo.
+if (getConfig('whatsapp_interacoes_v1') !== '1') {
+    db.transaction(() => {
+        db.prepare(`UPDATE fechamento_mensal_convites SET expirada = 1
+            WHERE resposta = 'nao' AND prioridade = 1 AND EXISTS (
+                SELECT 1 FROM fechamento_mensal_ciclos c WHERE c.message_id = fechamento_mensal_convites.message_id
+                AND (julianday(respondido_em) - 2440587.5) * 86400000 >= c.prazo_em
+            )`).run();
+        setConfig('whatsapp_interacoes_v1', '1');
+    }).immediate();
+}
+
 module.exports = {
+    marcarVotoManual,
     criarCicloMensal, getCicloMensalAtual, expirarRenovacoesMensais, responderChamadaMensal, getResumoMensal, aprovarInteressadaMensal,
     db,
     upsertJogador,

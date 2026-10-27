@@ -12,7 +12,7 @@ let dados;
 async function main() {
 try {
     fs.mkdirSync(path.join(temporario, 'data'));
-    for (const arquivo of ['db.js', 'mensagens-prontas.js']) fs.copyFileSync(path.join(raiz, arquivo), path.join(temporario, arquivo));
+    for (const arquivo of ['db.js', 'mensagens-prontas.js', 'sincronizacao-whatsapp.js']) fs.copyFileSync(path.join(raiz, arquivo), path.join(temporario, arquivo));
     fs.symlinkSync(path.join(raiz, 'node_modules'), path.join(temporario, 'node_modules'), 'dir');
     const carregar = createRequire(path.join(temporario, 'teste.js'));
     const { fechamentoMensalDoMes, mesReferenciaAtual, montarTextoMensal } = carregar('./mensagens-prontas');
@@ -105,19 +105,15 @@ try {
     assert.equal(getResumoMensal().fila[0].nome, 'Bia');
     assert.equal(getResumoMensal().mesNovo, '2027-01');
 
-    // Executa o handler real com um cliente falso: resolver a primeira identidade
-    // mais lentamente não pode inverter a ordem de chegada das reações.
-    const vm = require('node:vm');
-    const bot = fs.readFileSync(path.join(raiz, 'index.js'), 'utf8');
-    const trecho = bot.slice(bot.indexOf('// Processa na ordem de chegada'), bot.indexOf('// 🧾 COMPROVANTE'));
-    let handler;
-    vm.runInNewContext(trecho, {
-        client: { on: (evento, fn) => { assert.equal(evento, 'message_reaction'); handler = fn; } },
-        console, getIdSerialized: id => id, getCicloMensalAtual: dados.getCicloMensalAtual,
-        resolverIdCanonico: async id => { if (id === clara) await new Promise(resolve => setTimeout(resolve, 15)); return id; },
-        getJogadorPorWhatsappId: id => ({ id }), getConviteFechamentoMensal: dados.getConviteFechamentoMensal,
-        responderChamadaMensal,
+    // A mesma fila atende eventos ao vivo e leituras após reconexão.
+    const { criarSincronizadorWhatsApp } = carregar('./sincronizacao-whatsapp');
+    for (const id of [clara, dora]) db.prepare('UPDATE jogadores SET whatsapp_id = ? WHERE id = ?').run(id + '@c.us', id);
+    let relogio = Date.now();
+    const sincronizador = criarSincronizadorWhatsApp({
+        client: {}, agora: () => ++relogio,
+        resolverIdCanonico: async id => { if (id === clara + '@c.us') await new Promise(resolve => setTimeout(resolve, 15)); return id; },
     });
+    const handler = reacao => sincronizador.receberReacao({ ...reacao, senderId: reacao.senderId + '@c.us' });
     await Promise.all([
         handler({ msgId: 'chamada-3', senderId: clara, reaction: '👍' }),
         handler({ msgId: 'chamada-3', senderId: dora, reaction: '👍' }),

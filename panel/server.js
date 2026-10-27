@@ -26,6 +26,7 @@ const multer = require('multer');
 const SqliteSessionStore = require('./sqlite-session-store');
 const {
     db,
+    marcarVotoManual,
     getResumoMensal, aprovarInteressadaMensal, definirPapelJogador,
     getConfig,
     setConfig,
@@ -501,14 +502,17 @@ app.post('/jogos/:id/confirmar', requireLogin, (req, res) => {
     // /elenco), não é mais escolhido na hora — mantém coerência com o pagamento dela
     const papel = jogador.papel === 'mensalista' ? 'mensalista' : 'avulso';
 
-    db.prepare(
-        `INSERT INTO votos (enquete_id, jogador_id, opcao, papel)
-         VALUES (?, ?, ?, ?)
-         ON CONFLICT(enquete_id, jogador_id) DO UPDATE SET
-             opcao = excluded.opcao,
-             papel = excluded.papel,
-             votado_em = datetime('now')`,
-    ).run(enqueteId, jogadorId, textoOpcaoConfirmada(), papel);
+    db.transaction(() => {
+        db.prepare(
+            `INSERT INTO votos (enquete_id, jogador_id, opcao, papel)
+             VALUES (?, ?, ?, ?)
+             ON CONFLICT(enquete_id, jogador_id) DO UPDATE SET
+                 opcao = excluded.opcao,
+                 papel = excluded.papel,
+                 votado_em = datetime('now'), ordem_manual = NULL`,
+        ).run(enqueteId, jogadorId, textoOpcaoConfirmada(), papel);
+        marcarVotoManual(enqueteId, jogadorId);
+    }).immediate();
 
     redirectOk(res, req.body.voltarAtual === '1' ? '/jogo/atual' : '/jogos/' + enqueteId, `${jogador.nome} confirmada manualmente!`);
 });
@@ -517,7 +521,10 @@ app.post('/jogos/:id/confirmar/:jogadorId/remover', requireLogin, (req, res) => 
     const enqueteId = Number(req.params.id);
     const jogadorId = Number(req.params.jogadorId);
 
-    db.prepare('DELETE FROM votos WHERE enquete_id = ? AND jogador_id = ?').run(enqueteId, jogadorId);
+    db.transaction(() => {
+        db.prepare('DELETE FROM votos WHERE enquete_id = ? AND jogador_id = ?').run(enqueteId, jogadorId);
+        marcarVotoManual(enqueteId, jogadorId);
+    }).immediate();
 
     redirectOk(res, req.body.voltarAtual === '1' ? '/jogo/atual?aba=' + (req.body.abaAtual === 'espera' ? 'espera' : 'presenca') : '/jogos/' + enqueteId, 'Confirmação removida.');
 });
@@ -744,6 +751,8 @@ app.get('/mensal/jogadoras/:id/historico', requireLogin, (req, res) => {
 // ---------- COMANDOS DO BOT (referência + whitelist de quem pode usar) ----------
 
 const COMANDOS_DO_BOT = [
+    { comando: '!confirmarlista', onde: 'Grupo configurado', descricao: 'Aplica a prévia da lista editada que você reenviou. Corrige presenças sem alterar mensalistas ou pagamentos.' },
+    { comando: '!cancelarlista', onde: 'Grupo configurado', descricao: 'Descarta sua correção de lista pendente.' },
     { comando: '!mensal', onde: 'Grupo ou DM', descricao: 'Mostra renovações, pendências, desistências, novas aprovadas e fila do mensal por ordem de reação.' },
     { comando: '!enquete', onde: 'Grupo', descricao: 'Abre uma nova enquete de confirmação pro jogo.' },
     { comando: '!sincronizar', onde: 'Grupo', descricao: 'Sincroniza o elenco com os membros atuais do grupo do WhatsApp.' },

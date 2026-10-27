@@ -6,6 +6,8 @@ const path = require('path');
 const { Client, LocalAuth, Poll } = require('whatsapp-web.js');
 const { createWorker } = require('tesseract.js');
 const qrcode = require('qrcode-terminal');
+const { criarSincronizadorWhatsApp } = require('./sincronizacao-whatsapp');
+const { ErroLista, pareceLista, prepararLista, confirmarLista, cancelarLista } = require('./listas-whatsapp');
 const {
   db,
   upsertJogador,
@@ -21,8 +23,7 @@ const {
   marcarMensagemSemanalEnviada,
   marcarPagamentoMensalista,
   marcarPagamentoAvulso,
-  getConviteFechamentoMensal,
-  criarCicloMensal, getCicloMensalAtual, expirarRenovacoesMensais, responderChamadaMensal, getResumoMensal,
+  criarCicloMensal, expirarRenovacoesMensais, getResumoMensal,
   getJogadorPorWhatsappId,
   podeUsarComandos,
   getConfirmadosDaEnquete,
@@ -69,15 +70,30 @@ client.on('qr', qr => {
   qrcode.generate(qr, { small: true });
 });
 
+const sincronizadorWhatsApp = criarSincronizadorWhatsApp({
+  client,
+  resolverIdCanonico,
+  limitar: promise => comTimeoutDeSessao(promise, 30000, 'Leitura de votos e reações'),
+});
+let whatsappJaFicouPronto = false;
+client.on('disconnected', () => sincronizadorWhatsApp.desconectar());
+client.on('change_state', estado => {
+  if (estado !== 'CONNECTED') sincronizadorWhatsApp.desconectar();
+  else if (whatsappJaFicouPronto) sincronizadorWhatsApp.conectar();
+});
+
 // evita criar um segundo setInterval quando 'ready' dispara de novo depois de
 // um reiniciarSessaoWhatsapp() (destroy + initialize reautentica e reemite 'ready')
 let intervaloIniciado = false;
 
 client.on('ready', async () => {
   console.log('Bot pronto! 🤖');
+  whatsappJaFicouPronto = true;
   if (!intervaloIniciado) {
     intervaloIniciado = true;
     setInterval(() => {
+      // A leitura não atrasa os agendamentos; a expiração espera a recuperação abaixo.
+      sincronizadorWhatsApp.sincronizar();
       checarEnvioAutomaticoDeEnquete();
       checarEnvioManualDeEnqueteViaPainel();
       checarMensagensAgendadas();
@@ -90,6 +106,7 @@ client.on('ready', async () => {
       checarConvitesFechamentoMensalExpirados();
     }, 60 * 1000);
   }
+  await sincronizadorWhatsApp.conectar();
   await sincronizarGruposConhecidos();
 });
 
@@ -461,33 +478,12 @@ async function checarFechamentoMensal() {
 
 // O prazo é congelado por ciclo. Só respostas da chamada mais recente são aceitas.
 async function checarConvitesFechamentoMensalExpirados() {
+  await sincronizadorWhatsApp.sincronizar();
   expirarRenovacoesMensais();
 }
 
-// Processa na ordem de chegada: resolver identidades envolve awaits e não pode inverter a fila.
-let filaReacoesMensais = Promise.resolve();
-client.on('message_reaction', (reaction) => {
-  filaReacoesMensais = filaReacoesMensais.then(async () => {
-  try {
-    // Retirar a reação ou trocar por outro emoji cancela uma manifestação anterior.
-    const resposta = reaction.reaction === '👍' ? 'sim' : 'nao';
-    const messageId = getIdSerialized(reaction.msgId);
-    const ciclo = getCicloMensalAtual();
-    if (!messageId || !ciclo || ciclo.message_id !== messageId) return;
-    const idCanonico = await resolverIdCanonico(reaction.senderId);
-    const jogador = getJogadorPorWhatsappId(idCanonico);
-    if (!jogador) return;
-    if (reaction.reaction !== '👍' && reaction.reaction !== '👎') {
-      const convite = getConviteFechamentoMensal(messageId, jogador.id);
-      if (!convite || convite.resposta !== 'sim') return;
-    }
-    responderChamadaMensal(messageId, jogador.id, resposta);
-  } catch (err) {
-    console.error('Erro ao processar reação de fechamento do mensal:', err);
-  }
-  });
-  return filaReacoesMensais;
-});
+// Eventos ao vivo e recuperação usam a mesma fila e os mesmos controles de repetição.
+client.on('message_reaction', reacao => sincronizadorWhatsApp.receberReacao(reacao));
 
 // 🧾 COMPROVANTE DE PAGAMENTO — OCR local (tesseract.js, roda em WASM, sem shell out)
 // lazy + reaproveitado entre chamadas, pra não recarregar o modelo a cada imagem
@@ -881,10 +877,40 @@ async function checarEnquetesParaDesafixar() {
   }
 }
 
+async function tratarListaEditada(msg, text) {
+  const comando = text === '!confirmarlista' || text === '!cancelarlista';
+  if (!comando && !pareceLista(msg.body)) return false;
+  if (msg.fromMe || msg.isStatus) return false;
+  if (!(await remetenteAutorizado(msg))) {
+    if (comando) await negarComando(msg);
+    return comando;
+  }
+  if (msg.from !== getConfig('enquete_grupo_id') || !msg.from.endsWith('@g.us')) {
+    if (comando) await msg.reply('Use este comando no grupo configurado para o jogo.');
+    return comando;
+  }
+  try {
+    await sincronizadorWhatsApp.sincronizar();
+    const autor = await resolverIdCanonico(getUserId(msg));
+    const args = { grupo: msg.from, autor };
+    let resposta;
+    if (text === '!confirmarlista') resposta = confirmarLista(args);
+    else if (text === '!cancelarlista') resposta = cancelarLista(args);
+    else resposta = prepararLista({ ...args, texto: msg.body, messageId: getIdSerialized(msg.id) });
+    if (resposta) await msg.reply(resposta);
+  } catch (erro) {
+    const resposta = erro instanceof ErroLista ? erro.message : 'Não consegui concluir a solicitação. Confira com !lista antes de tentar novamente.';
+    if (!(erro instanceof ErroLista)) registrarLog('lista', 'erro', 'Falha no processamento ou resposta da correção de lista pelo WhatsApp.');
+    await msg.reply(resposta).catch(() => registrarLog('lista', 'erro', 'Não foi possível enviar a resposta da correção de lista.'));
+  }
+  return true;
+}
+
 client.on('message', async msg => {
   console.log('msg from:', msg.from);
 
   const text = msg.body.toLowerCase().trim();
+  if (await tratarListaEditada(msg, text)) return;
 
   if (msg.from.endsWith('@g.us') && text === '!enquete') {
     if (!(await remetenteAutorizado(msg))) return negarComando(msg);
@@ -899,29 +925,34 @@ client.on('message', async msg => {
   // funciona em grupo OU em DM direto com o bot
   if (text === '!fechar') {
     if (!(await remetenteAutorizado(msg))) return negarComando(msg);
+    await sincronizadorWhatsApp.sincronizar();
     return enviarListaDeConfirmadas(msg);
   }
 
   // funciona em grupo OU em DM direto com o bot
   if (text === '!mensal') {
     if (!(await remetenteAutorizado(msg))) return negarComando(msg);
+    await sincronizadorWhatsApp.sincronizar();
     return msg.reply(montarTextoMensal(getResumoMensal()));
   }
 
   if (text === '!lista') {
     if (!(await remetenteAutorizado(msg))) return negarComando(msg);
+    await sincronizadorWhatsApp.sincronizar();
     return enviarListaAtual(msg);
   }
 
   // funciona em grupo OU em DM direto com o bot
   if (text === '!espera') {
     if (!(await remetenteAutorizado(msg))) return negarComando(msg);
+    await sincronizadorWhatsApp.sincronizar();
     return enviarListaDeEspera(msg);
   }
 
   // funciona em grupo OU em DM direto com o bot
   if (text === '!times') {
     if (!(await remetenteAutorizado(msg))) return negarComando(msg);
+    await sincronizadorWhatsApp.sincronizar();
     return enviarTimesSorteados(msg);
   }
 
@@ -943,71 +974,7 @@ client.on('message', async msg => {
 });
 
 // 🗳️ CAPTURA VOTO DA ENQUETE NATIVA
-client.on('vote_update', async vote => {
-  try {
-    // WhatsApp renomeou a chave interna _serialized para $1; aceita os dois formatos
-    const msgId =
-      vote.parentMessage?.id?._serialized ||
-      vote.parentMessage?.id?.$1 ||
-      vote.parentMsgKey?._serialized ||
-      vote.parentMsgKey?.$1;
-    if (!msgId) return;
-
-    const enquete = db
-      .prepare('SELECT * FROM enquetes WHERE message_id = ?')
-      .get(msgId);
-    if (!enquete) return; // enquete de outra origem, ignora
-
-    const idCanonico = await resolverIdCanonico(vote.voter);
-
-    if (enquete.fechada_em) {
-      console.log(`🔒 Voto ignorado — enquete #${enquete.id} já está com a lista fechada`);
-      return;
-    }
-
-    const contact = await client.getContactById(idCanonico);
-    const nome = contact.pushname || contact.name || 'Jogador';
-    // autofill de telefone: só se o id já é baseado em telefone (@c.us).
-    // se continuar @lid (não foi possível resolver), contact.number NÃO é o telefone real
-    const telefone = idCanonico.endsWith('@lid') ? null : (contact.number || null);
-
-    if (vote.selectedOptions.length === 0) {
-      const jogador = db
-        .prepare('SELECT id FROM jogadores WHERE whatsapp_id = ?')
-        .get(idCanonico);
-      if (jogador) {
-        db.prepare(
-          'DELETE FROM votos WHERE enquete_id = ? AND jogador_id = ?'
-        ).run(enquete.id, jogador.id);
-      }
-      console.log(`🗳️ ${nome} removeu o voto`);
-      return;
-    }
-
-    const opcaoTexto = vote.selectedOptions.map(o => o.name).join(', ');
-    const opcaoConfig = getEnqueteOpcoes().find(o => o.texto === opcaoTexto);
-    const contaComoConfirmado = !!(opcaoConfig && opcaoConfig.conta);
-
-    // papel da confirmação segue sempre o cadastro da jogadora (lista de mensalistas em
-    // /elenco) — não é mais decidido pela opção da enquete escolhida no voto
-    const jogadorId = upsertJogador(idCanonico, nome, null, telefone);
-    const jogadorCadastrado = db.prepare('SELECT papel FROM jogadores WHERE id = ?').get(jogadorId);
-    const papel = contaComoConfirmado ? jogadorCadastrado.papel : null;
-
-    db.prepare(`
-      INSERT INTO votos (enquete_id, jogador_id, opcao, papel)
-      VALUES (?, ?, ?, ?)
-      ON CONFLICT(enquete_id, jogador_id) DO UPDATE SET
-        opcao = excluded.opcao,
-        papel = excluded.papel,
-        votado_em = datetime('now')
-    `).run(enquete.id, jogadorId, opcaoTexto, papel);
-
-    console.log(`🗳️ ${nome} votou: ${opcaoTexto}`);
-  } catch (err) {
-    console.error('Erro ao processar voto:', err);
-  }
-});
+client.on('vote_update', voto => sincronizadorWhatsApp.receberVoto(voto));
 
 // 👤 helper: cria/atualiza jogador a partir de um whatsapp id (bruto, @lid ou @c.us),
 // resolvendo pro id canônico e com autofill de telefone
