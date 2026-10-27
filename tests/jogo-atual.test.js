@@ -108,7 +108,24 @@ async function main() {
         assert.match(decodeURIComponent(resposta.headers.get('location')), /nova enquete/);
         resposta = await post('/confirmados/enviar-lista', { _csrf: 'invalido', enqueteId: String(proximo) });
         assert.equal(resposta.status, 403);
-        console.log('OK: início vazio, vagas e espera, pagamentos, abas, atalhos antigos, confirmação manual, proteção contra enquete desatualizada e CSRF.');
+        const avaliar = dados.db.prepare('INSERT INTO avaliacoes (enquete_id, jogador_id, avaliador_id, nota) VALUES (?, ?, ?, ?)');
+        avaliar.run(jogo, ana, bia, 4);
+        avaliar.run(jogo, ana, clara, 2);
+        avaliar.run(jogo, bia, ana, 5);
+        avaliar.run(proximo, ana, bia, 1);
+        const detalhe = await html(`/jogos/${jogo}`);
+        assert.match(detalhe, /Jogadoras com vaga \(2\)/);
+        assert.match(detalhe, /Lista de espera \(1\)/);
+        assert(!detalhe.includes('name="voltarAtual"'));
+        const notas = await html(`/jogos/${jogo}?aba=avaliacoes`);
+        assert.match(notas, /3 notas de 3 avaliadoras/);
+        assert.match(notas, /<strong>3,0<\/strong> \/ 5/);
+        assert.match(notas, /<strong>5,0<\/strong> \/ 5/);
+        assert(notas.includes(`/votacao/${jogo}`));
+        assert.match(await html(`/jogos/${proximo}?aba=avaliacoes`), /<strong>1,0<\/strong> \/ 5/);
+        const historico = await html('/jogos');
+        assert.match(historico, /2 com vaga · 1 na espera · 3 notas/);
+        console.log('OK: início, vagas/espera, abas, histórico, médias por jogo, confirmações, proteção contra enquete desatualizada e CSRF.');
     } finally {
         if (dados?.db.open) dados.db.close();
         if (servidor && servidor.exitCode === null) {

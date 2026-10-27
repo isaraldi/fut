@@ -1,38 +1,32 @@
 <div class="page-header">
-    <div>
-        <h1>Histórico de jogos</h1>
-        <p><%= jogos.length %> jogo<%= jogos.length === 1 ? '' : 's' %> registrado<%= jogos.length === 1 ? '' : 's' %></p>
-    </div>
+    <div><h1>Histórico de jogos</h1><p><%= jogos.length %> jogo<%= jogos.length === 1 ? '' : 's' %> registrado<%= jogos.length === 1 ? '' : 's' %>, do mais recente ao mais antigo.</p></div>
+    <a class="button-link secondary" href="/jogo/atual">Jogo atual</a>
 </div>
-
 <div class="card">
-    <% if (jogos.length === 0) { %>
-        <p class="empty">Nenhuma enquete registrada ainda. Mande <code>!enquete</code> no grupo do WhatsApp.</p>
+    <% if (!jogos.length) { %>
+        <p class="empty">Nenhum jogo registrado. Envie uma enquete para começar.</p>
+        <a class="button-link" href="/enquete/config">Preparar enquete</a>
     <% } else { %>
-        <table>
-            <thead>
-                <tr><th>Jogo</th><th>Criada em</th><th>Confirmados</th><th>Respostas</th><th></th></tr>
-            </thead>
-            <tbody>
-                <% jogos.forEach(j => { %>
-                    <tr>
-                        <td><%= j.titulo %></td>
-                        <td><%= formatarDataHora(j.criada_em) %></td>
-                        <td><%= j.confirmados %></td>
-                        <td><%= j.total_respostas %></td>
-                        <td style="white-space:nowrap">
-                            <a href="/jogos/<%= j.id %>" class="icon-btn secondary" title="Ver detalhe" aria-label="Ver detalhe de <%= j.titulo %>">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
-                            </a>
-                            <form method="post" action="/jogos/<%= j.id %>/excluir" style="display:inline" data-confirm="Excluir {nome}? Isso apaga as confirmações e avaliações desse jogo." data-confirm-nome="<%= j.titulo %>"><input type="hidden" name="_csrf" value="<%= csrfToken %>">
-                                <button class="icon-btn danger" type="submit" title="Excluir" aria-label="Excluir <%= j.titulo %>">
-                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
-                                </button>
-                            </form>
-                        </td>
-                    </tr>
-                <% }) %>
-            </tbody>
-        </table>
+        <div class="form-row">
+            <div><label for="historico-busca">Buscar jogo</label><input type="text" id="historico-busca" placeholder="Título ou data da enquete" autocomplete="off"></div>
+            <div><label for="historico-status">Situação da enquete</label><select id="historico-status"><option value="todas">Todas</option><option value="aberta">Enquete aberta</option><option value="fechada">Lista fechada</option></select></div>
+        </div>
+        <p class="hint" role="status" data-historico-resultado><%= jogos.length %> jogo<%= jogos.length === 1 ? '' : 's' %></p>
+        <ul class="historico-lista">
+            <% jogos.forEach(j => { %>
+                <li data-historico-jogo data-situacao="<%= j.fechada_em ? 'fechada' : 'aberta' %>">
+                    <a class="historico-jogo" href="/jogos/<%= j.id %>">
+                        <div><strong><%= j.titulo %></strong><span class="hint">Enquete enviada em <%= formatarDataHora(j.criada_em) %></span></div>
+                        <div class="historico-jogo-resumo">
+                            <span class="badge <%= j.fechada_em ? 'pendente' : 'pago' %>"><%= j.fechada_em ? 'Lista fechada' : 'Enquete aberta' %></span>
+                            <span><%= j.confirmados %> com vaga · <%= j.espera %> na espera · <%= j.total_avaliacoes %> nota<%= j.total_avaliacoes === 1 ? '' : 's' %></span>
+                        </div>
+                        <span class="historico-ver">Ver jogo →</span>
+                    </a>
+                </li>
+            <% }) %>
+        </ul>
+        <p class="empty" data-historico-vazio hidden>Nenhum jogo encontrado. Altere a busca ou a situação.</p>
     <% } %>
 </div>
+<script src="/historico.js" defer></script>

@@ -445,34 +445,34 @@ app.get('/', requireLogin, (req, res) => {
 // ---------- HISTÓRICO DE JOGOS ----------
 
 app.get('/jogos', requireLogin, (req, res) => {
-    const jogos = db
-        .prepare(
-            `SELECT e.*,
-                    (SELECT COUNT(*) FROM votos v WHERE v.enquete_id = e.id AND v.papel IS NOT NULL) AS confirmados,
-                    (SELECT COUNT(*) FROM votos v WHERE v.enquete_id = e.id) AS total_respostas
-             FROM enquetes e
-             ORDER BY e.id DESC`,
-        )
-        .all();
-
+    const jogos = db.prepare(`SELECT e.*,
+        (SELECT COUNT(*) FROM votos v WHERE v.enquete_id = e.id AND v.papel IS NOT NULL) AS confirmacoes,
+        (SELECT COUNT(*) FROM votos v WHERE v.enquete_id = e.id) AS total_respostas,
+        (SELECT COUNT(*) FROM avaliacoes a WHERE a.enquete_id = e.id) AS total_avaliacoes
+        FROM enquetes e ORDER BY e.id DESC`).all().map(jogo => {
+        const confirmados = jogo.vagas_maximo ? Math.min(jogo.confirmacoes, jogo.vagas_maximo) : jogo.confirmacoes;
+        return { ...jogo, confirmados, espera: jogo.confirmacoes - confirmados };
+    });
     res.render('jogos', { usuario: req.session.usuario, jogos });
 });
 
 app.get('/jogos/:id', requireLogin, (req, res) => {
-    const enquete = db
-        .prepare('SELECT * FROM enquetes WHERE id = ?')
-        .get(Number(req.params.id));
+    const enquete = db.prepare('SELECT * FROM enquetes WHERE id = ?').get(Number(req.params.id));
     if (!enquete) return res.redirect('/jogos');
-
     const { votos, grupos } = carregarVotosAgrupados(enquete.id);
     const jogadores = db.prepare('SELECT id, nome, papel FROM jogadores ORDER BY nome ASC').all();
-
+    const confirmados = getConfirmadosDaEnquete(enquete.id);
+    const listaDeEspera = getListaDeEsperaDaEnquete(enquete.id);
+    const avaliacoes = db.prepare(`SELECT j.id, j.nome, COUNT(*) AS quantidade, AVG(a.nota) AS media
+        FROM avaliacoes a JOIN jogadores j ON j.id = a.jogador_id
+        WHERE a.enquete_id = ? GROUP BY j.id ORDER BY j.nome COLLATE NOCASE`).all(enquete.id);
+    const resumoAvaliacoes = db.prepare(`SELECT COUNT(*) AS notas, COUNT(DISTINCT avaliador_id) AS avaliadoras
+        FROM avaliacoes WHERE enquete_id = ?`).get(enquete.id);
     res.render('jogo-detalhe', {
-        usuario: req.session.usuario,
-        enquete,
-        grupos,
-        totalVotos: votos.length,
-        jogadores,
+        usuario: req.session.usuario, enquete, grupos, jogadores, confirmados, listaDeEspera,
+        totalVotos: votos.length, avaliacoes, resumoAvaliacoes,
+        aba: req.query.aba === 'avaliacoes' ? 'avaliacoes' : 'participacao',
+        jogoAtual: db.prepare('SELECT id FROM enquetes ORDER BY id DESC LIMIT 1').get().id === enquete.id,
         ok: req.query.ok,
     });
 });

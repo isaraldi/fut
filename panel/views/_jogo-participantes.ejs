@@ -12,7 +12,7 @@
                         <td class="jogo-row-action">
                             <form method="post" action="/jogos/<%= enquete.id %>/confirmar/<%= j.id %>/remover" data-confirm="Remover a presença de {nome}?" data-confirm-nome="<%= j.nome %>">
                                 <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-                                <input type="hidden" name="voltarAtual" value="1">
+                                <% if (typeof historico === 'undefined' || !historico) { %><input type="hidden" name="voltarAtual" value="1"><% } %>
                                 <input type="hidden" name="abaAtual" value="<%= aba %>">
                                 <button type="submit" class="secondary">Remover</button>
                             </form>

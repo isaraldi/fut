@@ -802,3 +802,18 @@ code {
 .time-vazio[hidden] { display: none; }
 .times-enviar .hint { margin-top: 0; }
 .times-enviar-acoes { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px; }
+
+/* Histórico: consulta de registros e avaliação por jogo. */
+.historico-lista { list-style: none; margin: 0; padding: 0; }
+.historico-lista li + li { border-top: 1px solid var(--border); }
+.historico-jogo { display: flex; align-items: center; flex-wrap: wrap; justify-content: space-between; gap: 16px; padding: 20px 4px; text-decoration: none; color: var(--text); }
+.historico-jogo:hover { background: var(--bg); }
+.historico-jogo > div:first-child { flex: 1 1 240px; min-width: 0; overflow-wrap: anywhere; }
+.historico-jogo .hint { display: block; margin-bottom: 0; }
+.historico-jogo-resumo { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; font-size: 0.82rem; color: var(--muted); }
+.historico-ver { font-size: 0.85rem; color: var(--primary); font-weight: 600; }
+.historico-link-avaliacao { display: flex; align-items: flex-start; flex-wrap: wrap; gap: 10px; }
+.historico-link-avaliacao input { flex: 1 1 240px; min-width: 0; margin-bottom: 0; }
+.historico-excluir { margin-top: 32px; }
+.historico-excluir summary { color: var(--critical); }
+.historico-excluir button { margin-top: 12px; }

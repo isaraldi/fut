@@ -1,33 +1,87 @@
 <div class="page-header">
     <div>
+        <p><a href="/jogos">← Histórico de jogos</a></p>
         <h1><%= enquete.titulo %></h1>
-        <p><a href="/jogos">&larr; Voltar pro histórico de jogos</a></p>
+        <p>Enquete enviada em <%= formatarDataHora(enquete.criada_em) %>.</p>
     </div>
-    <form method="post" action="/jogos/<%= enquete.id %>/excluir" data-confirm="Excluir {nome}? Isso apaga as confirmações e avaliações desse jogo." data-confirm-nome="<%= enquete.titulo %>"><input type="hidden" name="_csrf" value="<%= csrfToken %>">
-        <button class="danger btn-icon-label" type="submit">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
-            Excluir jogo
-        </button>
+    <% if (jogoAtual) { %><a class="button-link secondary" href="/jogo/atual">Acompanhar jogo atual</a><% } %>
+</div>
+
+<div class="card jogo-resumo">
+    <div>
+        <span class="badge <%= enquete.fechada_em ? 'pendente' : 'pago' %>"><%= enquete.fechada_em ? 'Lista fechada' : 'Enquete aberta' %></span>
+        <% if (enquete.fechada_em) { %><p class="hint">Fechada em <%= formatarDataHora(enquete.fechada_em) %>.</p><% } %>
+        <p class="hint">Registros da enquete; confirmação não comprova presença no dia.</p>
+    </div>
+    <div class="jogo-numeros">
+        <span><strong><%= confirmados.length %><%= enquete.vagas_maximo ? '/' + enquete.vagas_maximo : '' %></strong> com vaga</span>
+        <span><strong><%= listaDeEspera.length %></strong> na espera</span>
+        <span><strong><%= totalVotos %></strong> respostas</span>
+        <span><strong><%= resumoAvaliacoes.notas %></strong> notas recebidas</span>
+    </div>
+</div>
+
+<nav class="jogo-abas" aria-label="Seções do histórico do jogo">
+    <a href="/jogos/<%= enquete.id %>" <%- aba === 'participacao' ? 'aria-current="page"' : '' %>>Participação</a>
+    <a href="/jogos/<%= enquete.id %>?aba=avaliacoes" <%- aba === 'avaliacoes' ? 'aria-current="page"' : '' %>>Avaliações <span><%= resumoAvaliacoes.notas %></span></a>
+</nav>
+
+<% if (aba === 'participacao') { %>
+    <div class="card">
+        <h2>Jogadoras com vaga (<%= confirmados.length %>)</h2>
+        <%- include('_jogo-participantes', { participantes: confirmados, historico: true, mensagemVazia: 'Nenhuma confirmação com vaga neste jogo.' }) %>
+    </div>
+    <% if (listaDeEspera.length) { %>
+        <div class="card">
+            <h2>Lista de espera (<%= listaDeEspera.length %>)</h2>
+            <%- include('_jogo-participantes', { participantes: listaDeEspera, historico: true, mensagemVazia: 'Nenhuma jogadora na espera.' }) %>
+        </div>
+    <% } %>
+    <details class="form-help">
+        <summary>Ver todas as respostas (<%= totalVotos %>)</summary>
+        <%- include('_votos-por-opcao', { grupos, enqueteId: enquete.id }) %>
+    </details>
+    <details class="form-help">
+        <summary>Corrigir presença manualmente</summary>
+        <p class="hint">Alterações nas confirmações podem mudar a lista de vagas e quem aparece na avaliação.</p>
+        <%- include('_confirmar-manual', { enquete, jogadores }) %>
+    </details>
+<% } else { %>
+    <div class="card">
+        <h2>Compartilhar avaliação</h2>
+        <p class="hint">Após o jogo, compartilhe o link para as jogadoras darem notas de 1 a 5. Não exige login.</p>
+        <label for="link-votacao">Link público de avaliação</label>
+        <div class="historico-link-avaliacao">
+            <input type="text" id="link-votacao" data-caminho="/votacao/<%= enquete.id %>" value="/votacao/<%= enquete.id %>" readonly>
+            <button type="button" data-copiar-avaliacao>Copiar link</button>
+            <a class="button-link secondary" href="/votacao/<%= enquete.id %>" target="_blank" rel="noopener">Abrir avaliação</a>
+        </div>
+        <p class="hint" role="status" data-copiar-status></p>
+    </div>
+    <div class="card">
+        <h2>Notas deste jogo</h2>
+        <% if (!avaliacoes.length) { %>
+            <p class="empty">Nenhuma avaliação recebida. Compartilhe o link acima para começar.</p>
+        <% } else { %>
+            <p class="hint"><%= resumoAvaliacoes.notas %> nota<%= resumoAvaliacoes.notas === 1 ? '' : 's' %> de <%= resumoAvaliacoes.avaliadoras %> avaliadora<%= resumoAvaliacoes.avaliadoras === 1 ? '' : 's' %>. As médias abaixo são apenas deste jogo.</p>
+            <div class="table-scroll"><table>
+                <thead><tr><th>Jogadora</th><th>Média neste jogo</th><th>Notas recebidas</th></tr></thead>
+                <tbody>
+                    <% avaliacoes.forEach(j => { %>
+                        <tr><td><%= j.nome %></td><td><strong><%= Number(j.media).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) %></strong> / 5</td><td><%= j.quantidade %></td></tr>
+                    <% }) %>
+                </tbody>
+            </table></div>
+        <% } %>
+    </div>
+<% } %>
+
+<details class="form-help historico-excluir">
+    <summary>Excluir este jogo</summary>
+    <p class="hint">Remove o jogo, confirmações, avaliações e pagamentos avulsos vinculados. Esta ação não pode ser desfeita.</p>
+    <form method="post" action="/jogos/<%= enquete.id %>/excluir" data-confirm="Excluir {nome}? Confirmações, avaliações e pagamentos avulsos vinculados serão apagados." data-confirm-nome="<%= enquete.titulo %>">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <button class="danger" type="submit">Excluir jogo</button>
     </form>
-</div>
-
-<div class="card">
-    <h2><%= totalVotos %> resposta<%= totalVotos === 1 ? '' : 's' %> &middot; criada em <%= formatarDataHora(enquete.criada_em) %></h2>
-</div>
-
-<div class="card">
-    <h1>Avaliação pós-jogo</h1>
-    <p class="hint">Compartilhe esse link no grupo depois do jogo pra galera dar nota de 1 a 5 pra cada jogadora que jogou. Não precisa de login.</p>
-    <input type="text" id="link-votacao" value="/votacao/<%= enquete.id %>" readonly onclick="this.select()">
-</div>
-
-<%- include('_confirmar-manual', { enquete, jogadores }) %>
-
-<%- include('_votos-por-opcao', { grupos, enqueteId: enquete.id }) %>
-
-<script>
-    (function () {
-        var input = document.getElementById('link-votacao');
-        if (input) input.value = window.location.origin + '/votacao/<%= enquete.id %>';
-    })();
-</script>
+</details>
+<script src="/historico.js" defer></script>
