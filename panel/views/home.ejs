@@ -1,79 +1,71 @@
 <div class="page-header">
     <div>
-        <h1>Visão geral</h1>
-        <p>Resumo do time — <%= mes %></p>
+        <h1>Início</h1>
+        <p>O jogo em acompanhamento e o que precisa da sua atenção.</p>
     </div>
 </div>
 
-<div class="stat-grid">
-    <div class="stat-tile accent-primary">
-        <div class="stat-label">Próximo jogo</div>
-        <% if (proximoJogo) { %>
-            <div class="stat-value" style="font-size:1.15rem"><%= proximoJogo.titulo %></div>
-            <div class="stat-sub"><%= confirmadosProximoJogo %> confirmado<%= confirmadosProximoJogo === 1 ? '' : 's' %></div>
+<div class="card inicio-jogo">
+    <div>
+        <p class="section-eyebrow">Jogo atual</p>
+        <% if (jogoAtual) { %>
+            <h2><%= jogoAtual.titulo %></h2>
+            <p class="hint">Última enquete enviada em <%= formatarDataHora(jogoAtual.criada_em) %>.</p>
+            <div class="inicio-jogo-status">
+                <span class="badge <%= jogoAtual.fechada_em ? 'pendente' : 'pago' %>"><%= jogoAtual.fechada_em ? 'Lista fechada' : 'Recebendo respostas' %></span>
+                <span><strong><%= confirmados %><%= jogoAtual.vagas_maximo ? '/' + jogoAtual.vagas_maximo : '' %></strong> com vaga · <strong><%= espera %></strong> na espera</span>
+            </div>
         <% } else { %>
-            <div class="stat-value" style="font-size:1rem;color:var(--muted)">Nenhum ainda</div>
-            <div class="stat-sub">Mande <code>!enquete</code> no grupo</div>
+            <h2>Nenhuma enquete enviada</h2>
+            <p class="hint">Prepare a enquete para começar a organizar o jogo.</p>
         <% } %>
     </div>
-
-    <div class="stat-tile accent-blue">
-        <div class="stat-label">Jogadores</div>
-        <div class="stat-value"><%= totalJogadores %></div>
-        <div class="stat-sub"><%= totalMensalistas %> mensalistas &middot; <%= totalAvulsos %> avulsos</div>
-    </div>
-
-    <div class="stat-tile <%= pendentes > 0 ? 'accent-critical' : 'accent-good' %>">
-        <div class="stat-label">Pagamentos do mês</div>
-        <div class="stat-value"><%= pagamentosMes.pagos %>/<%= pagamentosMes.devem %></div>
-        <div class="stat-sub"><%= pendentes %> pendente<%= pendentes === 1 ? '' : 's' %> (mensalistas)</div>
-    </div>
-
-    <div class="stat-tile accent-good">
-        <div class="stat-label">Jogos registrados</div>
-        <div class="stat-value"><%= ultimosJogos.length > 0 ? ultimosJogos.length : 0 %><%= ultimosJogos.length === 5 ? '+' : '' %></div>
-        <div class="stat-sub"><a href="/jogos">ver histórico completo →</a></div>
+    <div class="inicio-jogo-acoes">
+        <% if (jogoAtual) { %>
+            <a class="button-link" href="/jogo/atual">Acompanhar jogo</a>
+            <a class="button-link secondary" href="/jogo/atual?aba=times">Montar times</a>
+        <% } else { %>
+            <a class="button-link" href="/enquete/config">Preparar enquete</a>
+        <% } %>
     </div>
 </div>
 
-<div class="card">
-    <h1>Últimos jogos</h1>
-    <% if (ultimosJogos.length === 0) { %>
-        <p class="empty">Nenhuma enquete registrada ainda. Mande <code>!enquete</code> no grupo do WhatsApp.</p>
-    <% } else { %>
-        <table>
-            <thead>
-                <tr><th>Jogo</th><th>Criado em</th><th>Confirmados</th><th></th></tr>
-            </thead>
-            <tbody>
+<section aria-labelledby="inicio-pendencias">
+    <div class="page-header"><div><h2 id="inicio-pendencias">Precisa de atenção</h2><p>Pagamentos do ciclo <%= mes %> e andamento do mensal.</p></div></div>
+    <div class="inicio-pendencias">
+        <% [
+            [pendentes, 'Mensalidades pendentes', pagamentosMes.pagos + ' de ' + pagamentosMes.devem + ' mensalistas com pagamento registrado.', '/pagamentos/mensalistas?mes=' + mes],
+            [avulsasPendentes, 'Avulsas com pagamento pendente', 'Jogadoras com vaga na última enquete.', '/pagamentos/avulsos'],
+            [renovacoesPendentes, 'Renovações sem resposta', 'Acompanhe o prazo de prioridade do mensal.', '/mensal'],
+            [filaMensal, 'Interessadas na fila do mensal', renovacoesPendentes ? 'Resolva as renovações antes de aprovar entradas.' : 'Confira as vagas antes de aprovar entradas.', '/mensal']
+        ].forEach(([quantidade, titulo, descricao, destino]) => { %>
+            <a class="card inicio-pendencia" href="<%= destino %>">
+                <span class="inicio-pendencia-numero <%= quantidade ? 'com-pendencia' : '' %>"><%= quantidade %></span>
+                <div><h3><%= titulo %></h3><p class="hint"><%= descricao %></p></div>
+                <span aria-hidden="true">→</span>
+            </a>
+        <% }) %>
+    </div>
+</section>
+
+<div class="inicio-secundario">
+    <section class="card">
+        <div class="page-header"><h2>Jogos recentes</h2><a href="/jogos">Ver histórico</a></div>
+        <% if (!ultimosJogos.length) { %>
+            <p class="empty">Os jogos aparecerão aqui após o envio da primeira enquete.</p>
+        <% } else { %>
+            <ul class="inicio-jogos">
                 <% ultimosJogos.forEach(j => { %>
-                    <tr>
-                        <td><%= j.titulo %></td>
-                        <td><%= formatarDataHora(j.criada_em) %></td>
-                        <td><%= j.confirmados %></td>
-                        <td>
-                            <a href="/jogos/<%= j.id %>" class="icon-btn secondary" title="Ver detalhe" aria-label="Ver detalhe de <%= j.titulo %>">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
-                            </a>
-                        </td>
-                    </tr>
+                    <li><a href="/jogos/<%= j.id %>"><strong><%= j.titulo %></strong><span><%= j.confirmados %> com vaga · <%= formatarDataHora(j.criada_em) %></span></a></li>
                 <% }) %>
-            </tbody>
-        </table>
-    <% } %>
-</div>
-
-<div class="stat-grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr))">
-    <a class="card" style="text-decoration:none;display:block" href="/times">
-        <h1>⚽ Sortear times</h1>
-        <p class="hint" style="margin-bottom:0">Monta os times balanceados por nível para o próximo jogo.</p>
-    </a>
-    <a class="card" style="text-decoration:none;display:block" href="/pagamentos/mensalistas">
-        <h1>💰 Ver pagamentos</h1>
-        <p class="hint" style="margin-bottom:0">Marcar quem já pagou a mensalidade do mês.</p>
-    </a>
-    <a class="card" style="text-decoration:none;display:block" href="/elenco">
-        <h1>👥 Gerenciar jogadores</h1>
-        <p class="hint" style="margin-bottom:0">Adicionar, editar nível/papel ou remover jogadores.</p>
-    </a>
+            </ul>
+        <% } %>
+    </section>
+    <section class="card">
+        <h2>Jogadoras</h2>
+        <p class="inicio-total"><%= jogadoras.total %> <span>ativas</span></p>
+        <p class="hint"><%= jogadoras.mensalistas %> mensalistas · <%= jogadoras.total - jogadoras.mensalistas %> avulsas</p>
+        <a class="button-link secondary" href="/elenco">Gerenciar jogadoras</a>
+        <p class="hint inicio-link-comunicacao"><a href="/mensagens">Envios e agendamentos →</a></p>
+    </section>
 </div>

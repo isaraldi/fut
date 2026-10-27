@@ -18,12 +18,11 @@
             <span class="icon">🏠</span> Início
         </a>
 
-        <details class="nav-group" <%= grupoAberto(['/confirmados', '/jogos', '/times']) ? 'open' : '' %>>
+        <details class="nav-group" <%= grupoAberto(['/confirmados', '/jogos', '/times', '/jogo/atual']) ? 'open' : '' %>>
             <summary><span class="icon">⚽</span> Jogos <span class="chevron">▸</span></summary>
             <div class="nav-sub">
-                <a class="nav-link <%= ativo('/confirmados') ? 'active' : '' %>" href="/confirmados">Presença e espera</a>
+                <a class="nav-link <%= ativo('/jogo/atual') ? 'active' : '' %>" href="/jogo/atual">Jogo atual</a>
                 <a class="nav-link <%= caminho.startsWith('/jogos') ? 'active' : '' %>" href="/jogos">Histórico</a>
-                <a class="nav-link <%= ativo('/times') ? 'active' : '' %>" href="/times">Times</a>
             </div>
         </details>
 

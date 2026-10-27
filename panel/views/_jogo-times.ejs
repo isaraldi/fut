@@ -1,0 +1,60 @@
+<% if (!enquete) { %>
+    <div class="card"><p class="empty">Envie uma enquete para organizar os times.</p></div>
+<% } else if (!plano && confirmados.length < 2) { %>
+    <div class="card"><h2>Sorteio dos times</h2><p class="empty">É preciso ter pelo menos 2 jogadoras com vaga para montar os times.</p></div>
+<% } else { %>
+    <%
+        const nomesDestino = { A: 'Time A', B: 'Time B', ...(plano?.times.length === 3 ? { C: 'Time C' } : {}), reserva: 'Reserva', ausente: 'Faltou' };
+        const destinoDe = j => destinos[j.id] || 'reserva';
+    %>
+    <div class="times-toolbar">
+        <div>
+            <h2>Sorteio dos times</h2>
+            <p class="hint">Use “Mover” para trocar uma jogadora de time. As quantidades e somas de nível atualizam na hora.</p>
+            <% if (modoManual) { %><p class="hint">Modo manual: monte e envie por esta página. O comando <code>!times</code> fica desativado.</p><% } %>
+            <% if (!plano) { %><p class="hint">Há menos de 2 presentes. Mova quem voltou para um time ou refaça o sorteio após ajustar as faltas.</p><% } %>
+        </div>
+        <a href="/jogo/atual?aba=times" class="button-link secondary">Sortear de novo</a>
+    </div>
+    <form method="post" action="/times/enviar" data-times-form>
+        <input type="hidden" name="enqueteId" value="<%= enquete.id %>">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <div class="times-board">
+            <% Object.entries(nomesDestino).forEach(([destino, titulo]) => {
+                const jogadoras = confirmados.filter(j => destinoDe(j) === destino);
+                const time = ['A', 'B', 'C'].includes(destino);
+            %>
+                <section class="card time-card time-<%= destino %> <%= time ? '' : 'time-apoio' %>" data-time-card="<%= destino %>" aria-labelledby="time-titulo-<%= destino %>">
+                    <div class="time-card-header">
+                        <h3 id="time-titulo-<%= destino %>"><%= titulo %></h3>
+                        <span class="time-quantidade" data-time-count><%= jogadoras.length %> jogadora(s)</span>
+                    </div>
+                    <% if (time) { %><p class="hint time-nivel">Soma de nível: <strong data-time-soma><%= jogadoras.reduce((soma, j) => soma + Number(j.nivel), 0) %></strong></p><% } %>
+                    <ul class="time-jogadoras" data-time-lista>
+                        <% jogadoras.forEach(j => { %>
+                            <li class="time-jogadora" data-time-jogadora data-nivel="<%= j.nivel %>">
+                                <div class="time-jogadora-dados"><strong><%= j.nome %></strong><span><%= j.posicao === 'indefinida' ? 'Posição não informada' : j.posicao %> · Nível <%= j.nivel %></span></div>
+                                <details class="time-mover">
+                                    <summary aria-label="Mover <%= j.nome %>">Mover</summary>
+                                    <select aria-label="Time de <%= j.nome %>" name="dest_<%= j.id %>">
+                                        <% Object.entries(nomesDestino).forEach(([valor, nome]) => { %>
+                                            <option value="<%= valor %>" <%= destino === valor ? 'selected' : '' %>><%= nome %></option>
+                                        <% }) %>
+                                    </select>
+                                </details>
+                            </li>
+                        <% }) %>
+                    </ul>
+                    <p class="empty time-vazio" data-time-vazio <%= jogadoras.length ? 'hidden' : '' %>><%= time ? 'Nenhuma jogadora neste time.' : destino === 'reserva' ? 'Nenhuma reserva.' : 'Nenhuma falta marcada.' %></p>
+                </section>
+            <% }) %>
+        </div>
+        <div class="card times-enviar">
+            <p class="hint">O envio usa a distribuição acima. A ordem do rodízio é sorteada ao enviar; reservas e faltas são consideradas.</p>
+            <div class="times-enviar-acoes">
+                <button type="submit" formaction="/times/ausentes" class="secondary">Salvar faltas e sortear de novo</button>
+                <button type="submit">Enviar times ao grupo</button>
+            </div>
+        </div>
+    </form>
+<% } %>

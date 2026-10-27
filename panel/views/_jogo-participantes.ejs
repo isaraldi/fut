@@ -1,0 +1,25 @@
+<% if (!participantes.length) { %>
+    <p class="empty"><%= mensagemVazia %></p>
+<% } else { %>
+    <div class="table-scroll">
+        <table>
+            <thead><tr><th>Jogadora</th><th>Participação</th><th><span class="sr-only">Ações</span></th></tr></thead>
+            <tbody>
+                <% participantes.forEach(j => { %>
+                    <tr>
+                        <td><%= j.nome %></td>
+                        <td><span class="badge <%= j.papel %>"><%= j.papel === 'mensalista' ? 'Mensalista' : 'Avulsa' %></span></td>
+                        <td class="jogo-row-action">
+                            <form method="post" action="/jogos/<%= enquete.id %>/confirmar/<%= j.id %>/remover" data-confirm="Remover a presença de {nome}?" data-confirm-nome="<%= j.nome %>">
+                                <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                                <input type="hidden" name="voltarAtual" value="1">
+                                <input type="hidden" name="abaAtual" value="<%= aba %>">
+                                <button type="submit" class="secondary">Remover</button>
+                            </form>
+                        </td>
+                    </tr>
+                <% }) %>
+            </tbody>
+        </table>
+    </div>
+<% } %>

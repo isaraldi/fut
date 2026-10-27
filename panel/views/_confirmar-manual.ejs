@@ -2,6 +2,7 @@
     <h1>Confirmar manualmente</h1>
     <p class="hint">Adicione quem não respondeu à enquete ou votou na opção errada.</p>
     <form method="post" action="/jogos/<%= enquete.id %>/confirmar"><input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <% if (typeof voltarAtual !== 'undefined' && voltarAtual) { %><input type="hidden" name="voltarAtual" value="1"><% } %>
         <div class="form-row">
             <div>
                 <label for="confirmar-manual-campo-1">Jogadora</label>

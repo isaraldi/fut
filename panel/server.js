@@ -377,23 +377,20 @@ function carregarVotosAgrupados(enqueteId) {
 }
 
 app.get('/confirmados', requireLogin, (req, res) => {
-    const enquete = db
-        .prepare('SELECT * FROM enquetes ORDER BY id DESC LIMIT 1')
-        .get();
+    const query = req.query.ok ? '&ok=' + encodeURIComponent(req.query.ok) : '';
+    res.redirect('/jogo/atual?aba=presenca' + query);
+});
 
-    const { votos, grupos } = enquete
-        ? carregarVotosAgrupados(enquete.id)
-        : { votos: [], grupos: {} };
-
-    const jogadores = db.prepare('SELECT id, nome, papel FROM jogadores ORDER BY nome ASC').all();
+app.get('/jogo/atual', requireLogin, (req, res) => {
+    const enquete = db.prepare('SELECT * FROM enquetes ORDER BY id DESC LIMIT 1').get();
+    const aba = ['presenca', 'espera', 'times'].includes(req.query.aba) ? req.query.aba : 'presenca';
+    const confirmados = enquete ? getConfirmadosDaEnquete(enquete.id) : [];
     const listaDeEspera = enquete ? getListaDeEsperaDaEnquete(enquete.id) : [];
-
-    res.render('confirmados', {
-        enquete,
-        grupos,
-        totalVotos: votos.length,
-        jogadores,
-        listaDeEspera,
+    const { votos, grupos } = enquete ? carregarVotosAgrupados(enquete.id) : { votos: [], grupos: {} };
+    const jogadores = db.prepare('SELECT id, nome, papel FROM jogadores WHERE ativo = 1 ORDER BY nome ASC').all();
+    res.render('jogo-atual', {
+        enquete, aba, confirmados, listaDeEspera, grupos, jogadores, totalVotos: votos.length,
+        ...(aba === 'times' ? dadosDosTimes(enquete, confirmados) : {}),
         ok: req.query.ok,
     });
 });
@@ -401,72 +398,47 @@ app.get('/confirmados', requireLogin, (req, res) => {
 app.post('/confirmados/enviar-lista', requireLogin, (req, res) => {
     const grupoId = getConfig('enquete_grupo_id');
     if (!grupoId) {
-        return redirectOk(res, '/confirmados', 'Configure o grupo de destino em Configurações → Enquete antes de mandar.');
+        return redirectOk(res, '/jogo/atual', 'Configure o grupo de destino em Configurações → Enquete antes de mandar.');
     }
 
     const enquete = db.prepare('SELECT * FROM enquetes ORDER BY id DESC LIMIT 1').get();
-    if (!enquete) return res.redirect('/confirmados');
+    if (!enquete) return res.redirect('/jogo/atual');
 
+    if (req.body.enqueteId && Number(req.body.enqueteId) !== enquete.id) return redirectOk(res, '/jogo/atual', 'Uma nova enquete foi aberta. Confira a lista antes de enviar.');
     const confirmados = getConfirmadosDaEnquete(enquete.id);
     const texto = montarTextoListaConfirmadas(enquete, confirmados, getConfig('lista_confirmada_mensagem'));
     criarEnvioImediato(grupoId, texto, 'lista');
     fecharEnquete(enquete.id); // novos votos passam a ser ignorados; o bot desafixa a enquete no próximo minuto
 
-    redirectOk(res, '/confirmados', 'Lista enviada e enquete fechada! Pode levar até 1 minuto pra aparecer no grupo.');
+    redirectOk(res, '/jogo/atual', 'Lista enviada e enquete fechada! Pode levar até 1 minuto pra aparecer no grupo.');
 });
 
 // ---------- HOME (resumo geral) ----------
 
 app.get('/', requireLogin, (req, res) => {
     const mes = mesReferenciaAtual(new Date(), Number(getConfig('enquete_dia_semana')));
-
-    const proximoJogo = db
-        .prepare('SELECT * FROM enquetes ORDER BY id DESC LIMIT 1')
-        .get();
-
-    const confirmadosProximoJogo = proximoJogo
-        ? db
-              .prepare(
-                  'SELECT COUNT(*) AS c FROM votos WHERE enquete_id = ? AND papel IS NOT NULL',
-              )
-              .get(proximoJogo.id).c
-        : 0;
-
-    const totalJogadores = db.prepare('SELECT COUNT(*) AS c FROM jogadores').get().c;
-    const totalMensalistas = db
-        .prepare("SELECT COUNT(*) AS c FROM jogadores WHERE papel = 'mensalista'")
-        .get().c;
-    const totalAvulsos = totalJogadores - totalMensalistas;
-
-    const pagamentosMes = db
-        .prepare(
-            `SELECT
-                (SELECT COUNT(*) FROM jogadores WHERE papel = 'mensalista') AS devem,
-                (SELECT COUNT(*) FROM pagamentos WHERE mes_referencia = ? AND pago = 1) AS pagos`,
-        )
-        .get(mes);
-    const pendentes = Math.max(0, pagamentosMes.devem - pagamentosMes.pagos);
-
-    const ultimosJogos = db
-        .prepare(
-            `SELECT e.*,
-                    (SELECT COUNT(*) FROM votos v WHERE v.enquete_id = e.id AND v.papel IS NOT NULL) AS confirmados
-             FROM enquetes e
-             ORDER BY e.id DESC
-             LIMIT 5`,
-        )
-        .all();
-
+    const jogoAtual = db.prepare('SELECT * FROM enquetes ORDER BY id DESC LIMIT 1').get();
+    const confirmados = jogoAtual ? getConfirmadosDaEnquete(jogoAtual.id) : [];
+    const espera = jogoAtual ? getListaDeEsperaDaEnquete(jogoAtual.id).length : 0;
+    const pagamentosMes = db.prepare(`SELECT COUNT(j.id) AS devem,
+        COALESCE(SUM(CASE WHEN p.pago = 1 THEN 1 ELSE 0 END), 0) AS pagos
+        FROM jogadores j LEFT JOIN pagamentos p ON p.jogador_id = j.id AND p.mes_referencia = ?
+        WHERE j.papel = 'mensalista'`).get(mes);
+    const avulsas = confirmados.filter(j => j.papel === 'avulso');
+    const pagamentoAvulso = db.prepare('SELECT pago FROM pagamentos_avulsos WHERE jogador_id = ? AND enquete_id = ?');
+    const avulsasPendentes = jogoAtual ? avulsas.filter(j => !pagamentoAvulso.get(j.id, jogoAtual.id)?.pago).length : 0;
+    const resumoMensal = getResumoMensal();
+    const jogadoras = db.prepare(`SELECT COUNT(*) AS total,
+        COALESCE(SUM(CASE WHEN papel = 'mensalista' THEN 1 ELSE 0 END), 0) AS mensalistas
+        FROM jogadores WHERE ativo = 1`).get();
+    const ultimosJogos = db.prepare('SELECT * FROM enquetes ORDER BY id DESC LIMIT 5').all()
+        .map(jogo => ({ ...jogo, confirmados: getConfirmadosDaEnquete(jogo.id).length }));
     res.render('home', {
-        proximoJogo,
-        confirmadosProximoJogo,
-        totalJogadores,
-        totalMensalistas,
-        totalAvulsos,
-        pagamentosMes,
-        pendentes,
-        mes,
-        ultimosJogos,
+        jogoAtual, confirmados: confirmados.length, espera, pagamentosMes, avulsasPendentes,
+        pendentes: pagamentosMes.devem - pagamentosMes.pagos,
+        renovacoesPendentes: resumoMensal?.pendentes.length || 0,
+        filaMensal: resumoMensal?.fila.length || 0,
+        jogadoras, mes, ultimosJogos,
     });
 });
 
@@ -539,7 +511,7 @@ app.post('/jogos/:id/confirmar', requireLogin, (req, res) => {
              votado_em = datetime('now')`,
     ).run(enqueteId, jogadorId, textoOpcaoConfirmada(), papel);
 
-    redirectOk(res, '/jogos/' + enqueteId, `${jogador.nome} confirmada manualmente!`);
+    redirectOk(res, req.body.voltarAtual === '1' ? '/jogo/atual' : '/jogos/' + enqueteId, `${jogador.nome} confirmada manualmente!`);
 });
 
 app.post('/jogos/:id/confirmar/:jogadorId/remover', requireLogin, (req, res) => {
@@ -548,7 +520,7 @@ app.post('/jogos/:id/confirmar/:jogadorId/remover', requireLogin, (req, res) => 
 
     db.prepare('DELETE FROM votos WHERE enquete_id = ? AND jogador_id = ?').run(enqueteId, jogadorId);
 
-    redirectOk(res, '/jogos/' + enqueteId, 'Confirmação removida.');
+    redirectOk(res, req.body.voltarAtual === '1' ? '/jogo/atual?aba=' + (req.body.abaAtual === 'espera' ? 'espera' : 'presenca') : '/jogos/' + enqueteId, 'Confirmação removida.');
 });
 
 // ---------- PAGAMENTOS ----------
@@ -1175,11 +1147,11 @@ function configDeTimes() {
 }
 
 app.get('/times', requireLogin, (req, res) => {
-    const enquete = db
-        .prepare('SELECT * FROM enquetes ORDER BY id DESC LIMIT 1')
-        .get();
+    const query = req.query.ok ? '&ok=' + encodeURIComponent(req.query.ok) : '';
+    res.redirect('/jogo/atual?aba=times' + query);
+});
 
-    const confirmados = enquete ? getConfirmadosDaEnquete(enquete.id) : [];
+function dadosDosTimes(enquete, confirmados) {
     const ausentesIds = enquete ? getAusentesDaEnquete(enquete.id) : [];
     const presentes = confirmados.filter((j) => !ausentesIds.includes(j.id));
 
@@ -1193,16 +1165,8 @@ app.get('/times', requireLogin, (req, res) => {
         plano.reservas.forEach((j) => { destinos[j.id] = 'reserva'; });
     }
 
-    res.render('times', {
-        usuario: req.session.usuario,
-        enquete,
-        confirmados,
-        plano,
-        destinos,
-        modoManual: getConfig('jogo_times_modo') === 'manual',
-        ok: req.query.ok,
-    });
-});
+    return { plano, destinos, modoManual: getConfig('jogo_times_modo') === 'manual' };
+}
 
 // lê os selects "dest_<id>" do formulário: { A: [...], B: [...], C: [...], reserva: [...], ausente: [...] }
 function agruparPorDestino(confirmados, body) {
@@ -1217,26 +1181,28 @@ function agruparPorDestino(confirmados, body) {
 // só salva as faltas e volta pro sorteio, que passa a ignorar quem faltou
 app.post('/times/ausentes', requireLogin, (req, res) => {
     const enquete = db.prepare('SELECT * FROM enquetes ORDER BY id DESC LIMIT 1').get();
-    if (!enquete) return res.redirect('/times');
+    if (!enquete) return res.redirect('/jogo/atual?aba=times');
+    if (req.body.enqueteId && Number(req.body.enqueteId) !== enquete.id) return redirectOk(res, '/jogo/atual?aba=times', 'Uma nova enquete foi aberta. Confira os times antes de continuar.');
     const grupos = agruparPorDestino(getConfirmadosDaEnquete(enquete.id), req.body);
     setAusentesDaEnquete(enquete.id, grupos.ausente.map((j) => j.id));
-    redirectOk(res, '/times', 'Faltas salvas — sorteio refeito sem elas.');
+    redirectOk(res, '/jogo/atual?aba=times', 'Faltas salvas — sorteio refeito sem elas.');
 });
 
 app.post('/times/enviar', requireLogin, (req, res) => {
     const grupoId = getConfig('enquete_grupo_id');
     if (!grupoId) {
-        return redirectOk(res, '/times', 'Configure o grupo de destino em Configurações → Enquete antes de mandar.');
+        return redirectOk(res, '/jogo/atual?aba=times', 'Configure o grupo de destino em Configurações → Enquete antes de mandar.');
     }
 
     const enquete = db.prepare('SELECT * FROM enquetes ORDER BY id DESC LIMIT 1').get();
-    if (!enquete) return res.redirect('/times');
+    if (!enquete) return res.redirect('/jogo/atual?aba=times');
 
+    if (req.body.enqueteId && Number(req.body.enqueteId) !== enquete.id) return redirectOk(res, '/jogo/atual?aba=times', 'Uma nova enquete foi aberta. Confira os times antes de continuar.');
     const grupos = agruparPorDestino(getConfirmadosDaEnquete(enquete.id), req.body);
     setAusentesDaEnquete(enquete.id, grupos.ausente.map((j) => j.id));
 
     const times = [grupos.A, grupos.B, grupos.C].filter((time, t) => t < 2 || time.length > 0);
-    if (grupos.A.length === 0 && grupos.B.length === 0) return res.redirect('/times');
+    if (grupos.A.length === 0 && grupos.B.length === 0) return res.redirect('/jogo/atual?aba=times');
 
     const { minutos, duracao } = configDeTimes();
     const texto = montarTextoTimes(
@@ -1248,7 +1214,7 @@ app.post('/times/enviar', requireLogin, (req, res) => {
     );
     criarEnvioImediato(grupoId, texto, 'times');
 
-    redirectOk(res, '/times', 'Times enviados! Pode levar até 1 minuto pra aparecer no grupo.');
+    redirectOk(res, '/jogo/atual?aba=times', 'Times enviados! Pode levar até 1 minuto pra aparecer no grupo.');
 });
 
 // ---------- VOTAÇÃO PÚBLICA (avaliação pós-jogo, sem login administrativo) ----------

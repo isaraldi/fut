@@ -1,0 +1,66 @@
+<div class="page-header">
+    <div>
+        <h1>Jogo atual</h1>
+        <p>Presença, espera e times da última enquete enviada.</p>
+    </div>
+    <a class="button-link secondary" href="/jogos">Histórico de jogos</a>
+</div>
+
+<% if (!enquete) { %>
+    <div class="card">
+        <h2>Nenhum jogo em acompanhamento</h2>
+        <p class="hint">Envie uma enquete para começar a receber confirmações.</p>
+        <a class="button-link" href="/enquete/config">Preparar enquete</a>
+    </div>
+<% } else { %>
+    <div class="card jogo-resumo">
+        <div>
+            <h2><%= enquete.titulo %></h2>
+            <p class="hint">Enquete enviada em <%= formatarDataHora(enquete.criada_em) %>.</p>
+            <span class="badge <%= enquete.fechada_em ? 'pendente' : 'pago' %>"><%= enquete.fechada_em ? 'Lista fechada' : 'Recebendo respostas' %></span>
+            <% if (enquete.fechada_em) { %><p class="hint">Fechada em <%= formatarDataHora(enquete.fechada_em) %>. Novos votos no WhatsApp não contam.</p><% } %>
+        </div>
+        <div class="jogo-numeros">
+            <span><strong><%= confirmados.length %><%= enquete.vagas_maximo ? '/' + enquete.vagas_maximo : '' %></strong> com vaga</span>
+            <span><strong><%= listaDeEspera.length %></strong> na espera</span>
+            <span><strong><%= totalVotos %></strong> respostas</span>
+        </div>
+    </div>
+    <nav class="jogo-abas" aria-label="Seções do jogo atual">
+        <% [['presenca', 'Presença', confirmados.length], ['espera', 'Espera', listaDeEspera.length], ['times', 'Times', null]].forEach(([valor, titulo, quantidade]) => { %>
+            <a href="/jogo/atual?aba=<%= valor %>" <%- aba === valor ? 'aria-current="page"' : '' %>><%= titulo %><% if (quantidade !== null) { %> <span><%= quantidade %></span><% } %></a>
+        <% }) %>
+    </nav>
+
+    <% if (aba === 'presenca') { %>
+        <div class="card">
+            <div class="page-header">
+                <div><h2>Jogadoras com vaga</h2><p class="hint">Mensalistas têm prioridade; avulsas entram por ordem de confirmação.</p></div>
+                <form method="post" action="/confirmados/enviar-lista" data-confirm="<%= enquete.fechada_em ? 'Reenviar a lista ao grupo?' : 'Fechar a enquete e enviar a lista ao grupo? Novos votos deixarão de contar.' %>">
+                    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                    <input type="hidden" name="enqueteId" value="<%= enquete.id %>">
+                    <button type="submit"><%= enquete.fechada_em ? 'Reenviar lista' : 'Fechar lista e enviar' %></button>
+                </form>
+            </div>
+            <%- include('_jogo-participantes', { participantes: confirmados, mensagemVazia: 'Ainda não há jogadoras com vaga confirmada.' }) %>
+        </div>
+        <details class="form-help">
+            <summary>Confirmar presença manualmente</summary>
+            <%- include('_confirmar-manual', { enquete, jogadores, voltarAtual: true }) %>
+        </details>
+        <details class="form-help">
+            <summary>Ver todas as respostas da enquete (<%= totalVotos %>)</summary>
+            <%- include('_votos-por-opcao', { grupos, enqueteId: enquete.id, voltarAtual: true }) %>
+        </details>
+    <% } else if (aba === 'espera') { %>
+        <div class="card">
+            <h2>Lista de espera</h2>
+            <p class="hint">Entram quando uma vaga é liberada, respeitando a prioridade das mensalistas e a ordem de confirmação.</p>
+            <%- include('_jogo-participantes', { participantes: listaDeEspera, mensagemVazia: 'Nenhuma jogadora na espera.' }) %>
+        </div>
+    <% } else { %>
+        <p class="hint">Ajuste os times antes de enviar. Quem estiver como “Faltou” fica fora do sorteio.</p>
+        <%- include('_jogo-times') %>
+    <% } %>
+<% } %>
+<script src="/jogo-atual.js" defer></script>
