@@ -661,21 +661,7 @@ function excluirMensagemAgendada(id) {
 // marca (só liga, nunca desliga) o pagamento da mensalidade de um mês — usado tanto pelo
 // toggle manual do painel quanto pela leitura automática de comprovante no grupo
 function marcarPagamentoMensalista(jogadorId, mesReferencia) {
-    const atual = db
-        .prepare('SELECT * FROM pagamentos WHERE jogador_id = ? AND mes_referencia = ?')
-        .get(jogadorId, mesReferencia);
-
-    if (atual) {
-        if (!atual.pago) {
-            db.prepare(
-                "UPDATE pagamentos SET pago = 1, atualizado_em = datetime('now') WHERE id = ?",
-            ).run(atual.id);
-        }
-    } else {
-        db.prepare(
-            'INSERT INTO pagamentos (jogador_id, mes_referencia, pago) VALUES (?, ?, 1)',
-        ).run(jogadorId, mesReferencia);
-    }
+    definirPagamentoCaixa('mensal', jogadorId, mesReferencia, true);
 }
 
 // mensalistas que pagaram um mês de referência — base tanto do token {mensalistas_mes_anterior}
@@ -826,21 +812,7 @@ function definirPapelJogador(jogadorId, papelNovo) {
 
 // mesma ideia, mas pro pagamento avulso de um jogo específico
 function marcarPagamentoAvulso(jogadorId, enqueteId) {
-    const atual = db
-        .prepare('SELECT * FROM pagamentos_avulsos WHERE jogador_id = ? AND enquete_id = ?')
-        .get(jogadorId, enqueteId);
-
-    if (atual) {
-        if (!atual.pago) {
-            db.prepare(
-                "UPDATE pagamentos_avulsos SET pago = 1, atualizado_em = datetime('now') WHERE id = ?",
-            ).run(atual.id);
-        }
-    } else {
-        db.prepare(
-            'INSERT INTO pagamentos_avulsos (jogador_id, enquete_id, pago) VALUES (?, ?, 1)',
-        ).run(jogadorId, enqueteId);
-    }
+    definirPagamentoCaixa('avulso', jogadorId, enqueteId, true);
 }
 
 function getJogadorPorWhatsappId(whatsappId) {
@@ -1042,7 +1014,100 @@ if (getConfig('whatsapp_interacoes_v1') !== '1') {
     }).immediate();
 }
 
+// O caixa começa por adesão explícita. Pagamentos anteriores não são estimados.
+db.exec(`CREATE TABLE IF NOT EXISTS caixa_lancamentos (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    data TEXT NOT NULL,
+    tipo TEXT NOT NULL CHECK(tipo IN ('entrada', 'gasto', 'inicial')),
+    valor_centavos INTEGER NOT NULL,
+    descricao TEXT NOT NULL,
+    categoria TEXT NOT NULL,
+    origem TEXT UNIQUE,
+    criado_em TEXT NOT NULL DEFAULT (datetime('now')),
+    cancelado_em TEXT
+);
+CREATE INDEX IF NOT EXISTS caixa_data ON caixa_lancamentos(data, id);`);
+
+function dinheiroCentavos(valor, permitirNegativo = false) {
+    const texto = String(valor ?? '').trim().replace(',', '.');
+    if (!(permitirNegativo ? /^-?\d{1,9}(\.\d{1,2})?$/ : /^\d{1,9}(\.\d{1,2})?$/).test(texto)) {
+        throw new Error('Informe um valor válido com até duas casas decimais.');
+    }
+    const centavos = Math.round(Number(texto) * 100);
+    if (!permitirNegativo && centavos <= 0) throw new Error('O valor deve ser maior que zero.');
+    return centavos;
+}
+
+function dataCaixaAtual() {
+    return new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Sao_Paulo' });
+}
+
+function iniciarCaixa(saldo) {
+    return db.transaction(() => {
+        if (getConfig('caixa_ativo') === '1') throw new Error('O caixa já foi iniciado.');
+        const centavos = dinheiroCentavos(saldo, true);
+        // Ambos os valores precisam estar definidos para registrar os próximos pagamentos.
+        for (const [chave, nome] of [['valor_mensal', 'mensalidade'], ['valor_avulso', 'avulsa']]) {
+            try { dinheiroCentavos(getConfig(chave)); }
+            catch { throw new Error(`Configure um valor válido de ${nome} em Regras do jogo antes de iniciar.`); }
+        }
+        db.prepare(`INSERT INTO caixa_lancamentos (data, tipo, valor_centavos, descricao, categoria)
+            VALUES (?, 'inicial', ?, 'Saldo inicial', 'Saldo inicial')`).run(dataCaixaAtual(), centavos);
+        setConfig('caixa_ativo', '1');
+    }).immediate();
+}
+
+function lancarCaixa({ tipo, valor, data, descricao, categoria }) {
+    if (getConfig('caixa_ativo') !== '1') throw new Error('Inicie o caixa primeiro.');
+    if (!['entrada', 'gasto'].includes(tipo)) throw new Error('Escolha entrada ou gasto.');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(data || '') || !Number.isFinite(Date.parse(data + 'T12:00:00Z')) ||
+        new Date(data + 'T12:00:00Z').toISOString().slice(0, 10) !== data) throw new Error('Informe uma data válida.');
+    if (!descricao?.trim() || descricao.trim().length > 160) throw new Error('Informe uma descrição de até 160 caracteres.');
+    const categorias = ['Outras entradas', 'Quadra', 'Materiais', 'Eventos', 'Outros gastos'];
+    if (!categorias.includes(categoria)) throw new Error('Escolha uma categoria válida.');
+    return db.prepare(`INSERT INTO caixa_lancamentos (data, tipo, valor_centavos, descricao, categoria)
+        VALUES (?, ?, ?, ?, ?)`).run(data, tipo, dinheiroCentavos(valor), descricao.trim(), categoria);
+}
+
+function cancelarLancamentoCaixa(id) {
+    const resultado = db.prepare(`UPDATE caixa_lancamentos SET cancelado_em = datetime('now')
+        WHERE id = ? AND origem IS NULL AND tipo != 'inicial' AND cancelado_em IS NULL`).run(id);
+    if (!resultado.changes) throw new Error('Lançamento indisponível. Para pagamentos, corrija a situação na página Pagamentos.');
+}
+
+// Bot e painel passam pela mesma transação: repetir comprovante não duplica entrada.
+function definirPagamentoCaixa(tipo, jogadorId, referencia, pago) {
+    if (!['mensal', 'avulso'].includes(tipo)) throw new Error('Tipo de pagamento inválido.');
+    return db.transaction(() => {
+        const tabela = tipo === 'mensal' ? 'pagamentos' : 'pagamentos_avulsos';
+        const coluna = tipo === 'mensal' ? 'mes_referencia' : 'enquete_id';
+        const atual = db.prepare(`SELECT * FROM ${tabela} WHERE jogador_id = ? AND ${coluna} = ?`).get(jogadorId, referencia);
+        const novoPago = pago === undefined ? !atual?.pago : !!pago;
+        if (!!atual?.pago === novoPago) return;
+        let id = atual?.id;
+        if (atual) db.prepare(`UPDATE ${tabela} SET pago = ?, atualizado_em = datetime('now') WHERE id = ?`).run(Number(novoPago), id);
+        else id = db.prepare(`INSERT INTO ${tabela} (jogador_id, ${coluna}, pago) VALUES (?, ?, ?)`).run(jogadorId, referencia, Number(novoPago)).lastInsertRowid;
+        const origem = tipo + ':' + id;
+        if (!novoPago) {
+            db.prepare("UPDATE caixa_lancamentos SET cancelado_em = datetime('now') WHERE origem = ? AND cancelado_em IS NULL").run(origem);
+        } else if (getConfig('caixa_ativo') === '1') {
+            const existente = db.prepare('SELECT id FROM caixa_lancamentos WHERE origem = ?').get(origem);
+            if (existente) db.prepare('UPDATE caixa_lancamentos SET cancelado_em = NULL WHERE id = ?').run(existente.id);
+            else {
+                let valor;
+                try { valor = dinheiroCentavos(getConfig(tipo === 'mensal' ? 'valor_mensal' : 'valor_avulso')); }
+                catch { throw new Error('Configure o valor do pagamento em Regras do jogo. Nenhuma alteração foi salva.'); }
+                const jogadora = db.prepare('SELECT nome FROM jogadores WHERE id = ?').get(jogadorId);
+                const descricao = tipo === 'mensal' ? `Mensalidade ${referencia} — ${jogadora.nome}` : `Avulsa · jogo #${referencia} — ${jogadora.nome}`;
+                db.prepare(`INSERT INTO caixa_lancamentos (data, tipo, valor_centavos, descricao, categoria, origem)
+                    VALUES (?, 'entrada', ?, ?, ?, ?)`).run(dataCaixaAtual(), valor, descricao, tipo === 'mensal' ? 'Mensalidades' : 'Avulsas', origem);
+            }
+        }
+    }).immediate();
+}
+
 module.exports = {
+    dinheiroCentavos, dataCaixaAtual, iniciarCaixa, lancarCaixa, cancelarLancamentoCaixa, definirPagamentoCaixa,
     marcarVotoManual,
     criarCicloMensal, getCicloMensalAtual, expirarRenovacoesMensais, responderChamadaMensal, getResumoMensal, aprovarInteressadaMensal,
     db,

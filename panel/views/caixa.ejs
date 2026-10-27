@@ -1,0 +1,52 @@
+<% const reais = valor => (valor / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }); %>
+<div class="page-header"><div><h1>Caixa</h1><p>Entradas, gastos e o saldo da caixinha.</p></div><a class="button-link secondary" href="/pagamentos">Pagamentos</a></div>
+<% if (erro) { %><p role="alert" class="card"><%= erro %></p><% } %>
+<% if (!ativo) { %>
+<div class="card">
+    <h2>Começar o controle</h2>
+    <p>Informe quanto há na caixinha hoje. Pagamentos já registrados ficam fora deste saldo; os próximos entram automaticamente, com os valores configurados.</p>
+    <p class="hint">Confira os valores de mensalidade e avulsa em <a href="/jogo/config">Regras do jogo</a> antes de iniciar.</p>
+    <form method="post" action="/caixa/iniciar">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <label for="saldo">Saldo inicial (R$)</label><input id="saldo" name="saldo" type="number" step="0.01" value="0" required>
+        <button type="submit">Iniciar caixa</button>
+    </form>
+</div>
+<% } else { %>
+<div class="caixa-resumo">
+    <div class="card"><span>Saldo atual · todo o período</span><h2><%= reais(totais.saldo) %></h2></div>
+    <div class="card"><span>Entradas do mês consultado</span><h2><%= reais(totais.entradas) %></h2></div>
+    <div class="card"><span>Gastos do mês consultado</span><h2><%= reais(totais.gastos) %></h2></div>
+</div>
+<details class="card" id="novo-lancamento"><summary>Novo lançamento</summary>
+    <form method="post" action="/caixa/lancamentos" class="caixa-form">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <div><label for="tipo">Tipo</label><select id="tipo" name="tipo"><option value="gasto">Gasto</option><option value="entrada">Entrada</option></select></div>
+        <div><label for="valor">Valor (R$)</label><input id="valor" name="valor" type="number" min="0.01" step="0.01" required></div>
+        <div><label for="data">Data</label><input id="data" name="data" type="date" value="<%= hoje %>" required></div>
+        <div><label for="categoria">Categoria</label><select id="categoria" name="categoria"><% for (const categoria of ['Quadra', 'Materiais', 'Eventos', 'Outros gastos', 'Outras entradas']) { %><option><%= categoria %></option><% } %></select></div>
+        <div class="caixa-descricao"><label for="descricao">Descrição</label><input id="descricao" name="descricao" maxlength="160" placeholder="Ex.: aluguel da quadra" required></div>
+        <div><button type="submit">Registrar</button></div>
+    </form>
+    <p class="hint">Mensalidades e avulsas entram pela página Pagamentos ou pelos comprovantes reconhecidos pelo bot.</p>
+</details>
+<div class="card">
+    <div class="page-header"><h2>Movimentações</h2><form method="get" action="/caixa" class="financeiro-mes"><label for="mes">Mês</label><input type="month" id="mes" name="mes" value="<%= mes %>" required><button class="secondary" type="submit">Consultar</button></form></div>
+    <% if (!lancamentos.length) { %><p class="hint">Nenhuma movimentação neste mês.</p><% } else { %>
+    <div style="overflow-x:auto"><table><thead><tr><th>Data</th><th>Descrição</th><th>Categoria</th><th>Valor</th><th>Situação</th><th></th></tr></thead><tbody>
+    <% for (const item of lancamentos) { %>
+        <tr><td><%= item.data.split('-').reverse().join('/') %></td><td><%= item.descricao %><% if (item.origem) { %><small class="hint" style="display:block">Pagamento automático</small><% } %></td><td><%= item.categoria %></td><td style="white-space:nowrap"><%= item.tipo === 'gasto' ? '− ' : '' %><%= reais(item.valor_centavos) %></td><td><%= item.cancelado_em ? 'Cancelado' : item.tipo === 'inicial' ? 'Saldo inicial' : item.tipo === 'gasto' ? 'Gasto' : 'Entrada' %></td><td>
+        <% if (!item.cancelado_em && !item.origem && item.tipo !== 'inicial') { %>
+            <form method="post" action="/caixa/lancamentos/<%= item.id %>/cancelar" onsubmit="return confirm('Cancelar este lançamento? Ele continuará no histórico, sem afetar o saldo.')"><input type="hidden" name="_csrf" value="<%= csrfToken %>"><button class="secondary" type="submit" aria-label="Cancelar <%= item.descricao %>">Cancelar</button></form>
+        <% } %></td></tr>
+    <% } %></tbody></table></div><% } %>
+    <p class="hint">Cancelados não entram no saldo. Para corrigir uma entrada automática, altere o pagamento para pendente.</p>
+</div>
+<% } %>
+<style>
+.caixa-resumo { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:16px; }
+.caixa-resumo h2 { margin-bottom:0; }
+.caixa-form { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; margin-top:18px; }
+.caixa-descricao { grid-column:1/-1; }
+@media(max-width:650px) { .caixa-resumo,.caixa-form { grid-template-columns:1fr; } }
+</style>

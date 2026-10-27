@@ -26,6 +26,7 @@ const multer = require('multer');
 const SqliteSessionStore = require('./sqlite-session-store');
 const {
     db,
+    dataCaixaAtual, iniciarCaixa, lancarCaixa, cancelarLancamentoCaixa, definirPagamentoCaixa,
     marcarVotoManual,
     getResumoMensal, aprovarInteressadaMensal, definirPapelJogador,
     getConfig,
@@ -576,20 +577,10 @@ app.post('/pagamentos/mensalistas/:jogadorId/toggle', requireLogin, (req, res) =
     const mes = req.body.mes || mesReferenciaAtual(new Date(), Number(getConfig('enquete_dia_semana')));
     const jogadorId = Number(req.params.jogadorId);
 
-    const atual = db
-        .prepare(
-            'SELECT * FROM pagamentos WHERE jogador_id = ? AND mes_referencia = ?',
-        )
-        .get(jogadorId, mes);
-
-    if (atual) {
-        db.prepare(
-            "UPDATE pagamentos SET pago = ?, atualizado_em = datetime('now') WHERE id = ?",
-        ).run(atual.pago ? 0 : 1, atual.id);
-    } else {
-        db.prepare(
-            'INSERT INTO pagamentos (jogador_id, mes_referencia, pago) VALUES (?, ?, 1)',
-        ).run(jogadorId, mes);
+    try { definirPagamentoCaixa('mensal', jogadorId, mes); }
+    catch (erro) {
+        if (erro.code) throw erro;
+        return res.redirect('/caixa?erro=' + encodeURIComponent(erro.message));
     }
 
     redirectOk(res, '/pagamentos?mes=' + encodeURIComponent(mes), 'Pagamento atualizado!');
@@ -601,22 +592,42 @@ app.post('/pagamentos/avulsos/:jogadorId/toggle', requireLogin, (req, res) => {
     const jogadorId = Number(req.params.jogadorId);
     const enqueteId = Number(req.body.enqueteId);
 
-    const atual = db
-        .prepare('SELECT * FROM pagamentos_avulsos WHERE jogador_id = ? AND enquete_id = ?')
-        .get(jogadorId, enqueteId);
-
-    if (atual) {
-        db.prepare(
-            "UPDATE pagamentos_avulsos SET pago = ?, atualizado_em = datetime('now') WHERE id = ?",
-        ).run(atual.pago ? 0 : 1, atual.id);
-    } else {
-        db.prepare(
-            'INSERT INTO pagamentos_avulsos (jogador_id, enquete_id, pago) VALUES (?, ?, 1)',
-        ).run(jogadorId, enqueteId);
+    try { definirPagamentoCaixa('avulso', jogadorId, enqueteId); }
+    catch (erro) {
+        if (erro.code) throw erro;
+        return res.redirect('/caixa?erro=' + encodeURIComponent(erro.message));
     }
 
     redirectOk(res, '/pagamentos?aba=avulsas', 'Pagamento atualizado!');
 });
+
+// ---------- CAIXA ----------
+app.get('/caixa', requireLogin, (req, res) => {
+    const mes = /^\d{4}-(0[1-9]|1[0-2])$/.test(req.query.mes || '') ? req.query.mes : dataCaixaAtual().slice(0, 7);
+    const totais = db.prepare(`SELECT
+        COALESCE(SUM(CASE WHEN tipo = 'gasto' THEN -valor_centavos ELSE valor_centavos END), 0) saldo,
+        COALESCE(SUM(CASE WHEN tipo = 'entrada' AND substr(data,1,7) = ? THEN valor_centavos ELSE 0 END), 0) entradas,
+        COALESCE(SUM(CASE WHEN tipo = 'gasto' AND substr(data,1,7) = ? THEN valor_centavos ELSE 0 END), 0) gastos
+        FROM caixa_lancamentos WHERE cancelado_em IS NULL`).get(mes, mes);
+    const lancamentos = db.prepare('SELECT * FROM caixa_lancamentos WHERE substr(data,1,7) = ? ORDER BY data DESC, id DESC').all(mes);
+    res.render('caixa', { ativo: getConfig('caixa_ativo') === '1', mes, totais, lancamentos, hoje: dataCaixaAtual(), erro: req.query.erro });
+});
+
+for (const [rota, executar] of [
+    ['iniciar', req => iniciarCaixa(req.body.saldo)],
+    ['lancamentos', req => lancarCaixa(req.body)],
+    ['lancamentos/:id/cancelar', req => cancelarLancamentoCaixa(Number(req.params.id))],
+]) {
+    app.post('/caixa/' + rota, requireLogin, (req, res, next) => {
+        try {
+            executar(req);
+            redirectOk(res, '/caixa', 'Caixa atualizado.');
+        } catch (erro) {
+            if (erro.code) return next(erro);
+            res.redirect('/caixa?erro=' + encodeURIComponent(erro.message));
+        }
+    });
+}
 
 // ---------- ELENCO ----------
 

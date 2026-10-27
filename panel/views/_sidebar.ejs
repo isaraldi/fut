@@ -26,9 +26,10 @@
             </div>
         </details>
 
-        <details class="nav-group" <%= grupoAberto(['/pagamentos', '/mensal']) ? 'open' : '' %>>
-            <summary><span class="icon">💰</span> Mensal e pagamentos <span class="chevron">▸</span></summary>
+        <details class="nav-group" <%= grupoAberto(['/pagamentos', '/mensal', '/caixa']) ? 'open' : '' %>>
+            <summary><span class="icon">💰</span> Financeiro <span class="chevron">▸</span></summary>
             <div class="nav-sub">
+                <a class="nav-link <%= ativo('/caixa') ? 'active' : '' %>" href="/caixa">Caixa</a>
                 <a class="nav-link <%= caminho.startsWith('/mensal') ? 'active' : '' %>" href="/mensal">Mensalistas</a>
                 <a class="nav-link <%= caminho.startsWith('/pagamentos') ? 'active' : '' %>" href="/pagamentos">Pagamentos</a>
             </div>
