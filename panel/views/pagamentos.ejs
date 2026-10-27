@@ -1,0 +1,20 @@
+<div class="page-header">
+    <div><h1>Pagamentos</h1><p>Registre mensalidades e pagamentos por jogo.</p></div>
+    <a class="button-link secondary" href="/mensal">Gerenciar mensalistas</a>
+</div>
+<nav class="jogo-abas" aria-label="Tipos de pagamento">
+    <a href="/pagamentos" <%- aba === 'mensalistas' ? 'aria-current="page"' : '' %>>Mensalidades</a>
+    <a href="/pagamentos?aba=avulsas" <%- aba === 'avulsas' ? 'aria-current="page"' : '' %>>Avulsas por jogo</a>
+</nav>
+<% if (aba === 'mensalistas') { %>
+    <div class="card">
+        <form method="get" action="/pagamentos">
+            <label for="pagamento-mes">Mês de referência</label>
+            <div class="financeiro-mes"><input type="month" id="pagamento-mes" name="mes" value="<%= mes %>" required><button type="submit" class="secondary">Consultar</button></div>
+        </form>
+    </div>
+    <%- include('_pagamentos-mensalistas') %>
+<% } else { %>
+    <p class="hint"><%= enquete ? 'Jogadoras com vaga na última enquete: ' + enquete.titulo : 'Nenhum jogo registrado.' %></p>
+    <%- include('_pagamentos-avulsos') %>
+<% } %>

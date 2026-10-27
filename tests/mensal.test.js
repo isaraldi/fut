@@ -131,14 +131,14 @@ try {
     // Renderiza a view com e sem ciclo (também valida o formulário e seus campos).
     const ejs = require('ejs');
     const template = fs.readFileSync(path.join(raiz, 'panel/views/mensal.ejs'), 'utf8');
-    const vars = { usuario: 'teste', ok: '', csrfToken: 'teste', resumoMensal: getResumoMensal(),
+    const vars = { usuario: 'teste', ok: '', csrfToken: 'teste', resumoMensal: getResumoMensal(), aba: 'renovacao', mensalistas: [], avulsas: [],
         fechamentoMensalAtivo: true, fechamentoMensalMensagem: 'teste', fechamentoMensalHora: '09:00', fechamentoMensalPrazoHoras: '36',
         pagamentoDiaLimite: '7', proximoFechamentoMensalTexto: '30/10/2026', enqueteAutoEnviar: false, enqueteEnvioDiaSemana: 1,
         enqueteEnvioHora: '09:00', enqueteTituloTemplate: 'teste', enqueteOpcoes: [], listaConfirmadaMensagem: '', listaAtualMensagem: '', listaEsperaMensagem: '', timesMensagem: '' };
     assert.match(ejs.render(template, vars), /Confirmar entrada no mensal/);
     assert.match(ejs.render(template, { ...vars, resumoMensal: null }), /após o envio/);
     const modelos = fs.readFileSync(path.join(raiz, 'panel/views/mensagens-automaticas.ejs'), 'utf8');
-    assert.match(ejs.render(modelos, vars), /href="\/mensal"/);
+    assert.match(ejs.render(modelos, vars), /href="\/mensal\?aba=renovacao"/);
 
     // Simula atualização de instalação antiga e confirma idempotência da migração.
     setConfig('enquete_dia_semana', '3');

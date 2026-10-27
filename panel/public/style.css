@@ -817,3 +817,7 @@ code {
 .historico-excluir { margin-top: 32px; }
 .historico-excluir summary { color: var(--critical); }
 .historico-excluir button { margin-top: 12px; }
+
+.financeiro-mes { display: flex; align-items: flex-start; flex-wrap: wrap; gap: 10px; }
+.financeiro-mes input[type=month] { width: auto; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg); color: var(--text); font: inherit; }
+.elenco-perfil { display: block; margin-top: 6px; font-size: 0.8rem; color: var(--muted); }

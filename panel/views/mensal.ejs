@@ -1,9 +1,56 @@
 <div class="page-header">
-    <div>
-        <h1>Renovação do mensal</h1>
-        <p>Acompanhe as renovações e confirme novas entradas por ordem da fila.</p>
-    </div>
+    <div><h1>Mensalistas</h1><p>Gerencie o vínculo mensal e acompanhe a renovação.</p></div>
+    <a class="button-link secondary" href="/pagamentos">Ver pagamentos</a>
 </div>
+<nav class="jogo-abas" aria-label="Gestão das mensalistas">
+    <a href="/mensal" <%- aba === 'atuais' ? 'aria-current="page"' : '' %>>Mensalistas atuais <span><%= mensalistas.length %></span></a>
+    <a href="/mensal?aba=renovacao" <%- aba === 'renovacao' ? 'aria-current="page"' : '' %>>Renovação e fila</a>
+</nav>
+<% if (aba === 'atuais') { %>
+    <div class="card">
+        <h2>Mensalistas atuais</h2>
+        <p class="hint">O vínculo mensal define a prioridade nas vagas. Os pagamentos são controlados separadamente.</p>
+        <label for="mensal-busca">Buscar mensalista</label>
+        <input type="text" id="mensal-busca" placeholder="Buscar por nome" autocomplete="off">
+        <% if (!mensalistas.length) { %><p class="empty">Nenhuma mensalista ativa. Adicione manualmente abaixo ou aprove uma interessada pela renovação.</p><% } else { %>
+            <div class="table-scroll"><table>
+                <thead><tr><th>Jogadora</th><th>Histórico</th><th><span class="sr-only">Ações</span></th></tr></thead>
+                <tbody>
+                    <% mensalistas.forEach(j => { %>
+                        <tr data-mensalista-row>
+                            <td data-mensalista-nome><%= j.nome %></td>
+                            <td><a href="/mensal/jogadoras/<%= j.id %>/historico">Ver mudanças</a></td>
+                            <td class="jogo-row-action">
+                                <form method="post" action="/mensal/jogadoras/<%= j.id %>/participacao" data-confirm="Retirar {nome} do mensal? Ela passará a avulsa; cadastro e pagamentos serão preservados." data-confirm-nome="<%= j.nome %>">
+                                    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                                    <input type="hidden" name="papel" value="avulso">
+                                    <button type="submit" class="secondary">Retirar do mensal</button>
+                                </form>
+                            </td>
+                        </tr>
+                    <% }) %>
+                </tbody>
+            </table></div>
+            <p class="empty" data-mensalista-vazio hidden>Nenhuma mensalista encontrada.</p>
+        <% } %>
+    </div>
+    <details class="form-help">
+        <summary>Adicionar mensalista manualmente</summary>
+        <p class="hint">Ajuste administrativo do vínculo, sem confirmar pagamento ou responder à chamada. Para entradas da chamada, use <a href="/mensal?aba=renovacao">Renovação e fila</a>.</p>
+        <% if (resumoMensal && (resumoMensal.pendentes.length || resumoMensal.fila.length)) { %><p class="hint">Há renovações pendentes ou interessadas na fila. Resolva as entradas em <a href="/mensal?aba=renovacao">Renovação e fila</a> antes de adicionar manualmente.</p><% } else if (!avulsas.length) { %><p class="empty">Não há jogadoras avulsas ativas. Cadastre uma jogadora em <a href="/elenco">Jogadoras</a>.</p><% } else { %>
+            <form method="post" action="/mensal/adicionar" data-confirm="Adicionar a jogadora selecionada como mensalista por ajuste administrativo? Isso não aprova a fila da renovação.">
+                <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                <label for="mensal-adicionar">Jogadora</label>
+                <select name="jogador_id" id="mensal-adicionar" required>
+                    <option value="">Selecione uma jogadora</option>
+                    <% avulsas.forEach(j => { %><option value="<%= j.id %>"><%= j.nome %></option><% }) %>
+                </select>
+                <button type="submit">Adicionar manualmente</button>
+            </form>
+        <% } %>
+    </details>
+    <p class="hint">Durante uma chamada, os ajustes manuais não alteram respostas, prazo nem posição na fila. A renovação continua seguindo as regras da chamada.</p>
+<% } else { %>
 <section class="section">
     <details class="form-help">
         <summary>Como funcionam a prioridade e a fila</summary>
@@ -43,3 +90,6 @@
     </div>
     <p class="hint">Horário, prazo e texto da chamada: <a href="/mensagens/automaticas">modelos e mensagens automáticas</a>.</p>
 </section>
+
+<% } %>
+<script src="/mensalistas.js" defer></script>

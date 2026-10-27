@@ -14,21 +14,23 @@
         </div>
         <div class="elenco-filtros" role="group" aria-label="Filtrar participação">
             <% [['todas', 'Todas'], ['mensalista', 'Mensalistas'], ['avulso', 'Avulsas']].forEach(([valor, rotulo]) => { %>
-                <button type="button" class="secondary" data-elenco-filtro="<%= valor %>" aria-pressed="<%= valor === 'todas' %>"><%= rotulo %> <span data-elenco-contagem="<%= valor %>"><%= valor === 'todas' ? jogadores.length : jogadores.filter(j => j.papel === valor).length %></span></button>
+                <button type="button" class="secondary" data-elenco-filtro="<%= valor %>" aria-pressed="<%= valor === 'todas' %>"><%= rotulo %> <span><%= valor === 'todas' ? jogadores.length : jogadores.filter(j => j.papel === valor).length %></span></button>
             <% }) %>
         </div>
     </div>
-    <p class="hint">Mensalistas têm prioridade nas vagas; avulsas participam por jogo. A participação não indica se o pagamento está em dia.</p>
+    <p class="hint">Nome, contato e perfil para os times. O vínculo mensal é gerenciado em <a href="/mensal">Mensalistas</a>.</p>
     <p class="hint" role="status" data-elenco-resultado><%= jogadores.length %> jogadora(s)</p>
     <% if (!jogadores.length) { %>
         <p class="empty">Nenhuma jogadora cadastrada. Use “Adicionar jogadora” para começar.</p>
     <% } else { %>
         <table class="elenco-tabela">
-            <thead><tr><th>Jogadora</th><th>Participação</th><th><span class="sr-only">Ações</span></th></tr></thead>
+            <thead><tr><th>Jogadora</th><th>Perfil para os times</th><th><span class="sr-only">Ações</span></th></tr></thead>
             <tbody>
                 <% jogadores.forEach(j => { %>
-                    <tr data-jogadora-row data-jogadora-id="<%= j.id %>">
-                        <td><strong data-jogadora-nome><%= j.nome %></strong><span class="elenco-alterada" data-jogadora-alterada hidden>Alterada</span></td>
+                    <tr data-jogadora-row data-jogadora-id="<%= j.id %>" data-participacao="<%= j.papel %>">
+                        <td><strong data-jogadora-nome><%= j.nome %></strong>
+                            <% if (j.papel === 'mensalista') { %><a class="badge mensalista" href="/mensal">Mensalista</a><% } %>
+                            <span class="elenco-alterada" data-jogadora-alterada hidden>Alterada</span></td>
                         <td>
                             <form data-config-form id="jogadora-<%= j.id %>" method="post" action="/elenco/<%= j.id %>/atualizar">
                                 <input type="hidden" name="_csrf" value="<%= csrfToken %>">
@@ -36,10 +38,7 @@
                                 <input type="text" hidden name="telefone" value="<%= j.telefone || '' %>">
                                 <input type="text" hidden name="nivel" value="<%= j.nivel %>">
                                 <input type="text" hidden name="posicao" value="<%= j.posicao %>">
-                                <select name="papel" class="elenco-participacao <%= j.papel %>" aria-label="Participação de <%= j.nome %>">
-                                    <option value="mensalista" <%= j.papel === 'mensalista' ? 'selected' : '' %>>Mensalista</option>
-                                    <option value="avulso" <%= j.papel === 'avulso' ? 'selected' : '' %>>Avulsa</option>
-                                </select>
+                                <span class="elenco-perfil" data-jogadora-perfil><%= j.posicao === 'indefinida' ? 'Posição não informada' : j.posicao %> · Nível <%= j.nivel %></span>
                                 <button type="submit">Salvar</button>
                             </form>
                         </td>
@@ -61,11 +60,7 @@
     <form method="post" action="/elenco">
         <input type="hidden" name="_csrf" value="<%= csrfToken %>">
         <%- include('_jogadora-dados', { prefixo: 'nova' }) %>
-        <label for="nova-papel">Participação</label>
-        <select id="nova-papel" name="papel">
-            <option value="avulso" selected>Avulsa</option>
-            <option value="mensalista">Mensalista</option>
-        </select>
+        <p class="hint">Novas jogadoras entram como avulsas. Gerencie o vínculo mensal em <a href="/mensal">Mensalistas</a>.</p>
         <div class="jogadora-drawer-footer">
             <button type="button" class="secondary" data-dialog-fechar>Cancelar</button>
             <button type="submit">Adicionar jogadora</button>
@@ -87,7 +82,7 @@
         </div>
     </form>
     <div class="jogadora-drawer-extra">
-        <a data-jogadora-historico href="/elenco">Histórico de participação</a>
+        <a href="/mensal">Gerenciar vínculo mensal</a>
         <form id="jogadora-remover" method="post" action="/elenco" data-confirm="Excluir {nome} e seu histórico de pagamentos e presenças? Esta ação não pode ser desfeita.">
             <input type="hidden" name="_csrf" value="<%= csrfToken %>">
             <button type="submit" class="danger">Remover jogadora</button>

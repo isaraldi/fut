@@ -36,8 +36,8 @@
         <% [
             [pendentes, 'Mensalidades pendentes', pagamentosMes.pagos + ' de ' + pagamentosMes.devem + ' mensalistas com pagamento registrado.', '/pagamentos/mensalistas?mes=' + mes],
             [avulsasPendentes, 'Avulsas com pagamento pendente', 'Jogadoras com vaga na última enquete.', '/pagamentos/avulsos'],
-            [renovacoesPendentes, 'Renovações sem resposta', 'Acompanhe o prazo de prioridade do mensal.', '/mensal'],
-            [filaMensal, 'Interessadas na fila do mensal', renovacoesPendentes ? 'Resolva as renovações antes de aprovar entradas.' : 'Confira as vagas antes de aprovar entradas.', '/mensal']
+            [renovacoesPendentes, 'Renovações sem resposta', 'Acompanhe o prazo de prioridade do mensal.', '/mensal?aba=renovacao'],
+            [filaMensal, 'Interessadas na fila do mensal', renovacoesPendentes ? 'Resolva as renovações antes de aprovar entradas.' : 'Confira as vagas antes de aprovar entradas.', '/mensal?aba=renovacao']
         ].forEach(([quantidade, titulo, descricao, destino]) => { %>
             <a class="card inicio-pendencia" href="<%= destino %>">
                 <span class="inicio-pendencia-numero <%= quantidade ? 'com-pendencia' : '' %>"><%= quantidade %></span>

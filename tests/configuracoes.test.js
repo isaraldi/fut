@@ -97,22 +97,56 @@ async function main() {
         assert.equal(salva.nome, cadastro.nome);
         assert.equal(salva.telefone, cadastro.telefone);
         assert.equal(salva.nivel, 4);
-        assert.equal(salva.papel, 'mensalista');
+        assert.equal(salva.papel, 'avulso');
         assert.equal(salva.posicao, 'defesa');
         assert.equal(salva.whatsapp_id, 'teste@c.us');
-        assert.equal(dados.getPapelHistorico(jogadora).length, 1);
+        assert.equal(dados.getPapelHistorico(jogadora).length, 0);
         assert.equal((await lote('/elenco', [alterar(rotaJogadora, cadastro)])).status, 200);
-        assert.equal(dados.getPapelHistorico(jogadora).length, 1);
+        assert.equal(dados.getPapelHistorico(jogadora).length, 0);
         assert.equal((await lote('/elenco', [
             alterar(rotaJogadora, { ...cadastro, papel: 'avulso' }),
             alterar('/elenco/999999/atualizar', cadastro),
         ])).status, 400);
-        assert.equal(dados.db.prepare('SELECT papel FROM jogadores WHERE id = ?').get(jogadora).papel, 'mensalista');
-        assert.equal(dados.getPapelHistorico(jogadora).length, 1);
+        assert.equal(dados.db.prepare('SELECT papel FROM jogadores WHERE id = ?').get(jogadora).papel, 'avulso');
+        assert.equal(dados.getPapelHistorico(jogadora).length, 0);
         assert.equal((await lote('/elenco', [alterar(rotaJogadora, { ...cadastro, nivel: '9' })])).status, 400);
         assert.equal((await lote('/elenco', [alterar(rotaJogadora, cadastro)], 'invalido')).status, 403);
         assert.equal((await lote('/elenco', [alterar('/elenco/1/excluir', {})])).status, 400);
-        console.log('OK: salvamento conjunto, rollback, ações separadas, checkbox, edição de jogadoras, histórico e CSRF.');
+        // O vínculo só muda na gestão de mensalistas; editar o perfil o preserva.
+        assert.equal((await post('/mensal/adicionar', { _csrf: csrf, jogador_id: String(jogadora) })).status, 302);
+        assert.equal(dados.getPapelHistorico(jogadora).length, 1);
+        assert.equal((await post('/mensal/adicionar', { _csrf: csrf, jogador_id: String(jogadora) })).status, 302);
+        assert.equal(dados.getPapelHistorico(jogadora).length, 1);
+        assert.equal((await lote('/elenco', [alterar(rotaJogadora, { ...cadastro, papel: 'avulso' })])).status, 200);
+        assert.equal(dados.db.prepare('SELECT papel FROM jogadores WHERE id = ?').get(jogadora).papel, 'mensalista');
+        assert.equal((await post('/pagamentos/mensalistas/' + jogadora + '/toggle', { _csrf: csrf, mes: '2026-10' })).status, 302);
+        dados.criarCicloMensal('chamada-teste', '2026-10', 36);
+        const interessada = Number(dados.db.prepare("INSERT INTO jogadores (nome, papel) VALUES ('Interessada de teste', 'avulso')").run().lastInsertRowid);
+        dados.responderChamadaMensal('chamada-teste', interessada, 'sim');
+        const convite = dados.getResumoMensal().fila[0].id;
+        assert.equal((await post('/mensal/adicionar', { _csrf: csrf, jogador_id: String(interessada) })).status, 409);
+        assert.equal((await post('/mensal/jogadoras/' + interessada + '/participacao', { _csrf: csrf, papel: 'mensalista' })).status, 409);
+        assert.equal((await post('/mensal/' + convite + '/aprovar', { _csrf: csrf })).status, 302);
+        assert.equal(dados.db.prepare('SELECT papel FROM jogadores WHERE id = ?').get(interessada).papel, 'avulso');
+        const retirada = '/mensal/jogadoras/' + jogadora + '/participacao';
+        assert.equal((await post(retirada, { _csrf: 'invalido', papel: 'avulso' })).status, 403);
+        assert.equal((await post(retirada, { _csrf: csrf, papel: 'invalido' })).status, 400);
+        assert.equal((await post(retirada, { _csrf: csrf, papel: 'avulso' })).status, 302);
+        assert.equal(dados.db.prepare('SELECT papel FROM jogadores WHERE id = ?').get(jogadora).papel, 'avulso');
+        assert.equal(dados.getPapelHistorico(jogadora).length, 2);
+        assert.equal(dados.db.prepare('SELECT pago FROM pagamentos WHERE jogador_id = ?').get(jogadora).pago, 1);
+        assert.equal(dados.getResumoMensal().pendentes.length, 1); // ajuste não responde à chamada
+        assert.equal(dados.getResumoMensal().fila[0].id, convite);
+        dados.responderChamadaMensal('chamada-teste', jogadora, 'nao');
+        const aprovada = await post('/mensal/' + convite + '/aprovar', { _csrf: csrf });
+        assert(aprovada.headers.get('location').startsWith('/mensal?aba=renovacao'));
+        assert.equal(dados.db.prepare('SELECT papel FROM jogadores WHERE id = ?').get(interessada).papel, 'mensalista');
+        for (const rota of ['/elenco', '/mensal', '/mensal?aba=renovacao', '/pagamentos', '/pagamentos?aba=avulsas', '/mensal/jogadoras/' + jogadora + '/historico']) {
+            assert.equal((await fetch(base + rota, { headers: { Cookie: cookie } })).status, 200, rota);
+        }
+        const antigo = await fetch(base + '/pagamentos/mensalistas?mes=2026-10', { headers: { Cookie: cookie }, redirect: 'manual' });
+        assert.equal(antigo.headers.get('location'), '/pagamentos?mes=2026-10');
+        console.log('OK: salvamento, perfil separado do mensal, histórico, pagamentos preservados, prioridade/fila e CSRF.');
     } finally {
         if (dados?.db.open) dados.db.close();
         if (servidor && servidor.exitCode === null) {

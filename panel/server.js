@@ -26,7 +26,7 @@ const multer = require('multer');
 const SqliteSessionStore = require('./sqlite-session-store');
 const {
     db,
-    getResumoMensal, aprovarInteressadaMensal,
+    getResumoMensal, aprovarInteressadaMensal, definirPapelJogador,
     getConfig,
     setConfig,
     getGrupos,
@@ -41,7 +41,6 @@ const {
     atualizarMensagemSemanal,
     getMensagensAgendadas,
     excluirMensagemAgendada,
-    registrarMudancaPapel,
     getPapelHistorico,
     getConfirmadosDaEnquete,
     getListaDeEsperaDaEnquete,
@@ -526,11 +525,25 @@ app.post('/jogos/:id/confirmar/:jogadorId/remover', requireLogin, (req, res) => 
 // ---------- PAGAMENTOS ----------
 
 app.get('/pagamentos', requireLogin, (req, res) => {
-    const query = req.query.mes ? '?mes=' + encodeURIComponent(req.query.mes) : '';
-    res.redirect('/pagamentos/mensalistas' + query);
-});
+    const aba = req.query.aba === 'avulsas' ? 'avulsas' : 'mensalistas';
+    if (aba === 'avulsas') {
+        const enquete = db.prepare('SELECT * FROM enquetes ORDER BY id DESC LIMIT 1').get();
 
-app.get('/pagamentos/mensalistas', requireLogin, (req, res) => {
+        let jogadores = [];
+        if (enquete) {
+            const confirmados = getConfirmadosDaEnquete(enquete.id).filter((j) => j.papel === 'avulso');
+            const statusStmt = db.prepare(
+                'SELECT pago FROM pagamentos_avulsos WHERE jogador_id = ? AND enquete_id = ?',
+            );
+            jogadores = confirmados.map((j) => ({
+                id: j.id,
+                nome: j.nome,
+                pago: !!statusStmt.get(j.id, enquete.id)?.pago,
+            }));
+        }
+
+        return res.render('pagamentos', { aba, jogadores, enquete, mes: null, ok: req.query.ok });
+    }
     const mes = req.query.mes || mesReferenciaAtual(new Date(), Number(getConfig('enquete_dia_semana')));
 
     const jogadores = db
@@ -545,7 +558,11 @@ app.get('/pagamentos/mensalistas', requireLogin, (req, res) => {
         )
         .all(mes);
 
-    res.render('pagamentos-mensalistas', { usuario: req.session.usuario, jogadores, mes, ok: req.query.ok });
+    res.render('pagamentos', { aba, jogadores, mes, enquete: null, ok: req.query.ok });
+});
+
+app.get('/pagamentos/mensalistas', requireLogin, (req, res) => {
+    res.redirect('/pagamentos' + (req.query.mes ? '?mes=' + encodeURIComponent(req.query.mes) : ''));
 });
 
 app.post('/pagamentos/mensalistas/:jogadorId/toggle', requireLogin, (req, res) => {
@@ -568,27 +585,10 @@ app.post('/pagamentos/mensalistas/:jogadorId/toggle', requireLogin, (req, res) =
         ).run(jogadorId, mes);
     }
 
-    redirectOk(res, '/pagamentos/mensalistas?mes=' + encodeURIComponent(mes), 'Pagamento atualizado!');
+    redirectOk(res, '/pagamentos?mes=' + encodeURIComponent(mes), 'Pagamento atualizado!');
 });
 
-app.get('/pagamentos/avulsos', requireLogin, (req, res) => {
-    const enquete = db.prepare('SELECT * FROM enquetes ORDER BY id DESC LIMIT 1').get();
-
-    let jogadores = [];
-    if (enquete) {
-        const confirmados = getConfirmadosDaEnquete(enquete.id).filter((j) => j.papel === 'avulso');
-        const statusStmt = db.prepare(
-            'SELECT pago FROM pagamentos_avulsos WHERE jogador_id = ? AND enquete_id = ?',
-        );
-        jogadores = confirmados.map((j) => ({
-            id: j.id,
-            nome: j.nome,
-            pago: !!statusStmt.get(j.id, enquete.id)?.pago,
-        }));
-    }
-
-    res.render('pagamentos-avulsos', { usuario: req.session.usuario, enquete, jogadores, ok: req.query.ok });
-});
+app.get('/pagamentos/avulsos', requireLogin, (req, res) => res.redirect('/pagamentos?aba=avulsas'));
 
 app.post('/pagamentos/avulsos/:jogadorId/toggle', requireLogin, (req, res) => {
     const jogadorId = Number(req.params.jogadorId);
@@ -608,7 +608,7 @@ app.post('/pagamentos/avulsos/:jogadorId/toggle', requireLogin, (req, res) => {
         ).run(jogadorId, enqueteId);
     }
 
-    redirectOk(res, '/pagamentos/avulsos', 'Pagamento atualizado!');
+    redirectOk(res, '/pagamentos?aba=avulsas', 'Pagamento atualizado!');
 });
 
 // ---------- ELENCO ----------
@@ -628,7 +628,7 @@ app.get('/elenco/inativos', requireLogin, (req, res) => {
 });
 
 app.post('/elenco', requireLogin, (req, res) => {
-    const { nome, telefone, nivel, papel, posicao } = req.body;
+    const { nome, telefone, nivel, posicao } = req.body;
     if (!nome || !nome.trim()) return res.redirect('/elenco');
 
     db.prepare(
@@ -637,7 +637,7 @@ app.post('/elenco', requireLogin, (req, res) => {
         nome.trim(),
         telefone || null,
         Number(nivel) || 3,
-        papel === 'mensalista' ? 'mensalista' : 'avulso',
+        'avulso',
         posicaoValida(posicao),
     );
 
@@ -668,16 +668,14 @@ app.post('/elenco/config', requireLogin, (req, res) => {
     redirectOk(res, '/elenco/config', 'Configuração salva!');
 });
 
-// A edição individual e o lote usam as mesmas validações e histórico de participação.
+// O perfil não altera o vínculo mensal, gerenciado nas rotas de mensalistas.
 function salvarJogadora(id, campos) {
-    const atual = db.prepare('SELECT papel FROM jogadores WHERE id = ? AND ativo = 1').get(id);
+    const atual = db.prepare('SELECT id FROM jogadores WHERE id = ? AND ativo = 1').get(id);
     const nome = (campos.nome || '').trim();
     const nivel = Number(campos.nivel);
-    if (!atual || !nome || !Number.isInteger(nivel) || nivel < 1 || nivel > 5 ||
-        !['mensalista', 'avulso'].includes(campos.papel)) throw new Error('Dados da jogadora inválidos');
-    db.prepare('UPDATE jogadores SET nome = ?, telefone = ?, nivel = ?, papel = ?, posicao = ? WHERE id = ?')
-        .run(nome, (campos.telefone || '').trim() || null, nivel, campos.papel, posicaoValida(campos.posicao), id);
-    if (atual.papel !== campos.papel) registrarMudancaPapel(id, atual.papel, campos.papel);
+    if (!atual || !nome || !Number.isInteger(nivel) || nivel < 1 || nivel > 5) throw new Error('Dados da jogadora inválidos');
+    db.prepare('UPDATE jogadores SET nome = ?, telefone = ?, nivel = ?, posicao = ? WHERE id = ?')
+        .run(nome, (campos.telefone || '').trim() || null, nivel, posicaoValida(campos.posicao), id);
 }
 
 app.post('/elenco/:id/atualizar', requireLogin, (req, res) => {
@@ -695,7 +693,6 @@ app.post('/elenco/salvar-todas', requireLogin, (req, res) => {
     const nomes = arr(req.body.nome);
     const telefones = arr(req.body.telefone);
     const niveis = arr(req.body.nivel);
-    const papeis = arr(req.body.papel);
     const posicoes = arr(req.body.posicao);
 
     const salvarTodas = db.transaction(() => {
@@ -704,18 +701,12 @@ app.post('/elenco/salvar-todas', requireLogin, (req, res) => {
             if (!nome) return;
 
             const id = Number(idStr);
-            const atual = db.prepare('SELECT papel FROM jogadores WHERE id = ?').get(id);
+            const atual = db.prepare('SELECT id FROM jogadores WHERE id = ?').get(id);
             if (!atual) return;
 
-            const papelNovo = papeis[i] === 'mensalista' ? 'mensalista' : 'avulso';
-
             db.prepare(
-                'UPDATE jogadores SET nome = ?, telefone = ?, nivel = ?, papel = ?, posicao = ? WHERE id = ?',
-            ).run(nome, telefones[i] || null, Number(niveis[i]) || 3, papelNovo, posicaoValida(posicoes[i]), id);
-
-            if (atual.papel !== papelNovo) {
-                registrarMudancaPapel(id, atual.papel, papelNovo);
-            }
+                'UPDATE jogadores SET nome = ?, telefone = ?, nivel = ?, posicao = ? WHERE id = ?',
+            ).run(nome, telefones[i] || null, Number(niveis[i]) || 3, posicaoValida(posicoes[i]), id);
         });
     });
 
@@ -736,7 +727,9 @@ app.post('/elenco/:id/reativar', requireLogin, (req, res) => {
     redirectOk(res, '/elenco', 'Jogadora reativada!');
 });
 
-app.get('/elenco/:id/historico', requireLogin, (req, res) => {
+app.get('/elenco/:id/historico', requireLogin, (req, res) => res.redirect('/mensal/jogadoras/' + Number(req.params.id) + '/historico'));
+
+app.get('/mensal/jogadoras/:id/historico', requireLogin, (req, res) => {
     const id = Number(req.params.id);
     const jogador = db.prepare('SELECT * FROM jogadores WHERE id = ?').get(id);
     if (!jogador) return res.redirect('/elenco');
@@ -1029,12 +1022,49 @@ app.get('/mensagens/automaticas', requireLogin, (req, res) => {
 });
 
 app.get('/mensal', requireLogin, (req, res) => {
-    res.render('mensal', { resumoMensal: getResumoMensal(), ok: req.query.ok });
+    const resumoMensal = getResumoMensal();
+    const jogadoras = db.prepare('SELECT id, nome, papel FROM jogadores WHERE ativo = 1 ORDER BY nome COLLATE NOCASE').all();
+    res.render('mensal', {
+        resumoMensal, aba: req.query.aba === 'renovacao' ? 'renovacao' : 'atuais',
+        mensalistas: jogadoras.filter(j => j.papel === 'mensalista'),
+        avulsas: jogadoras.filter(j => j.papel === 'avulso'),
+        ok: req.query.ok,
+    });
+});
+
+// Ajustes manuais preservam pagamentos e não respondem nem reordenam a chamada.
+function ajustarParticipacaoMensal(id, papel) {
+    return db.transaction(() => {
+        const jogadora = db.prepare('SELECT papel FROM jogadores WHERE id = ? AND ativo = 1').get(id);
+        if (!jogadora) return 404;
+        if (papel === 'mensalista' && jogadora.papel !== 'mensalista') {
+            const resumo = getResumoMensal();
+            if (resumo && (resumo.pendentes.length || resumo.fila.length)) return 409;
+        }
+        definirPapelJogador(id, papel);
+        return 200;
+    }).immediate();
+}
+
+function responderAjusteMensal(req, res, papel, id) {
+    if (!['mensalista', 'avulso'].includes(papel)) return res.status(400).send('Participação inválida.');
+    const status = ajustarParticipacaoMensal(id, papel);
+    if (status === 404) return res.status(404).send('Jogadora não encontrada.');
+    if (status === 409) return res.status(409).send('Há renovações pendentes ou interessadas na fila. Use a aba Renovação e fila para aprovar novas entradas na ordem.');
+    redirectOk(res, '/mensal', papel === 'mensalista' ? 'Mensalista adicionada manualmente.' : 'Jogadora retirada do mensal. O cadastro e os pagamentos foram preservados.');
+}
+
+app.post('/mensal/jogadoras/:id/participacao', requireLogin, (req, res) => {
+    return responderAjusteMensal(req, res, req.body.papel, Number(req.params.id));
+});
+
+app.post('/mensal/adicionar', requireLogin, (req, res) => {
+    return responderAjusteMensal(req, res, 'mensalista', Number(req.body.jogador_id));
 });
 
 app.post(['/mensal/:id/aprovar', '/mensagens/mensal/:id/aprovar'], requireLogin, (req, res) => {
     const aprovada = aprovarInteressadaMensal(Number(req.params.id));
-    redirectOk(res, '/mensal', aprovada ? 'Entrada no mensal confirmada!' : 'Aguarde as renovações pendentes e confirme a primeira interessada da fila. Confira se há vaga.');
+    redirectOk(res, '/mensal?aba=renovacao', aprovada ? 'Entrada no mensal confirmada!' : 'Aguarde as renovações pendentes e confirme a primeira interessada da fila. Confira se há vaga.');
 });
 
 app.post('/mensagens/fechamento-mensal', requireLogin, (req, res) => {

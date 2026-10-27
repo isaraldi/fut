@@ -2,13 +2,13 @@
     var rows = Array.from(document.querySelectorAll('[data-jogadora-row]'));
     var search = document.getElementById('elenco-busca');
     var filters = Array.from(document.querySelectorAll('[data-elenco-filtro]'));
+    var filter = 'todas';
     var empty = document.querySelector('[data-elenco-vazio]');
     var result = document.querySelector('[data-elenco-resultado]');
     var createDialog = document.getElementById('jogadora-nova');
     var editDialog = document.getElementById('jogadora-edicao');
     var editor = document.getElementById('jogadora-editor');
     var activeRow = null;
-    var filter = 'todas';
     var draft = '';
 
     function values(form) {
@@ -28,17 +28,9 @@
             var form = row.querySelector('form');
             row.querySelector('[data-jogadora-nome]').textContent = form.elements.nome.value;
             row.querySelector('[data-jogadora-alterada]').hidden = values(form) === initial.get(row);
-            var select = form.elements.papel;
-            select.classList.toggle('mensalista', select.value === 'mensalista');
-            select.classList.toggle('avulso', select.value === 'avulso');
-            select.setAttribute('aria-label', 'Participação de ' + form.elements.nome.value);
+            var position = form.elements.posicao.value;
+            row.querySelector('[data-jogadora-perfil]').textContent = (position === 'indefinida' ? 'Posição não informada' : position) + ' · Nível ' + form.elements.nivel.value;
             row.querySelector('[data-jogadora-editar]').setAttribute('aria-label', 'Editar ' + form.elements.nome.value);
-        });
-        document.querySelectorAll('[data-elenco-contagem]').forEach(function (count) {
-            var kind = count.dataset.elencoContagem;
-            count.textContent = kind === 'todas' ? rows.length : rows.filter(function (row) {
-                return row.querySelector('[name="papel"]').value === kind;
-            }).length;
         });
     }
     function applyFilter() {
@@ -47,7 +39,7 @@
         rows.forEach(function (row) {
             var form = row.querySelector('form');
             row.hidden = !normalize(form.elements.nome.value).includes(query) ||
-                (filter !== 'todas' && form.elements.papel.value !== filter);
+                (filter !== 'todas' && row.dataset.participacao !== filter);
             if (!row.hidden) visible++;
         });
         if (empty) empty.hidden = visible !== 0;
@@ -61,9 +53,6 @@
             applyFilter();
         });
     });
-    document.addEventListener('change', function (event) {
-        if (event.target.matches('.elenco-participacao')) refreshRows();
-    });
     rows.forEach(function (row) {
         row.querySelector('form').addEventListener('reset', function () {
             requestAnimationFrame(function () { refreshRows(); applyFilter(); });
@@ -75,7 +64,6 @@
                 editor.elements[name].value = source.elements[name].value;
             });
             document.getElementById('jogadora-edicao-titulo').textContent = source.elements.nome.value;
-            editDialog.querySelector('[data-jogadora-historico]').href = '/elenco/' + row.dataset.jogadoraId + '/historico';
             var remove = document.getElementById('jogadora-remover');
             remove.action = '/elenco/' + row.dataset.jogadoraId + '/excluir';
             remove.dataset.confirmNome = source.elements.nome.value;
