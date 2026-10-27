@@ -7,7 +7,7 @@
 <div class="card">
     <h1>Inclusão automática</h1>
     <p class="hint">Cadastra novos membros do grupo com o nome e o telefone disponíveis no WhatsApp.</p>
-    <form method="post" action="/elenco/config"><input type="hidden" name="_csrf" value="<%= csrfToken %>">
+    <form data-config-form method="post" action="/elenco/config"><input type="hidden" name="_csrf" value="<%= csrfToken %>">
         <div class="switch-row">
             <input type="checkbox" id="autoIncluir" name="autoIncluir" <%= autoIncluir ? 'checked' : '' %>>
             <label for="autoIncluir">Incluir automaticamente novos membros do grupo</label>

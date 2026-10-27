@@ -8,10 +8,10 @@
     <div class="card">
         <h1>Dia e horário</h1>
         <p class="hint">Define o próximo jogo (ou hoje, se for o dia escolhido) e preenche <code>{data}</code>, <code>{dia}</code> e <code>{hora}</code> na enquete. O mensal fecha no dia seguinte ao último jogo do mês.</p>
-        <form method="post" action="/jogo/config"><input type="hidden" name="_csrf" value="<%= csrfToken %>">
-            <input type="hidden" name="valorMensal" value="<%= valorMensal || '' %>">
-            <input type="hidden" name="valorAvulso" value="<%= valorAvulso || '' %>">
-            <input type="hidden" name="vagasMaximo" value="<%= vagasMaximo || '' %>">
+        <form data-config-form method="post" action="/jogo/config"><input type="hidden" name="_csrf" value="<%= csrfToken %>">
+
+
+
             <div class="form-row">
                 <div>
                     <label for="jogo-config-campo-1">Dia da semana</label>
@@ -50,12 +50,12 @@
     <div class="card">
         <h1>Vagas</h1>
         <p class="hint">Mensalistas têm prioridade. As vagas restantes vão para avulsas por ordem de confirmação; as demais entram na espera. Em branco: sem limite. Alterações valem só para novas enquetes.</p>
-        <form method="post" action="/jogo/config"><input type="hidden" name="_csrf" value="<%= csrfToken %>">
-            <input type="hidden" name="diaSemana" value="<%= diaSemana %>">
-            <input type="hidden" name="horaH" value="<%= hora.split(':')[0] %>">
-            <input type="hidden" name="horaM" value="<%= hora.split(':')[1] %>">
-            <input type="hidden" name="valorMensal" value="<%= valorMensal || '' %>">
-            <input type="hidden" name="valorAvulso" value="<%= valorAvulso || '' %>">
+        <form data-config-form method="post" action="/jogo/config"><input type="hidden" name="_csrf" value="<%= csrfToken %>">
+
+
+
+
+
             <div class="form-row">
                 <div>
                     <label for="jogo-config-campo-2">Limite de jogadoras</label>
@@ -73,7 +73,7 @@
             <p class="hint">Com participantes para 3 times completos, há rodízio entre 3; caso contrário, são 2 times e reservas. Abaixo de 2 times completos, as jogadoras são divididas em 2. Sobras ficam na reserva; a ordem do rodízio é sorteada.</p>
         </details>
         <p class="hint"><strong>Automática:</strong> <code>!times</code> sorteia e envia. <strong>Manual:</strong> monte e envie em <a href="/times">Times</a>; o comando fica desativado.</p>
-        <form method="post" action="/jogo/config/times"><input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <form data-config-form method="post" action="/jogo/config/times"><input type="hidden" name="_csrf" value="<%= csrfToken %>">
             <div class="form-row">
                 <div>
                     <label for="jogo-config-campo-3">Jogadoras por time</label>
@@ -102,11 +102,11 @@
     <div class="card">
         <h1>Valores</h1>
         <p class="hint">O bot lê comprovantes no grupo ou no privado e identifica mensalidade ou avulso pelo valor. Valores incompatíveis ou ambíguos exigem conferência em <a href="/logs">Atividade do bot</a>; não são marcados como pagos.</p>
-        <form method="post" action="/jogo/config"><input type="hidden" name="_csrf" value="<%= csrfToken %>">
-            <input type="hidden" name="diaSemana" value="<%= diaSemana %>">
-            <input type="hidden" name="horaH" value="<%= hora.split(':')[0] %>">
-            <input type="hidden" name="horaM" value="<%= hora.split(':')[1] %>">
-            <input type="hidden" name="vagasMaximo" value="<%= vagasMaximo || '' %>">
+        <form data-config-form method="post" action="/jogo/config"><input type="hidden" name="_csrf" value="<%= csrfToken %>">
+
+
+
+
             <div class="form-row">
                 <div>
                     <label for="jogo-config-campo-7">Valor da mensalidade (R$)</label>

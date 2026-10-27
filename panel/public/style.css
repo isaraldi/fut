@@ -459,6 +459,30 @@ button:focus-visible, a:focus-visible, summary:focus-visible {
 .form-help summary { cursor: pointer; font-size: 0.85rem; font-weight: 600; }
 .form-help .hint { margin: 10px 0 0; }
 
+.config-enhanced form[data-config-form] [type=submit] { display: none; }
+.config-save-bar[hidden] { display: none; }
+.config-save-bar {
+    position: fixed;
+    left: calc(var(--sidebar-w) + 16px);
+    right: 16px;
+    bottom: 16px;
+    z-index: 30;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+    padding: 14px 18px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    font-size: 0.9rem;
+}
+.config-save-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.config-save-bar .erro { margin: 6px 0 0; }
+.has-unsaved-config .content { padding-bottom: 170px; }
+
 label, .field-label { font-size: 0.85rem; color: var(--muted); display: block; margin-bottom: 4px; }
 
 .login-wrap {
@@ -629,4 +653,6 @@ code {
     .app { flex-direction: column; }
     .sidebar { width: 100%; height: auto; position: static; }
     .content { padding: 16px; }
+    .config-save-bar { left: 12px; right: 12px; bottom: 12px; }
+    .has-unsaved-config .content { padding-bottom: 200px; }
 }

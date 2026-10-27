@@ -192,6 +192,134 @@ const uploadLogo = multer({
     fileFilter: (req, file, cb) => cb(null, !!EXTENSOES_PERMITIDAS[file.mimetype]),
 });
 
+// Apenas configurações: enviar mensagens, excluir e sincronizar continuam em rotas próprias.
+const salvarConfiguracao = {
+    '/elenco/config': (body) => {
+        setConfig('elenco_auto_incluir_grupo', body.autoIncluir === 'on' ? '1' : '0');
+    },
+    '/jogo/config': (body) => {
+        if (Object.hasOwn(body, 'diaSemana')) {
+            const diaSemana = Number(body.diaSemana);
+            if (Number.isInteger(diaSemana) && diaSemana >= 0 && diaSemana <= 6) setConfig('enquete_dia_semana', String(diaSemana));
+            const horaH = String(body.horaH || '20').padStart(2, '0');
+            const horaM = String(body.horaM || '00').padStart(2, '0');
+            setConfig('enquete_hora', `${horaH}:${horaM}`);
+        }
+        for (const [campo, chave] of [['valorMensal', 'valor_mensal'], ['valorAvulso', 'valor_avulso']]) {
+            if (!Object.hasOwn(body, campo)) continue;
+            const valor = parseFloat(String(body[campo]).replace(',', '.'));
+            setConfig(chave, Number.isFinite(valor) && valor > 0 ? valor.toFixed(2) : '');
+        }
+        if (Object.hasOwn(body, 'vagasMaximo')) {
+            const vagas = parseInt(body.vagasMaximo, 10);
+            setConfig('jogo_vagas_maximo', Number.isFinite(vagas) && vagas > 0 ? String(vagas) : '');
+        }
+    },
+    '/jogo/config/times': (body) => {
+        const inteiro = (valor, padrao, minimo) => {
+            const n = parseInt(valor, 10);
+            return String(Number.isFinite(n) && n >= minimo ? n : padrao);
+        };
+        setConfig('jogo_jogadoras_por_time', inteiro(body.porTime, 5, 1));
+        setConfig('jogo_times_modo', body.timesModo === 'manual' ? 'manual' : 'automatico');
+        setConfig('jogo_rodizio_minutos', inteiro(body.rodizioMinutos, 10, 1));
+        setConfig('jogo_duracao_minutos', inteiro(body.duracaoMinutos, 60, 1));
+    },
+    '/enquete/config/auto': (body) => {
+        const envioDiaSemana = Number(body.envioDiaSemana);
+        const envioHoraH = String(body.envioHoraH || '09').padStart(2, '0');
+        const envioHoraM = String(body.envioHoraM || '00').padStart(2, '0');
+
+        if (envioDiaSemana >= 0 && envioDiaSemana <= 6) {
+            setConfig('enquete_envio_dia_semana', String(envioDiaSemana));
+        }
+        setConfig('enquete_envio_hora', `${envioHoraH}:${envioHoraM}`);
+        if (body.grupoId) setConfig('enquete_grupo_id', body.grupoId);
+        setConfig('enquete_auto_enviar', body.autoEnviar === 'on' ? '1' : '0');
+    },
+    '/enquete/config/titulo': (body) => {
+        const titulo = (body.titulo || '').trim();
+        if (titulo) setConfig('enquete_titulo_template', titulo);
+    },
+    '/mensagens/fechamento-mensal': (body) => {
+        setConfig('fechamento_mensal_ativo', body.fechamentoMensalAtivo === 'on' ? '1' : '0');
+
+        const mensagem = String(body.fechamentoMensalMensagem || '').trim();
+        if (mensagem) setConfig('fechamento_mensal_mensagem', mensagem);
+
+        const diaLimite = parseInt(body.pagamentoDiaLimite, 10);
+        setConfig('pagamento_dia_limite', Number.isFinite(diaLimite) && diaLimite >= 1 && diaLimite <= 31 ? String(diaLimite) : '7');
+
+        const horaH = String(body.fechamentoMensalHoraH || '00').padStart(2, '0');
+        const horaM = String(body.fechamentoMensalHoraM || '00').padStart(2, '0');
+        setConfig('fechamento_mensal_hora', `${horaH}:${horaM}`);
+
+        const prazoHoras = parseInt(body.fechamentoMensalPrazoHoras, 10);
+        setConfig('fechamento_mensal_prazo_horas', Number.isFinite(prazoHoras) && prazoHoras >= 1 ? String(prazoHoras) : '36');
+    },
+    '/mensagens/lista-confirmada': (body) => {
+        const mensagem = String(body.mensagem || '').trim();
+        if (mensagem) setConfig('lista_confirmada_mensagem', mensagem);
+    },
+    '/mensagens/lista-atual': (body) => {
+        const mensagem = String(body.mensagem || '').trim();
+        if (mensagem) setConfig('lista_atual_mensagem', mensagem);
+    },
+    '/mensagens/lista-espera': (body) => {
+        const mensagem = String(body.mensagem || '').trim();
+        if (mensagem) setConfig('lista_espera_mensagem', mensagem);
+    },
+    '/mensagens/times': (body) => {
+        const mensagem = String(body.mensagem || '').trim();
+        if (mensagem) setConfig('times_mensagem', mensagem);
+    },
+};
+
+const configuracoesPorPagina = {
+    '/jogo/config': ['/jogo/config', '/jogo/config/times'],
+    '/enquete/config': ['/enquete/config/auto', '/enquete/config/titulo'],
+    '/mensagens/automaticas': ['/mensagens/lista-confirmada', '/mensagens/lista-atual', '/mensagens/lista-espera', '/mensagens/times', '/mensagens/fechamento-mensal'],
+    '/elenco/config': ['/elenco/config'],
+};
+
+app.post('/configuracoes/salvar', requireLogin, (req, res) => {
+    const pagina = req.body.pagina;
+    const permitidas = Object.hasOwn(configuracoesPorPagina, pagina) ? configuracoesPorPagina[pagina] : null;
+    if (!permitidas) return res.status(400).json({ erro: 'Página de configurações inválida.' });
+    let alteracoes;
+    try {
+        alteracoes = JSON.parse(req.body.alteracoes);
+    } catch {
+        return res.status(400).json({ erro: 'Não foi possível ler as alterações.' });
+    }
+    if (!Array.isArray(alteracoes) || !alteracoes.length || alteracoes.length > 100) {
+        return res.status(400).json({ erro: 'Selecione as configurações que deseja salvar.' });
+    }
+    // Valida o lote inteiro antes de escrever. As mudanças são confirmadas juntas.
+    const validas = alteracoes.every(item => item && typeof item.action === 'string' &&
+        item.campos && typeof item.campos === 'object' && !Array.isArray(item.campos) &&
+        Object.values(item.campos).every(valor => typeof valor === 'string') &&
+        (permitidas.includes(item.action) || (pagina === '/enquete/config' && /^\/enquete\/config\/opcoes\/\d+$/.test(item.action))));
+    if (!validas) return res.status(400).json({ erro: 'Há configurações inválidas. Recarregue a página.' });
+    try {
+        db.transaction(() => {
+            for (const { action, campos } of alteracoes) {
+                if (salvarConfiguracao[action]) salvarConfiguracao[action](campos);
+                else {
+                    if (!campos.texto?.trim()) throw new Error('Opção sem texto');
+                    const id = Number(action.split('/').pop());
+                    const resultado = db.prepare('UPDATE enquete_opcoes SET texto = ?, conta = ? WHERE id = ?')
+                        .run(campos.texto.trim(), campos.conta === '1' ? 1 : 0, id);
+                    if (!resultado.changes) throw new Error('Opção removida');
+                }
+            }
+        }).immediate();
+    } catch {
+        return res.status(400).json({ erro: 'Nenhuma alteração foi salva. Confira os campos e tente novamente.' });
+    }
+    return res.json({ destino: pagina + '?ok=' + encodeURIComponent('Alterações salvas!') });
+});
+
 // ---------- LOGIN ----------
 
 app.get('/login', (req, res) => {
@@ -562,7 +690,7 @@ app.post('/elenco/config/sincronizar', requireLogin, (req, res) => {
 });
 
 app.post('/elenco/config', requireLogin, (req, res) => {
-    setConfig('elenco_auto_incluir_grupo', req.body.autoIncluir === 'on' ? '1' : '0');
+    salvarConfiguracao['/elenco/config'](req.body);
     redirectOk(res, '/elenco/config', 'Configuração salva!');
 });
 
@@ -755,34 +883,12 @@ app.get('/jogo/config', requireLogin, (req, res) => {
 });
 
 app.post('/jogo/config', requireLogin, (req, res) => {
-    const diaSemana = Number(req.body.diaSemana);
-    const horaH = String(req.body.horaH || '20').padStart(2, '0');
-    const horaM = String(req.body.horaM || '00').padStart(2, '0');
-
-    if (diaSemana >= 0 && diaSemana <= 6) setConfig('enquete_dia_semana', String(diaSemana));
-    setConfig('enquete_hora', `${horaH}:${horaM}`);
-
-    const valorMensal = parseFloat(String(req.body.valorMensal).replace(',', '.'));
-    setConfig('valor_mensal', Number.isFinite(valorMensal) && valorMensal > 0 ? valorMensal.toFixed(2) : '');
-
-    const valorAvulso = parseFloat(String(req.body.valorAvulso).replace(',', '.'));
-    setConfig('valor_avulso', Number.isFinite(valorAvulso) && valorAvulso > 0 ? valorAvulso.toFixed(2) : '');
-
-    const vagasMaximo = parseInt(req.body.vagasMaximo, 10);
-    setConfig('jogo_vagas_maximo', Number.isFinite(vagasMaximo) && vagasMaximo > 0 ? String(vagasMaximo) : '');
-
+    salvarConfiguracao['/jogo/config'](req.body);
     redirectOk(res, '/jogo/config', 'Configurações salvas!');
 });
 
 app.post('/jogo/config/times', requireLogin, (req, res) => {
-    const inteiro = (valor, padrao, minimo) => {
-        const n = parseInt(valor, 10);
-        return String(Number.isFinite(n) && n >= minimo ? n : padrao);
-    };
-    setConfig('jogo_jogadoras_por_time', inteiro(req.body.porTime, 5, 1));
-    setConfig('jogo_times_modo', req.body.timesModo === 'manual' ? 'manual' : 'automatico');
-    setConfig('jogo_rodizio_minutos', inteiro(req.body.rodizioMinutos, 10, 1));
-    setConfig('jogo_duracao_minutos', inteiro(req.body.duracaoMinutos, 60, 1));
+    salvarConfiguracao['/jogo/config/times'](req.body);
     redirectOk(res, '/jogo/config', 'Configurações de times salvas!');
 });
 
@@ -803,17 +909,7 @@ app.get('/enquete/config', requireLogin, (req, res) => {
 });
 
 app.post('/enquete/config/auto', requireLogin, (req, res) => {
-    const envioDiaSemana = Number(req.body.envioDiaSemana);
-    const envioHoraH = String(req.body.envioHoraH || '09').padStart(2, '0');
-    const envioHoraM = String(req.body.envioHoraM || '00').padStart(2, '0');
-
-    if (envioDiaSemana >= 0 && envioDiaSemana <= 6) {
-        setConfig('enquete_envio_dia_semana', String(envioDiaSemana));
-    }
-    setConfig('enquete_envio_hora', `${envioHoraH}:${envioHoraM}`);
-    if (req.body.grupoId) setConfig('enquete_grupo_id', req.body.grupoId);
-    setConfig('enquete_auto_enviar', req.body.autoEnviar === 'on' ? '1' : '0');
-
+    salvarConfiguracao['/enquete/config/auto'](req.body);
     redirectOk(res, '/enquete/config', 'Envio automático atualizado!');
 });
 
@@ -827,8 +923,7 @@ app.post('/enquete/config/enviar-agora', requireLogin, (req, res) => {
 });
 
 app.post('/enquete/config/titulo', requireLogin, (req, res) => {
-    const titulo = (req.body.titulo || '').trim();
-    if (titulo) setConfig('enquete_titulo_template', titulo);
+    salvarConfiguracao['/enquete/config/titulo'](req.body);
     redirectOk(res, '/enquete/config', 'Título salvo!');
 });
 
@@ -948,45 +1043,27 @@ app.post(['/mensal/:id/aprovar', '/mensagens/mensal/:id/aprovar'], requireLogin,
 });
 
 app.post('/mensagens/fechamento-mensal', requireLogin, (req, res) => {
-    setConfig('fechamento_mensal_ativo', req.body.fechamentoMensalAtivo === 'on' ? '1' : '0');
-
-    const mensagem = String(req.body.fechamentoMensalMensagem || '').trim();
-    if (mensagem) setConfig('fechamento_mensal_mensagem', mensagem);
-
-    const diaLimite = parseInt(req.body.pagamentoDiaLimite, 10);
-    setConfig('pagamento_dia_limite', Number.isFinite(diaLimite) && diaLimite >= 1 && diaLimite <= 31 ? String(diaLimite) : '7');
-
-    const horaH = String(req.body.fechamentoMensalHoraH || '00').padStart(2, '0');
-    const horaM = String(req.body.fechamentoMensalHoraM || '00').padStart(2, '0');
-    setConfig('fechamento_mensal_hora', `${horaH}:${horaM}`);
-
-    const prazoHoras = parseInt(req.body.fechamentoMensalPrazoHoras, 10);
-    setConfig('fechamento_mensal_prazo_horas', Number.isFinite(prazoHoras) && prazoHoras >= 1 ? String(prazoHoras) : '36');
-
+    salvarConfiguracao['/mensagens/fechamento-mensal'](req.body);
     redirectOk(res, '/mensagens/automaticas', 'Configurações salvas!');
 });
 
 app.post('/mensagens/lista-confirmada', requireLogin, (req, res) => {
-    const mensagem = String(req.body.mensagem || '').trim();
-    if (mensagem) setConfig('lista_confirmada_mensagem', mensagem);
+    salvarConfiguracao['/mensagens/lista-confirmada'](req.body);
     redirectOk(res, '/mensagens/automaticas', 'Mensagem salva!');
 });
 
 app.post('/mensagens/lista-atual', requireLogin, (req, res) => {
-    const mensagem = String(req.body.mensagem || '').trim();
-    if (mensagem) setConfig('lista_atual_mensagem', mensagem);
+    salvarConfiguracao['/mensagens/lista-atual'](req.body);
     redirectOk(res, '/mensagens/automaticas', 'Mensagem salva!');
 });
 
 app.post('/mensagens/lista-espera', requireLogin, (req, res) => {
-    const mensagem = String(req.body.mensagem || '').trim();
-    if (mensagem) setConfig('lista_espera_mensagem', mensagem);
+    salvarConfiguracao['/mensagens/lista-espera'](req.body);
     redirectOk(res, '/mensagens/automaticas', 'Mensagem salva!');
 });
 
 app.post('/mensagens/times', requireLogin, (req, res) => {
-    const mensagem = String(req.body.mensagem || '').trim();
-    if (mensagem) setConfig('times_mensagem', mensagem);
+    salvarConfiguracao['/mensagens/times'](req.body);
     redirectOk(res, '/mensagens/automaticas', 'Mensagem salva!');
 });
 

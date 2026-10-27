@@ -26,7 +26,7 @@
             <summary>Campos disponíveis na mensagem</summary>
             <p class="hint">Campos: <code>{titulo}</code>, <code>{lista}</code> (mensalistas e avulsas numeradas) e <code>{total}</code>. Sem confirmadas, a resposta é “Ninguém confirmado ainda.”.</p>
         </details>
-        <form method="post" action="/mensagens/lista-confirmada"><input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <form data-config-form method="post" action="/mensagens/lista-confirmada"><input type="hidden" name="_csrf" value="<%= csrfToken %>">
             <div class="form-row">
                 <div>
                     <label for="mensagens-automaticas-campo-1">Mensagem</label>
@@ -44,7 +44,7 @@
             <summary>Campos disponíveis na mensagem</summary>
             <p class="hint">Campos: <code>{titulo}</code>, <code>{lista}</code>, <code>{total}</code> e <code>{espera}</code> (lista formatada ou vazia). Sem confirmadas nem espera, a resposta é “Ninguém confirmado ainda.”.</p>
         </details>
-        <form method="post" action="/mensagens/lista-atual"><input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <form data-config-form method="post" action="/mensagens/lista-atual"><input type="hidden" name="_csrf" value="<%= csrfToken %>">
             <div class="form-row">
                 <div>
                     <label for="mensagens-automaticas-campo-2">Mensagem</label>
@@ -62,7 +62,7 @@
             <summary>Campos disponíveis na mensagem</summary>
             <p class="hint">Tokens disponíveis: <code>{titulo}</code> e <code>{lista}</code> (nomes numerados).</p>
         </details>
-        <form method="post" action="/mensagens/lista-espera"><input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <form data-config-form method="post" action="/mensagens/lista-espera"><input type="hidden" name="_csrf" value="<%= csrfToken %>">
             <div class="form-row">
                 <div>
                     <label for="mensagens-automaticas-campo-3">Mensagem</label>
@@ -81,7 +81,7 @@
             <p class="hint">Tokens disponíveis: <code>{titulo}</code>, <code>{time_a}</code> e <code>{time_b}</code>
             (nomes de cada time, um por linha).</p>
         </details>
-        <form method="post" action="/mensagens/times"><input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <form data-config-form method="post" action="/mensagens/times"><input type="hidden" name="_csrf" value="<%= csrfToken %>">
             <div class="form-row">
                 <div>
                     <label for="mensagens-automaticas-campo-4">Mensagem</label>
@@ -107,7 +107,7 @@
             <code>{data_limite_pagamento}</code> e <code>{fechamento_mensal_prazo_horas}</code>.
             Negrito no WhatsApp: <code>*texto*</code>.</p>
         </details>
-        <form method="post" action="/mensagens/fechamento-mensal"><input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <form data-config-form method="post" action="/mensagens/fechamento-mensal"><input type="hidden" name="_csrf" value="<%= csrfToken %>">
             <div class="switch-row">
                 <input type="checkbox" id="fechamentoMensalAtivo" name="fechamentoMensalAtivo" <%= fechamentoMensalAtivo ? 'checked' : '' %>>
                 <label for="fechamentoMensalAtivo">Enviar chamada automaticamente</label>
