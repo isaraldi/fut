@@ -27,11 +27,7 @@
     <% if (listaDeEspera.length > 0) { %>
         <div class="card">
             <h1>⏳ Lista de espera (<%= listaDeEspera.length %>)</h1>
-            <p class="hint">
-                Confirmaram, mas o jogo já bateu o limite de vagas configurado em
-                <a href="/jogo/config">Configurações → Jogo</a>. Só entram se alguém da lista
-                de confirmadas sair.
-            </p>
+            <p class="hint">Sem vaga no limite definido em <a href="/jogo/config">Regras do jogo</a>. Entram se alguma confirmada desistir.</p>
             <table>
                 <thead>
                     <tr><th>Nome</th><th>Papel</th></tr>

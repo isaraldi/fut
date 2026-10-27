@@ -1,7 +1,7 @@
 <div class="page-header">
     <div>
         <h1>Times</h1>
-        <p>Sorteio balanceado por nível. Ajuste o destino de cada uma antes de mandar; quem estiver como "Faltou" fica fora do sorteio.</p>
+        <p>Times balanceados por nível. Ajuste as jogadoras antes de enviar; quem estiver como “Faltou” não participa do sorteio.</p>
     </div>
 </div>
 
@@ -20,7 +20,7 @@
     <div class="card">
         <h1><%= enquete.titulo %></h1>
         <h2><%= confirmados.length %> confirmada<%= confirmados.length === 1 ? '' : 's' %>, <%= plano.times.length %> times<%= plano.reservas.length ? ' + ' + plano.reservas.length + ' reserva(s)' : '' %></h2>
-        <% if (modoManual) { %><p class="hint">Modo manual: o comando <code>!times</code> no WhatsApp não envia nada, só esta página.</p><% } %>
+        <% if (modoManual) { %><p class="hint">Modo manual: monte e envie por esta página. O comando <code>!times</code> fica desativado.</p><% } %>
         <a href="/times" class="btn-icon-label">Sortear de novo</a>
     </div>
 
@@ -35,7 +35,7 @@
                             <td><span class="badge <%= j.posicao %>"><%= j.posicao %></span></td>
                             <td><span class="badge <%= j.papel %>"><%= j.nivel %></span></td>
                             <td>
-                                <select name="dest_<%= j.id %>">
+                                <select aria-label="Time de <%= j.nome %>" name="dest_<%= j.id %>">
                                     <% Object.keys(nomesDestino).filter(d => d !== 'C' || plano.times.length === 3).forEach(d => { %>
                                         <option value="<%= d %>" <%= destinos[j.id] === d ? 'selected' : '' %>><%= nomesDestino[d] %></option>
                                     <% }) %>
@@ -51,7 +51,7 @@
                 (a ordem de rodízio é sorteada na hora de enviar)
             </p>
             <button type="submit" formaction="/times/ausentes" class="btn-icon-label secondary">Salvar faltas e sortear de novo</button>
-            <button type="submit" class="btn-icon-label">Mandar pro grupo</button>
+            <button type="submit" class="btn-icon-label">Enviar times ao grupo</button>
         </div>
     </form>
 <% } %>

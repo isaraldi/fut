@@ -1,16 +1,13 @@
 <div class="page-header">
     <div>
         <h1>Usuários</h1>
-        <p>Quem consegue entrar no painel</p>
+        <p>Gerencie o acesso ao painel.</p>
     </div>
 </div>
 
 <div class="card">
     <h1>Novo usuário</h1>
-    <p class="hint">
-        Todo usuário criado aqui tem acesso completo ao painel, igual ao seu — não existe
-        permissão diferenciada por pessoa.
-    </p>
+    <p class="hint">Todos os usuários têm acesso completo ao painel.</p>
 
     <% if (typeof erro !== 'undefined' && erro) { %>
         <p class="erro"><%= erro %></p>
@@ -19,18 +16,18 @@
     <form method="post" action="/usuarios"><input type="hidden" name="_csrf" value="<%= csrfToken %>">
         <div class="form-row">
             <div>
-                <label>Usuário</label>
-                <input type="text" name="usuario" required autocomplete="off">
+                <label for="usuarios-campo-1">Usuário</label>
+                <input id="usuarios-campo-1" type="text" name="usuario" required autocomplete="off">
             </div>
         </div>
         <div class="form-row">
             <div>
-                <label>Senha</label>
-                <input type="password" name="senha" required minlength="6" autocomplete="new-password">
+                <label for="usuarios-campo-2">Senha (mínimo 6 caracteres)</label>
+                <input id="usuarios-campo-2" type="password" name="senha" required minlength="6" autocomplete="new-password">
             </div>
             <div>
-                <label>Confirmar senha</label>
-                <input type="password" name="confirmarSenha" required minlength="6" autocomplete="new-password">
+                <label for="usuarios-campo-3">Confirmar senha</label>
+                <input id="usuarios-campo-3" type="password" name="confirmarSenha" required minlength="6" autocomplete="new-password">
             </div>
         </div>
         <input type="submit" value="Criar usuário">

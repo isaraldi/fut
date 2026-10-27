@@ -25,7 +25,8 @@
     <% } %>
 
     <form method="post" action="/configuracoes/aparencia/logo" enctype="multipart/form-data"><input type="hidden" name="_csrf" value="<%= csrfToken %>">
-        <input type="file" name="logo" accept="image/png,image/jpeg,image/webp,image/svg+xml" required>
+        <label for="arquivo-logo">Arquivo da logo</label>
+        <input id="arquivo-logo" type="file" name="logo" accept="image/png,image/jpeg,image/webp,image/svg+xml" required>
         <input type="submit" value="Enviar logo">
     </form>
 </div>

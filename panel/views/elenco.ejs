@@ -1,38 +1,38 @@
 <div class="page-header">
     <div>
-        <h1>Jogadores</h1>
+        <h1>Jogadoras</h1>
         <p><%= jogadores.length %> cadastrado<%= jogadores.length === 1 ? '' : 's' %></p>
     </div>
 </div>
 
 <div class="card">
-    <h1>Adicionar jogador</h1>
+    <h1>Adicionar jogadora</h1>
     <form method="post" action="/elenco"><input type="hidden" name="_csrf" value="<%= csrfToken %>">
         <div class="form-row">
             <div>
-                <label>Nome</label>
-                <input type="text" name="nome" required>
+                <label for="elenco-campo-1">Nome</label>
+                <input id="elenco-campo-1" type="text" name="nome" required>
             </div>
             <div>
-                <label>Telefone (opcional)</label>
-                <input type="text" name="telefone">
+                <label for="elenco-campo-2">Telefone (opcional)</label>
+                <input id="elenco-campo-2" type="tel" name="telefone" autocomplete="tel">
             </div>
         </div>
         <div class="form-row">
             <div>
-                <label>Nível (1-5)</label>
-                <input type="number" name="nivel" min="1" max="5" value="3">
+                <label for="elenco-campo-3">Nível (1-5)</label>
+                <input id="elenco-campo-3" type="number" name="nivel" min="1" max="5" value="3">
             </div>
             <div>
-                <label>Papel</label>
-                <select name="papel">
+                <label for="elenco-campo-4">Categoria</label>
+                <select id="elenco-campo-4" name="papel">
                     <option value="mensalista">Mensalista</option>
-                    <option value="avulso" selected>Avulso</option>
+                    <option value="avulso" selected>Avulsa</option>
                 </select>
             </div>
             <div>
-                <label>Posição</label>
-                <select name="posicao">
+                <label for="elenco-campo-5">Posição</label>
+                <select id="elenco-campo-5" name="posicao">
                     <option value="indefinida" selected>Indefinida</option>
                     <option value="goleira">Goleira</option>
                     <option value="defesa">Defesa</option>
@@ -41,7 +41,7 @@
                 </select>
             </div>
         </div>
-        <input type="submit" value="Adicionar">
+        <input type="submit" value="Adicionar jogadora">
     </form>
 </div>
 
@@ -51,7 +51,7 @@
 %>
 <% if (jogadores.length === 0) { %>
     <div class="card">
-        <h1>Lista de jogadores</h1>
+        <h1>Lista de jogadoras</h1>
         <p class="empty">Ninguém cadastrado ainda — vote em uma enquete no WhatsApp ou adicione manualmente acima.</p>
     </div>
 <% } else { %>
@@ -64,25 +64,25 @@
                 <% } else { %>
                     <table>
                         <thead>
-                            <tr><th>Nome</th><th>Telefone</th><th>Nível</th><th>Papel</th><th>Posição</th><th></th></tr>
+                            <tr><th>Nome</th><th>Telefone</th><th>Nível</th><th>Categoria</th><th>Posição</th><th></th></tr>
                         </thead>
                         <tbody>
                             <% grupo.forEach(j => { %>
                                 <tr class="jogador-row">
                                     <td>
                                         <input type="hidden" name="id" value="<%= j.id %>">
-                                        <input type="text" class="field" name="nome" value="<%= j.nome %>" tabindex="-1" required>
+                                        <input type="text" class="field" name="nome" aria-label="Nome de <%= j.nome %>" value="<%= j.nome %>" tabindex="-1" required>
                                     </td>
-                                    <td><input type="text" class="field" name="telefone" value="<%= j.telefone || '' %>" tabindex="-1" placeholder="—"></td>
-                                    <td><input type="number" class="field field-number" name="nivel" min="1" max="5" value="<%= j.nivel %>" tabindex="-1"></td>
+                                    <td><input type="text" class="field" name="telefone" aria-label="Telefone de <%= j.nome %>" value="<%= j.telefone || '' %>" tabindex="-1" placeholder="—"></td>
+                                    <td><input type="number" class="field field-number" name="nivel" aria-label="Nível de <%= j.nome %>" min="1" max="5" value="<%= j.nivel %>" tabindex="-1"></td>
                                     <td>
-                                        <select class="field select-badge badge <%= j.papel %>" name="papel" data-badge-field tabindex="-1">
+                                        <select class="field select-badge badge <%= j.papel %>" name="papel" aria-label="Categoria de <%= j.nome %>" data-badge-field tabindex="-1">
                                             <option value="mensalista" <%= j.papel === 'mensalista' ? 'selected' : '' %>>Mensalista</option>
-                                            <option value="avulso" <%= j.papel === 'avulso' ? 'selected' : '' %>>Avulso</option>
+                                            <option value="avulso" <%= j.papel === 'avulso' ? 'selected' : '' %>>Avulsa</option>
                                         </select>
                                     </td>
                                     <td>
-                                        <select class="field select-badge badge <%= j.posicao %>" name="posicao" data-badge-field tabindex="-1">
+                                        <select class="field select-badge badge <%= j.posicao %>" name="posicao" aria-label="Posição de <%= j.nome %>" data-badge-field tabindex="-1">
                                             <option value="indefinida" <%= j.posicao === 'indefinida' ? 'selected' : '' %>>Indefinida</option>
                                             <option value="goleira" <%= j.posicao === 'goleira' ? 'selected' : '' %>>Goleira</option>
                                             <option value="defesa" <%= j.posicao === 'defesa' ? 'selected' : '' %>>Defesa</option>

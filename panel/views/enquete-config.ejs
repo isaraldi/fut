@@ -7,10 +7,7 @@
 <section class="section">
     <div class="card">
         <h1>Enviar agora</h1>
-        <p class="hint">
-            Abre a enquete no grupo configurado abaixo na hora, sem precisar mandar
-            <code>!enquete</code> pelo WhatsApp.
-        </p>
+        <p class="hint">Envia a enquete ao grupo selecionado, sem usar <code>!enquete</code> no WhatsApp.</p>
         <form method="post" action="/enquete/config/enviar-agora" data-confirm="Enviar a enquete agora pro grupo?"><input type="hidden" name="_csrf" value="<%= csrfToken %>">
             <input type="submit" value="🗳️ Enviar enquete agora" <%= grupoSelecionado ? '' : 'disabled' %>>
         </form>
@@ -21,23 +18,15 @@
 
     <div class="card">
         <h1>Envio automático</h1>
-        <p class="hint">
-            Dia e horário em que a <strong>enquete é disparada</strong> — diferente do dia/horário
-            do jogo (configurado em <a href="/jogo/config">Configurações → Jogo</a>, que só define a
-            data que aparece no texto da enquete). Ex: jogo quarta-feira às 20h, mas a enquete pode
-            ser mandada segunda-feira de manhã.
-        </p>
+        <p class="hint">Escolha quando enviar a enquete. O dia e o horário do jogo são definidos em <a href="/jogo/config">Regras do jogo</a>.</p>
         <% if (grupos.length === 0) { %>
-            <p class="hint">
-                ⚠️ Ainda não conheço nenhum grupo. A lista é sincronizada automaticamente quando o
-                bot conecta no WhatsApp — espere o bot ficar online e recarregue esta página.
-            </p>
+            <p class="hint">Nenhum grupo disponível. Aguarde o bot conectar ao WhatsApp e atualize a página.</p>
         <% } %>
         <form method="post" action="/enquete/config/auto"><input type="hidden" name="_csrf" value="<%= csrfToken %>">
             <div class="form-row">
                 <div>
-                    <label>Grupo de destino</label>
-                    <select name="grupoId" <%= grupos.length === 0 ? 'disabled' : '' %>>
+                    <label for="enquete-config-campo-1">Grupo de destino</label>
+                    <select id="enquete-config-campo-1" name="grupoId" <%= grupos.length === 0 ? 'disabled' : '' %>>
                         <% if (!grupoSelecionado) { %>
                             <option value="" selected disabled>Selecione um grupo</option>
                         <% } %>
@@ -49,8 +38,8 @@
             </div>
             <div class="form-row">
                 <div>
-                    <label>Dia da semana do envio</label>
-                    <select name="envioDiaSemana">
+                    <label for="enquete-config-campo-2">Dia da semana do envio</label>
+                    <select id="enquete-config-campo-2" name="envioDiaSemana">
                         <option value="0" <%= envioDiaSemana === 0 ? 'selected' : '' %>>Domingo</option>
                         <option value="1" <%= envioDiaSemana === 1 ? 'selected' : '' %>>Segunda-feira</option>
                         <option value="2" <%= envioDiaSemana === 2 ? 'selected' : '' %>>Terça-feira</option>
@@ -61,16 +50,16 @@
                     </select>
                 </div>
                 <div>
-                    <label>Horário do envio</label>
+                    <span class="field-label">Horário do envio</span>
                     <div class="time-select">
-                        <select name="envioHoraH">
+                        <select aria-label="Hora do envio" name="envioHoraH">
                             <% for (let h = 0; h < 24; h++) { %>
                                 <% const hh = String(h).padStart(2, '0'); %>
                                 <option value="<%= hh %>" <%= envioHora.split(':')[0] === hh ? 'selected' : '' %>><%= hh %></option>
                             <% } %>
                         </select>
                         <span>:</span>
-                        <select name="envioHoraM">
+                        <select aria-label="Minutos do envio" name="envioHoraM">
                             <% ['00','15','30','45'].forEach(mm => { %>
                                 <option value="<%= mm %>" <%= envioHora.split(':')[1] === mm ? 'selected' : '' %>><%= mm %></option>
                             <% }) %>
@@ -80,9 +69,9 @@
             </div>
             <div class="switch-row">
                 <input type="checkbox" id="autoEnviar" name="autoEnviar" <%= autoEnviar ? 'checked' : '' %>>
-                <label for="autoEnviar">Enviar enquete automaticamente no dia/horário acima</label>
+                <label for="autoEnviar">Ativar envio automático</label>
             </div>
-            <input type="submit" value="Salvar">
+            <input type="submit" value="Salvar envio automático">
         </form>
     </div>
 </section>
@@ -92,12 +81,10 @@
 
     <div class="card">
         <h1>Título da enquete</h1>
-        <p class="hint">
-            Tokens disponíveis: <code>{data}</code> (ex: 05/08), <code>{dia}</code> (ex: quarta-feira)
-            e <code>{hora}</code> (ex: 20:00) — vêm da <a href="/jogo/config">configuração do jogo</a>.
-        </p>
+        <p class="hint">Use <code>{data}</code> (05/08), <code>{dia}</code> (quinta-feira) e <code>{hora}</code> (20:00), conforme as <a href="/jogo/config">regras do jogo</a>.</p>
         <form method="post" action="/enquete/config/titulo"><input type="hidden" name="_csrf" value="<%= csrfToken %>">
-            <input type="text" name="titulo" value="<%= titulo %>" required>
+            <label for="enquete-titulo">Título</label>
+            <input id="enquete-titulo" type="text" name="titulo" value="<%= titulo %>" required>
             <input type="submit" value="Salvar título">
         </form>
     </div>
@@ -107,34 +94,31 @@
         <form method="post" action="/enquete/config/opcoes"><input type="hidden" name="_csrf" value="<%= csrfToken %>">
             <div class="form-row">
                 <div>
-                    <label>Texto da opção</label>
-                    <input type="text" name="texto" required>
+                    <label for="enquete-config-campo-3">Texto da opção</label>
+                    <input id="enquete-config-campo-3" type="text" name="texto" required>
                 </div>
                 <div>
-                    <label>Conta como confirmada?</label>
-                    <select name="conta">
+                    <label for="enquete-config-campo-4">Confirma presença?</label>
+                    <select id="enquete-config-campo-4" name="conta">
                         <option value="1">Sim (ex: "eu vou")</option>
                         <option value="0">Não (ex: "não vou")</option>
                     </select>
                 </div>
             </div>
-            <p class="hint">
-                O papel da confirmação (mensalista/avulsa) segue sempre o cadastro da jogadora em
-                <a href="/elenco">Jogadores</a> — não depende mais de qual opção ela escolhe aqui.
-            </p>
+            <p class="hint">A categoria mensalista ou avulsa vem do cadastro em <a href="/elenco">Jogadoras</a>, independentemente da opção votada.</p>
             <input type="submit" value="Adicionar opção">
         </form>
     </div>
 
     <div class="card">
         <h1>Opções atuais (<%= opcoes.length %>)</h1>
-        <p class="hint">Valem pra próxima enquete que você abrir com <code>!enquete</code>. Enquetes já enviadas não mudam.</p>
+        <p class="hint">Alterações valem só para novas enquetes. As já enviadas não mudam.</p>
         <% if (opcoes.length === 0) { %>
             <p class="empty">Nenhuma opção configurada — adicione pelo menos 2 acima.</p>
         <% } else { %>
             <table>
                 <thead>
-                    <tr><th>Texto</th><th>Conta como confirmada?</th><th></th></tr>
+                    <tr><th>Texto</th><th>Confirma presença?</th><th></th></tr>
                 </thead>
                 <tbody>
                     <% opcoes.forEach(o => { %>

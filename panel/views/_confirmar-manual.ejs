@@ -1,11 +1,11 @@
 <div class="card">
     <h1>Confirmar manualmente</h1>
-    <p class="hint">Pra quando alguém joga mas não respondeu (ou respondeu errado) a enquete no WhatsApp.</p>
+    <p class="hint">Adicione quem não respondeu à enquete ou votou na opção errada.</p>
     <form method="post" action="/jogos/<%= enquete.id %>/confirmar"><input type="hidden" name="_csrf" value="<%= csrfToken %>">
         <div class="form-row">
             <div>
-                <label>Jogadora</label>
-                <select name="jogador_id" required>
+                <label for="confirmar-manual-campo-1">Jogadora</label>
+                <select id="confirmar-manual-campo-1" name="jogador_id" required>
                     <option value="">Selecione...</option>
                     <% jogadores.forEach(j => { %>
                         <option value="<%= j.id %>"><%= j.nome %> (<%= j.papel === 'mensalista' ? 'Mensalista' : 'Avulsa' %>)</option>
@@ -13,7 +13,7 @@
                 </select>
             </div>
         </div>
-        <p class="hint">O papel (mensalista/avulsa) é o cadastrado em <a href="/elenco">Jogadores</a> — atualize lá se estiver errado.</p>
+        <p class="hint">A categoria vem do cadastro em <a href="/elenco">Jogadoras</a>. Corrija lá, se necessário.</p>
         <input type="submit" value="Confirmar presença">
     </form>
 </div>

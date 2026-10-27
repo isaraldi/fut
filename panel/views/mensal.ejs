@@ -5,6 +5,11 @@
     </div>
 </div>
 <section class="section">
+    <details class="form-help">
+        <summary>Como funcionam a prioridade e a fila</summary>
+        <p class="hint">Mensalistas mantêm a prioridade ao reagir 👍 dentro do prazo da chamada. Novas interessadas e renovações tardias entram na fila. Repetir 👍 mantém a posição; desistir e voltar leva ao fim.</p>
+        <p class="hint">Reagir 👎, retirar o 👍 ou não renovar no prazo libera a vaga. Novas entradas dependem de aprovação, após resolver as renovações pendentes. Reações a chamadas antigas não alteram o ciclo atual.</p>
+    </details>
     <div class="card">
         <h1>Renovação e fila do mensal</h1>
         <% if (!resumoMensal) { %>
@@ -12,7 +17,7 @@
         <% } else { %>
             <p>Ciclo <strong><%= resumoMensal.mesNovo %></strong>. Prioridade até
                 <%= new Date(resumoMensal.ciclo.prazo_em).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }) %>.</p>
-            <p class="hint">Confira as vagas antes de confirmar uma entrada. O sistema permite aprovar a primeira da fila após resolver as renovações pendentes. Atualize a página para ver novas respostas.</p>
+            <p class="hint">Resolva as renovações pendentes e confira as vagas antes de aprovar a primeira da fila. Atualize a página para ver novas respostas.</p>
             <% [['Renovações confirmadas', resumoMensal.renovadas], ['Pendentes de renovação', resumoMensal.pendentes], ['Novas mensalistas aprovadas', resumoMensal.aprovadas], ['Fila de interessadas', resumoMensal.fila], ['Desistências / prazo encerrado', resumoMensal.desistencias]].forEach(([titulo, lista]) => { %>
                 <h2><%= titulo %> (<%= lista.length %>)</h2>
                 <% if (!lista.length) { %><p>Nenhuma.</p><% } else { %>

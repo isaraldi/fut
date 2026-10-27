@@ -6,11 +6,7 @@
 
 <div class="card">
     <h1>Comandos disponíveis</h1>
-    <p class="hint">
-        Comandos que funcionam mandando mensagem no grupo do WhatsApp (ou em DM direto com o
-        número do bot, quando marcado abaixo). Só quem estiver liberado na lista logo abaixo
-        consegue usá-los — quem não estiver liberado recebe um aviso e nada acontece.
-    </p>
+    <p class="hint">Envie os comandos no grupo ou no privado do bot, conforme a tabela. Só jogadoras autorizadas abaixo podem usá-los.</p>
     <table>
         <thead>
             <tr><th>Comando</th><th>Onde funciona</th><th>O que faz</th></tr>
@@ -29,10 +25,7 @@
 
 <div class="card">
     <h1>Tokens disponíveis</h1>
-    <p class="hint">
-        Tokens que podem ser usados nos templates de mensagem do painel — cada um só é
-        substituído no template indicado na coluna "Onde usar", não em qualquer mensagem.
-    </p>
+    <p class="hint">Cada campo é substituído apenas no modelo indicado em “Onde usar”.</p>
     <table>
         <thead>
             <tr><th>Token</th><th>Onde usar</th><th>O que vira</th></tr>
@@ -51,11 +44,7 @@
 
 <div class="card">
     <h1>Formatação de mensagem</h1>
-    <p class="hint">
-        O WhatsApp entende essa formatação em qualquer mensagem mandada pelo bot (título de
-        enquete, mensagens agendadas, fechamento do mensal etc) — é só digitar os símbolos direto
-        no texto.
-    </p>
+    <p class="hint">Digite os símbolos no texto para formatar mensagens no WhatsApp.</p>
     <table>
         <thead>
             <tr><th>Pra fazer isso</th><th>Digite assim</th></tr>
@@ -72,12 +61,7 @@
 
 <div class="card">
     <h1>Quem pode usar comandos</h1>
-    <p class="hint">
-        Whitelist por jogadora — evita que qualquer pessoa do grupo mande <code>!fechar</code>
-        (ou outro comando) sem querer. Precisa estar cadastrada no elenco pra aparecer aqui.
-        Ninguém vem liberado por padrão, inclusive quem já usava os comandos antes — libere
-        pelo menos a si mesma abaixo.
-    </p>
+    <p class="hint">Autorize quem pode usar os comandos do bot. É preciso ter cadastro no elenco. Ninguém é autorizado por padrão; libere ao menos seu próprio cadastro.</p>
     <% if (jogadores.length === 0) { %>
         <p class="empty">Nenhuma jogadora cadastrada ainda.</p>
     <% } else { %>

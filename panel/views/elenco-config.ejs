@@ -1,43 +1,32 @@
 <div class="page-header">
     <div>
-        <h1>Configurações de jogadores</h1>
+        <h1>Cadastro e sincronização</h1>
     </div>
 </div>
 
 <div class="card">
     <h1>Inclusão automática</h1>
-    <p class="hint">
-        Quando ativado, toda pessoa adicionada ao grupo do WhatsApp é incluída automaticamente
-        na lista de jogadores (nome e telefone preenchidos a partir do contato do WhatsApp).
-    </p>
+    <p class="hint">Cadastra novos membros do grupo com o nome e o telefone disponíveis no WhatsApp.</p>
     <form method="post" action="/elenco/config"><input type="hidden" name="_csrf" value="<%= csrfToken %>">
         <div class="switch-row">
             <input type="checkbox" id="autoIncluir" name="autoIncluir" <%= autoIncluir ? 'checked' : '' %>>
             <label for="autoIncluir">Incluir automaticamente novos membros do grupo</label>
         </div>
-        <input type="submit" value="Salvar">
+        <input type="submit" value="Salvar inclusão automática">
     </form>
 </div>
 
 <div class="card">
-    <h1>Sincronizar membros já existentes</h1>
-    <p class="hint">
-        Adiciona ao elenco todo mundo que já está no grupo do WhatsApp e ainda não está
-        cadastrado. Só adiciona — <strong>nunca remove ninguém</strong>, nem quem já saiu do
-        grupo, pra não apagar o histórico de pagamentos e presenças de quem já jogou. Pra tirar
-        alguém do elenco, use o botão de excluir na tela de <a href="/elenco">Jogadores</a>.
-    </p>
+    <h1>Sincronizar membros do grupo</h1>
+    <p class="hint">Cadastra membros do grupo que ainda não estão no elenco. Não remove ninguém nem apaga históricos. Para desativar alguém, use <a href="/elenco">Jogadoras</a>.</p>
     <% if (grupos.length === 0) { %>
-        <p class="hint">
-            ⚠️ Ainda não conheço nenhum grupo. A lista é sincronizada automaticamente quando o
-            bot conecta no WhatsApp — espere o bot ficar online e recarregue esta página.
-        </p>
+        <p class="hint">Nenhum grupo disponível. Aguarde o bot conectar ao WhatsApp e atualize a página.</p>
     <% } %>
     <form method="post" action="/elenco/config/sincronizar"><input type="hidden" name="_csrf" value="<%= csrfToken %>">
         <div class="form-row">
             <div>
-                <label>Grupo</label>
-                <select name="grupoId" <%= grupos.length === 0 ? 'disabled' : '' %> required>
+                <label for="elenco-config-campo-1">Grupo</label>
+                <select id="elenco-config-campo-1" name="grupoId" <%= grupos.length === 0 ? 'disabled' : '' %> required>
                     <option value="" selected disabled>Selecione um grupo</option>
                     <% grupos.forEach(g => { %>
                         <option value="<%= g.whatsapp_id %>"><%= g.nome %></option>
@@ -47,10 +36,6 @@
         </div>
         <input type="submit" value="🔄 Sincronizar agora" <%= grupos.length === 0 ? 'disabled' : '' %>>
     </form>
-    <p class="hint">Ou mande <code>!sincronizar</code> direto no grupo pelo WhatsApp — funciona igual.</p>
-    <p class="hint">
-        ⚠️ Sobre o telefone: contas com id no formato <code>@lid</code> (cada vez mais comuns por
-        privacidade do WhatsApp) não expõem o número de telefone real — só contas <code>@c.us</code>
-        clássicas. Nesses casos o campo telefone pode ficar em branco mesmo com o autofill ativado.
-    </p>
+    <p class="hint">Também disponível pelo comando <code>!sincronizar</code> no grupo.</p>
+    <p class="hint">O WhatsApp pode ocultar o telefone por privacidade. Nesses casos, o campo fica em branco mesmo com a inclusão automática ativa.</p>
 </div>

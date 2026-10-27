@@ -1,25 +1,19 @@
 <div class="page-header">
     <div>
-        <h1>Mensagens agendadas</h1>
-        <p>Mensagens com conteúdo livre, criadas por você. Pra ver e editar as mensagens que o bot manda sozinho (enquete, fechamento do mensal), veja <a href="/mensagens/automaticas">Mensagens automáticas</a>.</p>
+        <h1>Envios e agendamentos</h1>
+        <p>Envie agora ou agende mensagens. Textos das respostas do bot ficam em <a href="/mensagens/automaticas">Modelos e automações</a>.</p>
     </div>
 </div>
 
 <section class="section">
     <div class="card">
-        <h1>Mandar mensagem pras jogadoras</h1>
-        <p class="hint">
-            Manda uma mensagem <strong>privada</strong> (no direto, não no grupo) pra cada jogadora do público
-            escolhido — por exemplo, depois que as mensalistas renovam no fechamento do mensal, ou
-            pras avulsas que confirmaram o jogo. Use <code>{nome}</code> no texto pra colocar o nome
-            de cada uma. O bot envia uma por vez, com uma pausa entre elas, então pode levar alguns
-            minutos; o resultado aparece em <a href="/logs">Logs</a>. Pra mandar numa data/horário, use <strong>Agendar mensagem</strong> abaixo e escolha o público em "Destino".
-        </p>
+        <h1>Enviar mensagem privada</h1>
+        <p class="hint">Envia no privado de cada jogadora do público escolhido. Use <code>{nome}</code> para personalizar. Os envios são espaçados e podem levar alguns minutos; acompanhe em <a href="/logs">Atividade do bot</a>. Para enviar depois, agende abaixo.</p>
         <form method="post" action="/mensagens/jogadoras" data-confirm="Enviar essa mensagem no privado pra cada jogadora do público escolhido?"><input type="hidden" name="_csrf" value="<%= csrfToken %>">
             <div class="form-row">
                 <div>
-                    <label>Para quem</label>
-                    <select name="publico">
+                    <label for="mensagens-campo-1">Público</label>
+                    <select id="mensagens-campo-1" name="publico">
                         <% publicosJogadoras.forEach(p => { %>
                             <option value="<%= p.chave %>"><%= p.titulo %> — <%= p.destinatarias.length %></option>
                         <% }) %>
@@ -27,8 +21,8 @@
                 </div>
             </div>
             <div>
-                <label>Mensagem</label>
-                <textarea name="texto" rows="5" required placeholder="Oi, {nome}! ..."><%= mensagemJogadorasTexto %></textarea>
+                <label for="mensagens-campo-2">Mensagem</label>
+                <textarea id="mensagens-campo-2" name="texto" rows="5" required placeholder="Oi, {nome}! ..."><%= mensagemJogadorasTexto %></textarea>
             </div>
             <% publicosJogadoras.forEach(p => { %>
                 <details style="margin:8px 0">
@@ -44,23 +38,15 @@
 <section class="section">
     <div class="card">
         <h1>Agendar mensagem</h1>
-        <p class="hint">
-            O bot manda a mensagem sozinho no grupo escolhido, ou no privado de cada jogadora de um
-            público (checagem a cada minuto) — numa data específica (só uma vez) ou toda semana, no
-            mesmo dia e horário. Nos públicos de jogadoras, quem faz parte dele é decidido na hora
-            do envio, não na hora de agendar.
-        </p>
+        <p class="hint">Envie uma vez ou toda semana, para um grupo ou no privado de um público. As destinatárias são definidas na hora do envio. O bot verifica os agendamentos a cada minuto.</p>
         <% if (grupos.length === 0) { %>
-            <p class="hint">
-                ⚠️ Ainda não conheço nenhum grupo. A lista é sincronizada automaticamente quando o
-                bot conecta no WhatsApp — espere o bot ficar online e recarregue esta página.
-            </p>
+            <p class="hint">Nenhum grupo disponível. Aguarde o bot conectar ao WhatsApp e atualize a página. Você ainda pode selecionar um público.</p>
         <% } %>
         <form method="post" action="/mensagens" class="form-mensagem"><input type="hidden" name="_csrf" value="<%= csrfToken %>">
             <div class="form-row">
                 <div>
-                    <label>Destino</label>
-                    <select name="grupoId" required>
+                    <label for="mensagens-campo-3">Destino</label>
+                    <select id="mensagens-campo-3" name="grupoId" required>
                         <option value="" selected disabled>Selecione um grupo ou público</option>
                         <optgroup label="Grupos">
                             <% grupos.forEach(g => { %>
@@ -76,27 +62,27 @@
                 </div>
             </div>
             <div>
-                <label>Mensagem</label>
-                <textarea name="texto" rows="4" required></textarea>
+                <label for="mensagens-campo-4">Mensagem</label>
+                <textarea id="mensagens-campo-4" name="texto" rows="4" required></textarea>
             </div>
 
             <div class="switch-row">
-                <label class="radio-label"><input type="radio" name="tipo" value="unica" checked> Data específica (só uma vez)</label>
+                <label class="radio-label"><input type="radio" name="tipo" value="unica" checked> Uma vez</label>
             </div>
             <div class="switch-row">
-                <label class="radio-label"><input type="radio" name="tipo" value="semanal"> Toda semana (recorrente)</label>
+                <label class="radio-label"><input type="radio" name="tipo" value="semanal"> Toda semana</label>
             </div>
 
             <div class="campo-data form-row">
                 <div>
-                    <label>Data</label>
-                    <input type="date" name="data" required>
+                    <label for="mensagens-campo-5">Data</label>
+                    <input id="mensagens-campo-5" type="date" name="data" required>
                 </div>
             </div>
             <div class="campo-dia-semana form-row" style="display:none">
                 <div>
-                    <label>Dia da semana</label>
-                    <select name="diaSemana">
+                    <label for="mensagens-campo-6">Dia da semana</label>
+                    <select id="mensagens-campo-6" name="diaSemana">
                         <option value="0">Domingo</option>
                         <option value="1">Segunda-feira</option>
                         <option value="2">Terça-feira</option>
@@ -110,16 +96,16 @@
 
             <div class="form-row">
                 <div>
-                    <label>Horário</label>
+                    <span class="field-label">Horário</span>
                     <div class="time-select">
-                        <select name="horaH">
+                        <select aria-label="Hora do envio" name="horaH">
                             <% for (let h = 0; h < 24; h++) { %>
                                 <% const hh = String(h).padStart(2, '0'); %>
                                 <option value="<%= hh %>" <%= hh === '09' ? 'selected' : '' %>><%= hh %></option>
                             <% } %>
                         </select>
                         <span>:</span>
-                        <select name="horaM">
+                        <select aria-label="Minutos do envio" name="horaM">
                             <% ['00','15','30','45'].forEach(mm => { %>
                                 <option value="<%= mm %>"><%= mm %></option>
                             <% }) %>
@@ -180,11 +166,11 @@
                         <tr class="edit-row" id="editar-<%= m.id %>" style="display:none">
                             <td colspan="5">
                                 <form method="post" action="/mensagens/<%= m.id %>/editar" class="form-mensagem"><input type="hidden" name="_csrf" value="<%= csrfToken %>">
-                                    <p class="hint">Editar reagenda essa mensagem — se já tinha sido enviada, volta pra pendente.</p>
+                                    <p class="hint">Salvar reagenda o envio. Mensagens já enviadas voltam a ficar pendentes.</p>
                                     <div class="form-row">
                                         <div>
-                                            <label>Destino</label>
-                                            <select name="grupoId" required>
+                                            <label for="mensagens-campo-7-<%= m.id %>">Destino</label>
+                                            <select id="mensagens-campo-7-<%= m.id %>" name="grupoId" required>
                                                 <optgroup label="Grupos">
                                                     <% grupos.forEach(g => { %>
                                                         <option value="<%= g.whatsapp_id %>" <%= g.whatsapp_id === m.grupo_id ? 'selected' : '' %>><%= g.nome %></option>
@@ -199,27 +185,27 @@
                                         </div>
                                     </div>
                                     <div>
-                                        <label>Mensagem</label>
-                                        <textarea name="texto" rows="4" required><%= m.texto %></textarea>
+                                        <label for="mensagens-campo-8-<%= m.id %>">Mensagem</label>
+                                        <textarea id="mensagens-campo-8-<%= m.id %>" name="texto" rows="4" required><%= m.texto %></textarea>
                                     </div>
 
                                     <div class="switch-row">
-                                        <label class="radio-label"><input type="radio" name="tipo" value="unica" <%= m.tipo === 'unica' ? 'checked' : '' %>> Data específica (só uma vez)</label>
+                                        <label class="radio-label"><input type="radio" name="tipo" value="unica" <%= m.tipo === 'unica' ? 'checked' : '' %>> Uma vez</label>
                                     </div>
                                     <div class="switch-row">
-                                        <label class="radio-label"><input type="radio" name="tipo" value="semanal" <%= m.tipo === 'semanal' ? 'checked' : '' %>> Toda semana (recorrente)</label>
+                                        <label class="radio-label"><input type="radio" name="tipo" value="semanal" <%= m.tipo === 'semanal' ? 'checked' : '' %>> Toda semana</label>
                                     </div>
 
                                     <div class="campo-data form-row" style="<%= m.tipo === 'semanal' ? 'display:none' : '' %>">
                                         <div>
-                                            <label>Data</label>
-                                            <input type="date" name="data" value="<%= m.tipo === 'unica' ? m.enviar_em.slice(0, 10) : '' %>" <%= m.tipo === 'unica' ? 'required' : '' %>>
+                                            <label for="mensagens-campo-9-<%= m.id %>">Data</label>
+                                            <input id="mensagens-campo-9-<%= m.id %>" type="date" name="data" value="<%= m.tipo === 'unica' ? m.enviar_em.slice(0, 10) : '' %>" <%= m.tipo === 'unica' ? 'required' : '' %>>
                                         </div>
                                     </div>
                                     <div class="campo-dia-semana form-row" style="<%= m.tipo === 'semanal' ? '' : 'display:none' %>">
                                         <div>
-                                            <label>Dia da semana</label>
-                                            <select name="diaSemana">
+                                            <label for="mensagens-campo-10-<%= m.id %>">Dia da semana</label>
+                                            <select id="mensagens-campo-10-<%= m.id %>" name="diaSemana">
                                                 <% NOMES_DIA_SEMANA.forEach((nomeDia, i) => { %>
                                                     <option value="<%= i %>" <%= m.dia_semana === i ? 'selected' : '' %>><%= nomeDia.charAt(0).toUpperCase() + nomeDia.slice(1) %></option>
                                                 <% }) %>
@@ -229,17 +215,17 @@
 
                                     <div class="form-row">
                                         <div>
-                                            <label>Horário</label>
+                                            <span class="field-label">Horário</span>
                                             <% const horaAtual = m.tipo === 'semanal' ? m.hora : m.enviar_em.slice(11, 16); %>
                                             <div class="time-select">
-                                                <select name="horaH">
+                                                <select aria-label="Hora do envio" name="horaH">
                                                     <% for (let h = 0; h < 24; h++) { %>
                                                         <% const hh = String(h).padStart(2, '0'); %>
                                                         <option value="<%= hh %>" <%= horaAtual.slice(0, 2) === hh ? 'selected' : '' %>><%= hh %></option>
                                                     <% } %>
                                                 </select>
                                                 <span>:</span>
-                                                <select name="horaM">
+                                                <select aria-label="Minutos do envio" name="horaM">
                                                     <% ['00','15','30','45'].forEach(mm => { %>
                                                         <option value="<%= mm %>" <%= horaAtual.slice(3, 5) === mm ? 'selected' : '' %>><%= mm %></option>
                                                     <% }) %>

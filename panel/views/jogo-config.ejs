@@ -7,19 +7,15 @@
 <section class="section">
     <div class="card">
         <h1>Dia e horário</h1>
-        <p class="hint">
-            A data do próximo jogo é calculada automaticamente a partir do dia da semana escolhido
-            (a próxima ocorrência dele, ou hoje, se hoje já for esse dia). Usada nos tokens
-            <code>{data}</code>/<code>{dia}</code>/<code>{hora}</code> do título da enquete.
-        </p>
+        <p class="hint">Define o próximo jogo (ou hoje, se for o dia escolhido) e preenche <code>{data}</code>, <code>{dia}</code> e <code>{hora}</code> na enquete. O mensal fecha no dia seguinte ao último jogo do mês.</p>
         <form method="post" action="/jogo/config"><input type="hidden" name="_csrf" value="<%= csrfToken %>">
             <input type="hidden" name="valorMensal" value="<%= valorMensal || '' %>">
             <input type="hidden" name="valorAvulso" value="<%= valorAvulso || '' %>">
             <input type="hidden" name="vagasMaximo" value="<%= vagasMaximo || '' %>">
             <div class="form-row">
                 <div>
-                    <label>Dia da semana</label>
-                    <select name="diaSemana">
+                    <label for="jogo-config-campo-1">Dia da semana</label>
+                    <select id="jogo-config-campo-1" name="diaSemana">
                         <option value="0" <%= diaSemana === 0 ? 'selected' : '' %>>Domingo</option>
                         <option value="1" <%= diaSemana === 1 ? 'selected' : '' %>>Segunda-feira</option>
                         <option value="2" <%= diaSemana === 2 ? 'selected' : '' %>>Terça-feira</option>
@@ -30,16 +26,16 @@
                     </select>
                 </div>
                 <div>
-                    <label>Horário</label>
+                    <span class="field-label">Horário</span>
                     <div class="time-select">
-                        <select name="horaH">
+                        <select aria-label="Hora do jogo" name="horaH">
                             <% for (let h = 0; h < 24; h++) { %>
                                 <% const hh = String(h).padStart(2, '0'); %>
                                 <option value="<%= hh %>" <%= hora.split(':')[0] === hh ? 'selected' : '' %>><%= hh %></option>
                             <% } %>
                         </select>
                         <span>:</span>
-                        <select name="horaM">
+                        <select aria-label="Minutos do jogo" name="horaM">
                             <% ['00','15','30','45'].forEach(mm => { %>
                                 <option value="<%= mm %>" <%= hora.split(':')[1] === mm ? 'selected' : '' %>><%= mm %></option>
                             <% }) %>
@@ -47,19 +43,13 @@
                     </div>
                 </div>
             </div>
-            <input type="submit" value="Salvar">
+            <input type="submit" value="Salvar dia e horário">
         </form>
     </div>
 
     <div class="card">
         <h1>Vagas</h1>
-        <p class="hint">
-            Número máximo de jogadoras no jogo. Mensalistas sempre têm prioridade: as vagas
-            delas são reservadas primeiro, e o que sobrar vai pras avulsas que confirmaram,
-            por ordem de quem confirmou primeiro. Quem ficar de fora entra numa lista de
-            espera — só joga se alguém da lista de confirmadas sair. Deixe em branco pra não
-            ter limite. O valor vale a partir da próxima enquete aberta; jogos já criados não mudam.
-        </p>
+        <p class="hint">Mensalistas têm prioridade. As vagas restantes vão para avulsas por ordem de confirmação; as demais entram na espera. Em branco: sem limite. Alterações valem só para novas enquetes.</p>
         <form method="post" action="/jogo/config"><input type="hidden" name="_csrf" value="<%= csrfToken %>">
             <input type="hidden" name="diaSemana" value="<%= diaSemana %>">
             <input type="hidden" name="horaH" value="<%= hora.split(':')[0] %>">
@@ -68,62 +58,50 @@
             <input type="hidden" name="valorAvulso" value="<%= valorAvulso || '' %>">
             <div class="form-row">
                 <div>
-                    <label>Vagas máximo (jogadoras)</label>
-                    <input type="number" name="vagasMaximo" step="1" min="1" placeholder="Ex: 12" value="<%= vagasMaximo || '' %>">
+                    <label for="jogo-config-campo-2">Limite de jogadoras</label>
+                    <input id="jogo-config-campo-2" type="number" name="vagasMaximo" step="1" min="1" placeholder="Ex: 12" value="<%= vagasMaximo || '' %>">
                 </div>
             </div>
-            <input type="submit" value="Salvar">
+            <input type="submit" value="Salvar limite de vagas">
         </form>
     </div>
 
     <div class="card">
         <h1>Times</h1>
-        <p class="hint">
-            Quantas jogadoras formam um time. Se confirmarem pelo menos 3 times completos
-            (ex: 15 com 5 por time), saem 3 times que revezam; com menos que isso, saem 2 times
-            completos e quem sobrar fica de reserva (quem sobra de 3 times também vira reserva).
-            Abaixo de 2 times completos, divide tudo igualmente em 2. A ordem de rodízio é sorteada.
-        </p>
-        <p class="hint">
-            <strong>Automático:</strong> o comando <code>!times</code> sorteia e já manda pro grupo.
-            <strong>Manual:</strong> <code>!times</code> não faz nada — você monta e envia pela página
-            <a href="/times">Times</a> do painel.
-        </p>
+        <details class="form-help">
+            <summary>Como funciona o sorteio</summary>
+            <p class="hint">Com participantes para 3 times completos, há rodízio entre 3; caso contrário, são 2 times e reservas. Abaixo de 2 times completos, as jogadoras são divididas em 2. Sobras ficam na reserva; a ordem do rodízio é sorteada.</p>
+        </details>
+        <p class="hint"><strong>Automática:</strong> <code>!times</code> sorteia e envia. <strong>Manual:</strong> monte e envie em <a href="/times">Times</a>; o comando fica desativado.</p>
         <form method="post" action="/jogo/config/times"><input type="hidden" name="_csrf" value="<%= csrfToken %>">
             <div class="form-row">
                 <div>
-                    <label>Jogadoras por time</label>
-                    <input type="number" name="porTime" step="1" min="1" value="<%= porTime %>">
+                    <label for="jogo-config-campo-3">Jogadoras por time</label>
+                    <input id="jogo-config-campo-3" type="number" name="porTime" step="1" min="1" value="<%= porTime %>">
                 </div>
                 <div>
-                    <label>Formação dos times</label>
-                    <select name="timesModo">
+                    <label for="jogo-config-campo-4">Formação dos times</label>
+                    <select id="jogo-config-campo-4" name="timesModo">
                         <option value="automatico" <%= timesModo !== 'manual' ? 'selected' : '' %>>Automática</option>
                         <option value="manual" <%= timesModo === 'manual' ? 'selected' : '' %>>Manual (pelo painel)</option>
                     </select>
                 </div>
                 <div>
-                    <label>Trocar a cada (minutos)</label>
-                    <input type="number" name="rodizioMinutos" step="1" min="1" value="<%= rodizioMinutos %>">
+                    <label for="jogo-config-campo-5">Intervalo do rodízio (min)</label>
+                    <input id="jogo-config-campo-5" type="number" name="rodizioMinutos" step="1" min="1" value="<%= rodizioMinutos %>">
                 </div>
                 <div>
-                    <label>Duração do jogo (minutos)</label>
-                    <input type="number" name="duracaoMinutos" step="1" min="1" value="<%= duracaoMinutos %>">
+                    <label for="jogo-config-campo-6">Duração do jogo (min)</label>
+                    <input id="jogo-config-campo-6" type="number" name="duracaoMinutos" step="1" min="1" value="<%= duracaoMinutos %>">
                 </div>
             </div>
-            <input type="submit" value="Salvar">
+            <input type="submit" value="Salvar regras dos times">
         </form>
     </div>
 
     <div class="card">
         <h1>Valores</h1>
-        <p class="hint">
-            Ao receber um comprovante de pagamento no grupo, o bot lê o valor nele por OCR e
-            compara com os valores configurados aqui: se bater com a mensalidade, marca a
-            mensalidade do mês como paga; se bater com o avulso, marca o pagamento avulso do
-            jogo. Se o valor do comprovante não for igual a nenhum dos dois, o bot não marca
-            nada como pago (fica só um aviso na tela de Logs pra conferência manual).
-        </p>
+        <p class="hint">O bot lê comprovantes no grupo ou no privado e identifica mensalidade ou avulso pelo valor. Valores incompatíveis ou ambíguos exigem conferência em <a href="/logs">Atividade do bot</a>; não são marcados como pagos.</p>
         <form method="post" action="/jogo/config"><input type="hidden" name="_csrf" value="<%= csrfToken %>">
             <input type="hidden" name="diaSemana" value="<%= diaSemana %>">
             <input type="hidden" name="horaH" value="<%= hora.split(':')[0] %>">
@@ -131,15 +109,15 @@
             <input type="hidden" name="vagasMaximo" value="<%= vagasMaximo || '' %>">
             <div class="form-row">
                 <div>
-                    <label>Valor da mensalidade (R$)</label>
-                    <input type="number" name="valorMensal" step="0.01" min="0" placeholder="Ex: 50,00" value="<%= valorMensal || '' %>">
+                    <label for="jogo-config-campo-7">Valor da mensalidade (R$)</label>
+                    <input id="jogo-config-campo-7" type="number" name="valorMensal" step="0.01" min="0" placeholder="Ex: 50,00" value="<%= valorMensal || '' %>">
                 </div>
                 <div>
-                    <label>Valor do avulso (R$)</label>
-                    <input type="number" name="valorAvulso" step="0.01" min="0" placeholder="Ex: 20,00" value="<%= valorAvulso || '' %>">
+                    <label for="jogo-config-campo-8">Valor por jogo avulso (R$)</label>
+                    <input id="jogo-config-campo-8" type="number" name="valorAvulso" step="0.01" min="0" placeholder="Ex: 20,00" value="<%= valorAvulso || '' %>">
                 </div>
             </div>
-            <input type="submit" value="Salvar">
+            <input type="submit" value="Salvar valores">
         </form>
     </div>
 </section>
