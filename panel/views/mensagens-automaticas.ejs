@@ -169,35 +169,5 @@
             <input type="submit" value="Salvar">
         </form>
     </div>
-    <div class="card">
-        <h1>Renovação e fila do mensal</h1>
-        <% if (!resumoMensal) { %>
-            <p>A lista aparece após o envio da mensagem automática de fechamento.</p>
-        <% } else { %>
-            <p>Ciclo <strong><%= resumoMensal.mesNovo %></strong>. Prioridade até
-                <%= new Date(resumoMensal.ciclo.prazo_em).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }) %>.</p>
-            <p class="hint">Confira as vagas antes de confirmar uma entrada. O sistema permite aprovar a primeira da fila após resolver as renovações pendentes. Atualize a página para ver novas respostas.</p>
-            <% [['Renovações confirmadas', resumoMensal.renovadas], ['Pendentes de renovação', resumoMensal.pendentes], ['Novas mensalistas aprovadas', resumoMensal.aprovadas], ['Fila de interessadas', resumoMensal.fila], ['Desistências / prazo encerrado', resumoMensal.desistencias]].forEach(([titulo, lista]) => { %>
-                <h2><%= titulo %> (<%= lista.length %>)</h2>
-                <% if (!lista.length) { %><p>Nenhuma.</p><% } else { %>
-                    <table>
-                        <thead><tr><th>Posição</th><th>Jogadora</th><th>Resposta em</th><th></th></tr></thead>
-                        <tbody>
-                        <% lista.forEach((j, i) => { %>
-                            <tr><td><%= i + 1 %></td><td><%= j.nome %></td>
-                                <td><%= j.respondido_em ? new Date(j.respondido_em + 'Z').toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }) : 'Aguardando' %></td>
-                                <td><% if (lista === resumoMensal.fila && i === 0 && !resumoMensal.pendentes.length) { %>
-                                    <form method="post" action="/mensagens/mensal/<%= j.id %>/aprovar">
-                                        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-                                        <input type="submit" value="Confirmar entrada no mensal">
-                                    </form>
-                                <% } %></td>
-                            </tr>
-                        <% }) %>
-                        </tbody>
-                    </table>
-                <% } %>
-            <% }) %>
-        <% } %>
-    </div>
+    <p class="hint">Renovações e aprovação de interessadas ficam em <a href="/mensal">Mensal e pagamentos → Renovação e fila</a>.</p>
 </section>

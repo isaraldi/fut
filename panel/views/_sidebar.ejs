@@ -21,43 +21,47 @@
         <details class="nav-group" <%= grupoAberto(['/confirmados', '/jogos', '/times']) ? 'open' : '' %>>
             <summary><span class="icon">⚽</span> Jogos <span class="chevron">▸</span></summary>
             <div class="nav-sub">
-                <a class="nav-link <%= ativo('/confirmados') ? 'active' : '' %>" href="/confirmados">Confirmados</a>
+                <a class="nav-link <%= ativo('/confirmados') ? 'active' : '' %>" href="/confirmados">Presença e espera</a>
                 <a class="nav-link <%= caminho.startsWith('/jogos') ? 'active' : '' %>" href="/jogos">Histórico</a>
                 <a class="nav-link <%= ativo('/times') ? 'active' : '' %>" href="/times">Times</a>
             </div>
         </details>
 
-        <details class="nav-group" <%= grupoAberto(['/pagamentos']) ? 'open' : '' %>>
-            <summary><span class="icon">💰</span> Financeiro <span class="chevron">▸</span></summary>
+        <details class="nav-group" <%= grupoAberto(['/pagamentos', '/mensal']) ? 'open' : '' %>>
+            <summary><span class="icon">💰</span> Mensal e pagamentos <span class="chevron">▸</span></summary>
             <div class="nav-sub">
-                <a class="nav-link <%= ativo('/pagamentos/mensalistas') ? 'active' : '' %>" href="/pagamentos/mensalistas">Mensalistas</a>
-                <a class="nav-link <%= ativo('/pagamentos/avulsos') ? 'active' : '' %>" href="/pagamentos/avulsos">Avulsas</a>
+                <a class="nav-link <%= ativo('/mensal') ? 'active' : '' %>" href="/mensal">Renovação e fila</a>
+                <a class="nav-link <%= ativo('/pagamentos/mensalistas') ? 'active' : '' %>" href="/pagamentos/mensalistas">Pagamentos de mensalistas</a>
+                <a class="nav-link <%= ativo('/pagamentos/avulsos') ? 'active' : '' %>" href="/pagamentos/avulsos">Pagamentos de avulsas</a>
             </div>
         </details>
 
         <details class="nav-group" <%= (ativo('/elenco') || (caminho.startsWith('/elenco/') && !caminho.startsWith('/elenco/config'))) ? 'open' : '' %>>
-            <summary><span class="icon">👥</span> Jogadores <span class="chevron">▸</span></summary>
+            <summary><span class="icon">👥</span> Jogadoras <span class="chevron">▸</span></summary>
             <div class="nav-sub">
-                <a class="nav-link <%= ativo('/elenco') ? 'active' : '' %>" href="/elenco">Ativos</a>
+                <a class="nav-link <%= ativo('/elenco') ? 'active' : '' %>" href="/elenco">Ativas</a>
                 <a class="nav-link <%= ativo('/elenco/inativos') ? 'active' : '' %>" href="/elenco/inativos">
-                    Inativos<% if (jogadorasInativasCount > 0) { %> (<%= jogadorasInativasCount %>)<% } %>
+                    Inativas<% if (jogadorasInativasCount > 0) { %> (<%= jogadorasInativasCount %>)<% } %>
                 </a>
             </div>
         </details>
 
-        <a class="nav-link <%= caminho.startsWith('/logs') ? 'active' : '' %>" href="/logs">
-            <span class="icon">📋</span> Logs
-        </a>
+        <details class="nav-group" <%= grupoAberto(['/mensagens']) ? 'open' : '' %>>
+            <summary><span class="icon">💬</span> Comunicação <span class="chevron">▸</span></summary>
+            <div class="nav-sub">
+                <a class="nav-link <%= ativo('/mensagens') ? 'active' : '' %>" href="/mensagens">Envios e agendamentos</a>
+                <a class="nav-link <%= ativo('/mensagens/automaticas') ? 'active' : '' %>" href="/mensagens/automaticas">Modelos e automações</a>
+            </div>
+        </details>
 
-        <details class="nav-group" <%= grupoAberto(['/elenco/config', '/jogo/config', '/enquete/config', '/mensagens', '/comandos', '/configuracoes', '/usuarios']) ? 'open' : '' %>>
+        <details class="nav-group" <%= grupoAberto(['/elenco/config', '/jogo/config', '/enquete/config', '/logs', '/comandos', '/configuracoes', '/usuarios']) ? 'open' : '' %>>
             <summary><span class="icon">⚙️</span> Configurações <span class="chevron">▸</span></summary>
             <div class="nav-sub">
-                <a class="nav-link <%= ativo('/elenco/config') ? 'active' : '' %>" href="/elenco/config">Jogadores</a>
-                <a class="nav-link <%= ativo('/jogo/config') ? 'active' : '' %>" href="/jogo/config">Jogo</a>
-                <a class="nav-link <%= ativo('/enquete/config') ? 'active' : '' %>" href="/enquete/config">Enquete</a>
-                <a class="nav-link <%= ativo('/mensagens') ? 'active' : '' %>" href="/mensagens">Mensagens</a>
-                <a class="nav-link <%= ativo('/mensagens/automaticas') ? 'active' : '' %>" href="/mensagens/automaticas">Msgs. automáticas</a>
-                <a class="nav-link <%= ativo('/comandos') ? 'active' : '' %>" href="/comandos">Comandos</a>
+                <a class="nav-link <%= ativo('/elenco/config') ? 'active' : '' %>" href="/elenco/config">Cadastro e sincronização</a>
+                <a class="nav-link <%= ativo('/jogo/config') ? 'active' : '' %>" href="/jogo/config">Regras do jogo</a>
+                <a class="nav-link <%= ativo('/enquete/config') ? 'active' : '' %>" href="/enquete/config">Enquete e envio automático</a>
+                <a class="nav-link <%= ativo('/comandos') ? 'active' : '' %>" href="/comandos">Comandos e permissões</a>
+                <a class="nav-link <%= ativo('/logs') ? 'active' : '' %>" href="/logs">Atividade do bot</a>
                 <a class="nav-link <%= ativo('/usuarios') ? 'active' : '' %>" href="/usuarios">Usuários</a>
                 <a class="nav-link <%= ativo('/configuracoes/aparencia') ? 'active' : '' %>" href="/configuracoes/aparencia">Aparência</a>
             </div>

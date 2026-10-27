@@ -919,7 +919,6 @@ app.get('/mensagens/automaticas', requireLogin, (req, res) => {
     const proximoFechamento = proximoFechamentoMensal();
     res.render('mensagens-automaticas', {
         usuario: req.session.usuario,
-        resumoMensal: getResumoMensal(),
         fechamentoMensalAtivo: getConfig('fechamento_mensal_ativo') === '1',
         fechamentoMensalMensagem: getConfig('fechamento_mensal_mensagem'),
         fechamentoMensalHora: getConfig('fechamento_mensal_hora'),
@@ -939,9 +938,13 @@ app.get('/mensagens/automaticas', requireLogin, (req, res) => {
     });
 });
 
-app.post('/mensagens/mensal/:id/aprovar', requireLogin, (req, res) => {
+app.get('/mensal', requireLogin, (req, res) => {
+    res.render('mensal', { resumoMensal: getResumoMensal(), ok: req.query.ok });
+});
+
+app.post(['/mensal/:id/aprovar', '/mensagens/mensal/:id/aprovar'], requireLogin, (req, res) => {
     const aprovada = aprovarInteressadaMensal(Number(req.params.id));
-    redirectOk(res, '/mensagens/automaticas', aprovada ? 'Entrada no mensal confirmada!' : 'Aguarde as renovações pendentes e confirme a primeira interessada da fila. Confira se há vaga.');
+    redirectOk(res, '/mensal', aprovada ? 'Entrada no mensal confirmada!' : 'Aguarde as renovações pendentes e confirme a primeira interessada da fila. Confira se há vaga.');
 });
 
 app.post('/mensagens/fechamento-mensal', requireLogin, (req, res) => {
