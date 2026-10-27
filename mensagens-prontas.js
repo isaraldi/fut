@@ -2,26 +2,22 @@
 // (botões "mandar pro grupo") usam — fica fora de db.js e index.js pra não duplicar entre
 // os dois processos (bot e painel rodam separados, só compartilham o banco)
 
-// o mensal fecha na quinta-feira seguinte à última quarta-feira do mês — normalmente cai
-// dentro do próprio mês, mas se o mês terminar numa quarta-feira a quinta vira dia 1º do mês
-// seguinte (o construtor de Date normaliza esse overflow de dia sozinho)
-function fechamentoMensalDoMes(ano, mesIndex) {
-    const ultimoDia = new Date(ano, mesIndex + 1, 0).getDate();
-    let ultimaQuarta = null;
-    for (let dia = ultimoDia; dia >= 1; dia--) {
-        if (new Date(ano, mesIndex, dia).getDay() === 3) {
-            ultimaQuarta = dia;
-            break;
-        }
+// Fecha no dia seguinte ao último jogo do mês, inclusive quando cai no mês seguinte.
+// O dia é recebido de quem lê as configurações, mantendo este módulo independente do banco.
+function fechamentoMensalDoMes(ano, mesIndex, diaSemana = 4) {
+    if (!Number.isInteger(diaSemana) || diaSemana < 0 || diaSemana > 6) {
+        throw new RangeError('Dia do jogo inválido');
     }
-    return new Date(ano, mesIndex, ultimaQuarta + 1);
+    const ultimo = new Date(ano, mesIndex + 1, 0);
+    const distancia = (ultimo.getDay() - diaSemana + 7) % 7;
+    return new Date(ano, mesIndex, ultimo.getDate() - distancia + 1);
 }
 
 // mês (YYYY-MM) que um pagamento feito "agora" deve contar: antes do fechamento do mensal
 // (calculado dentro do próprio mês corrente) conta pro mês corrente; a partir dele (inclusive)
 // já conta pro mês seguinte
-function mesReferenciaAtual(agora = new Date()) {
-    const fechamento = fechamentoMensalDoMes(agora.getFullYear(), agora.getMonth());
+function mesReferenciaAtual(agora = new Date(), diaSemana = 4) {
+    const fechamento = fechamentoMensalDoMes(agora.getFullYear(), agora.getMonth(), diaSemana);
     let ano = agora.getFullYear();
     let mes = agora.getMonth();
     if (agora >= fechamento) {
@@ -333,7 +329,22 @@ function montarTextoTimes(tituloJogo, nomesPorTime, reservas = [], rodizioTexto 
     return texto;
 }
 
+function montarTextoMensal(resumo) {
+    if (!resumo) return 'Ainda não há uma chamada de renovação do mensal. A fila começa na mensagem automática de fechamento.';
+    const horario = (valor) => valor ? new Date(valor + 'Z').toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }) : '';
+    const secao = (titulo, lista, comHora = false) => `*${titulo} (${lista.length})*\n` +
+        (lista.length ? lista.map((j, i) => `${i + 1}. ${j.nome}${comHora ? ' — ' + horario(j.respondido_em) : ''}`).join('\n') : 'Nenhuma.');
+    return [`*Mensal — ${resumo.mesNovo}*`,
+        `Prioridade para renovar até ${new Date(resumo.ciclo.prazo_em).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}.`,
+        secao('Renovações confirmadas', resumo.renovadas), secao('Pendentes de renovação', resumo.pendentes),
+        secao('Novas mensalistas aprovadas', resumo.aprovadas), secao('Fila de interessadas', resumo.fila, true),
+        secao('Desistências / prazo encerrado', resumo.desistencias),
+        'Reaja 👍 na mensagem de fechamento para continuar ou entrar na fila; 👎 (ou retirar o 👍) para desistir. Novas entradas dependem da confirmação da organização.'
+    ].join('\n\n');
+}
+
 module.exports = {
+    montarTextoMensal,
     embaralhar,
     balancearTimes,
     montarPlanoDeTimes,

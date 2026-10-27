@@ -146,6 +146,24 @@ db.exec(`
     );
 `);
 
+// Ciclos independentes dos convites: a chamada existe mesmo sem mensalistas atuais.
+db.exec(`CREATE TABLE IF NOT EXISTS fechamento_mensal_ciclos (
+    message_id TEXT PRIMARY KEY,
+    mes_anterior TEXT NOT NULL UNIQUE,
+    criado_em INTEGER NOT NULL,
+    prazo_em INTEGER NOT NULL
+)`);
+db.transaction(() => {
+    const colunasConvites = db.prepare('PRAGMA table_info(fechamento_mensal_convites)').all();
+    for (const [nome, definicao] of Object.entries({
+        prioridade: 'INTEGER NOT NULL DEFAULT 1',
+        ordem: 'INTEGER',
+        aprovada: 'INTEGER NOT NULL DEFAULT 0',
+    })) {
+        if (!colunasConvites.some(c => c.name === nome)) db.exec(`ALTER TABLE fechamento_mensal_convites ADD COLUMN ${nome} ${definicao}`);
+    }
+}).immediate();
+
 // migração leve: jogadores.posicao (times criados antes desse recurso não têm a coluna)
 const colunasJogadores = db.prepare('PRAGMA table_info(jogadores)').all();
 if (!colunasJogadores.some((c) => c.name === 'posicao')) {
@@ -304,9 +322,9 @@ if (totalOpcoes === 0) {
 }
 
 const DEFAULT_CONFIG = {
-    enquete_titulo_template: 'JOGO DE QUARTA - {data}',
+    enquete_titulo_template: 'JOGO DE {dia} - {data}',
     elenco_auto_incluir_grupo: '0',
-    enquete_dia_semana: '3', // dia do JOGO: 0=domingo ... 6=sábado (3=quarta, mantém o padrão atual) — usado nos tokens {data}/{dia}/{hora} do título
+    enquete_dia_semana: '4', // dia do jogo e base do fechamento: 0=domingo ... 6=sábado
     enquete_hora: '20:00', // horário do JOGO
     enquete_auto_enviar: '0',
     enquete_envio_dia_semana: '1', // dia em que a ENQUETE é disparada (independente do dia do jogo)
@@ -416,13 +434,13 @@ const PUBLICOS_JOGADORAS = {
 
 function getDestinatariasPorPublico(publico) {
     if (publico === 'renovaram') {
-        const ultimo = db.prepare('SELECT message_id FROM fechamento_mensal_convites ORDER BY id DESC LIMIT 1').get();
+        const ultimo = getCicloMensalAtual();
         if (!ultimo) return [];
         return db
             .prepare(
                 `SELECT j.id, j.nome, j.whatsapp_id, j.telefone FROM fechamento_mensal_convites c
                  JOIN jogadores j ON j.id = c.jogador_id
-                 WHERE c.message_id = ? AND c.resposta = 'sim' AND j.ativo = 1
+                 WHERE c.message_id = ? AND c.resposta = 'sim' AND (c.prioridade = 1 OR c.aprovada = 1) AND j.ativo = 1
                  ORDER BY j.nome`,
             )
             .all(ultimo.message_id);
@@ -645,9 +663,7 @@ function criarConviteFechamentoMensal(jogadorId, messageId, mesAnteriorRef) {
     ).run(jogadorId, messageId, mesAnteriorRef);
 }
 
-// localiza o convite de uma jogadora numa mensagem específica — usado pra confirmar que a
-// reação recebida é realmente sobre a mensagem de fechamento do mensal e sobre uma jogadora
-// que foi de fato convidada (não qualquer reação aleatória de qualquer pessoa no grupo)
+// Localiza a participação da jogadora: convite de renovação ou pedido de entrada na fila.
 function getConviteFechamentoMensal(messageId, jogadorId) {
     return db
         .prepare('SELECT * FROM fechamento_mensal_convites WHERE message_id = ? AND jogador_id = ?')
@@ -660,16 +676,90 @@ function registrarRespostaConviteFechamentoMensal(id, resposta) {
     ).run(resposta, id);
 }
 
-// convites ainda sem resposta cujo prazo pra reagir já passou — quem não reagiu a tempo
-// vira avulsa automaticamente (ver checarConvitesFechamentoMensalExpirados em index.js)
-function getConvitesFechamentoMensalExpirados(prazoHoras) {
-    return db
-        .prepare(
-            `SELECT c.*, j.nome AS jogador_nome FROM fechamento_mensal_convites c
-             JOIN jogadores j ON j.id = c.jogador_id
-             WHERE c.resposta IS NULL AND c.criado_em <= datetime('now', ?)`,
-        )
-        .all(`-${prazoHoras} hours`);
+// Operações transacionais: bot e painel podem consultar/alterar o mesmo ciclo.
+function criarCicloMensal(messageId, mesAnteriorRef, prazoHoras) {
+    return db.transaction(() => {
+        const agora = Date.now();
+        db.prepare('INSERT INTO fechamento_mensal_ciclos VALUES (?, ?, ?, ?)')
+            .run(messageId, mesAnteriorRef, agora, agora + prazoHoras * 3600000);
+        const mensalistas = db.prepare("SELECT id FROM jogadores WHERE papel = 'mensalista' AND ativo = 1").all();
+        for (const j of mensalistas) criarConviteFechamentoMensal(j.id, messageId, mesAnteriorRef);
+    }).immediate();
+}
+
+function getCicloMensalAtual() {
+    return db.prepare('SELECT * FROM fechamento_mensal_ciclos ORDER BY criado_em DESC, rowid DESC LIMIT 1').get();
+}
+
+function expirarRenovacoesMensais(agora = Date.now()) {
+    return db.transaction(() => {
+        const ciclo = getCicloMensalAtual();
+        if (!ciclo || agora < ciclo.prazo_em) return;
+        const pendentes = db.prepare(`SELECT id, jogador_id FROM fechamento_mensal_convites
+            WHERE message_id = ? AND prioridade = 1 AND resposta IS NULL`).all(ciclo.message_id);
+        for (const c of pendentes) {
+            registrarRespostaConviteFechamentoMensal(c.id, 'nao');
+            definirPapelJogador(c.jogador_id, 'avulso');
+            registrarLog('mensagem', 'sucesso', `Jogadora ${c.jogador_id}: prazo de renovação encerrado — virou avulsa.`);
+        }
+    }).immediate();
+}
+
+function responderChamadaMensal(messageId, jogadorId, resposta, agora = Date.now()) {
+    return db.transaction(() => {
+        expirarRenovacoesMensais(agora);
+        const ciclo = getCicloMensalAtual();
+        if (!ciclo || ciclo.message_id !== messageId) return false;
+        const jogadora = db.prepare('SELECT * FROM jogadores WHERE id = ? AND ativo = 1').get(jogadorId);
+        if (!jogadora) return false;
+        let convite = getConviteFechamentoMensal(messageId, jogadorId);
+        if (!convite) {
+            if (resposta !== 'sim') return false;
+            db.prepare(`INSERT INTO fechamento_mensal_convites (jogador_id, message_id, mes_anterior, prioridade)
+                VALUES (?, ?, ?, 0)`).run(jogadorId, messageId, ciclo.mes_anterior);
+            convite = getConviteFechamentoMensal(messageId, jogadorId);
+        }
+        if (convite.resposta === resposta) return true; // repetição não muda posição/horário
+        const prioridade = convite.prioridade === 1 && convite.resposta === null && agora < ciclo.prazo_em;
+        const ordem = resposta === 'sim' && !prioridade
+            ? db.prepare('SELECT COALESCE(MAX(ordem), 0) + 1 AS n FROM fechamento_mensal_convites').get().n : convite.ordem;
+        db.prepare(`UPDATE fechamento_mensal_convites SET resposta = ?, prioridade = ?, ordem = ?,
+            aprovada = 0, respondido_em = ? WHERE id = ?`).run(resposta, prioridade ? 1 : 0, ordem,
+                new Date(agora).toISOString().slice(0, -1), convite.id);
+        if (resposta === 'nao') definirPapelJogador(jogadorId, 'avulso');
+        else if (prioridade) definirPapelJogador(jogadorId, 'mensalista');
+        registrarLog('mensagem', 'sucesso', `${jogadora.nome}: ${resposta === 'nao' ? 'desistiu do mensal' : prioridade ? 'renovou o mensal' : 'entrou na fila do mensal'}.`);
+        return true;
+    }).immediate();
+}
+
+function getResumoMensal(agora = Date.now()) {
+    expirarRenovacoesMensais(agora);
+    const ciclo = getCicloMensalAtual();
+    if (!ciclo) return null;
+    const participantes = db.prepare(`SELECT c.*, j.nome FROM fechamento_mensal_convites c
+        JOIN jogadores j ON j.id = c.jogador_id WHERE c.message_id = ? AND j.ativo = 1
+        ORDER BY c.ordem, c.id`).all(ciclo.message_id);
+    const [ano, mes] = ciclo.mes_anterior.split('-').map(Number);
+    const proximo = new Date(ano, mes, 1);
+    return { ciclo, mesNovo: `${proximo.getFullYear()}-${String(proximo.getMonth() + 1).padStart(2, '0')}`,
+        renovadas: participantes.filter(c => c.prioridade && c.resposta === 'sim'),
+        pendentes: participantes.filter(c => c.prioridade && c.resposta === null),
+        aprovadas: participantes.filter(c => c.aprovada && c.resposta === 'sim'),
+        fila: participantes.filter(c => !c.prioridade && !c.aprovada && c.resposta === 'sim'),
+        desistencias: participantes.filter(c => c.resposta === 'nao') };
+}
+
+function aprovarInteressadaMensal(conviteId) {
+    return db.transaction(() => {
+        const resumo = getResumoMensal();
+        if (!resumo || resumo.pendentes.length || resumo.fila[0]?.id !== conviteId) return false;
+        const convite = resumo.fila[0];
+        definirPapelJogador(convite.jogador_id, 'mensalista');
+        db.prepare('UPDATE fechamento_mensal_convites SET aprovada = 1 WHERE id = ?').run(conviteId);
+        registrarLog('mensagem', 'sucesso', `${convite.nome}: entrada no mensal aprovada pela organização.`);
+        return true;
+    }).immediate();
 }
 
 // muda o papel de uma jogadora e registra no histórico — só escreve/loga se o papel
@@ -868,7 +958,23 @@ function upsertJogador(whatsappId, nome, papelSugerido, telefone) {
     return info.lastInsertRowid;
 }
 
+// Migração única solicitada: o jogo passou de quarta para quinta. Edições posteriores
+// no painel continuam sendo respeitadas. Templates personalizados são preservados.
+db.transaction(() => {
+    if (getConfig('mensal_calendario_v2') !== '1') {
+        if (getConfig('enquete_dia_semana') === '3') setConfig('enquete_dia_semana', '4');
+        if (getConfig('enquete_titulo_template') === 'JOGO DE QUARTA - {data}') setConfig('enquete_titulo_template', 'JOGO DE {dia} - {data}');
+        db.prepare(`INSERT OR IGNORE INTO fechamento_mensal_ciclos
+            SELECT message_id, mes_anterior, CAST(strftime('%s', MIN(criado_em)) AS INTEGER) * 1000,
+                CAST(strftime('%s', MIN(criado_em)) AS INTEGER) * 1000 + ?
+            FROM fechamento_mensal_convites GROUP BY message_id, mes_anterior ORDER BY MIN(criado_em) DESC`)
+            .run((parseInt(getConfig('fechamento_mensal_prazo_horas'), 10) || 36) * 3600000);
+        setConfig('mensal_calendario_v2', '1');
+    }
+}).immediate();
+
 module.exports = {
+    criarCicloMensal, getCicloMensalAtual, expirarRenovacoesMensais, responderChamadaMensal, getResumoMensal, aprovarInteressadaMensal,
     db,
     upsertJogador,
     getConfig,
@@ -910,7 +1016,6 @@ module.exports = {
     criarConviteFechamentoMensal,
     getConviteFechamentoMensal,
     registrarRespostaConviteFechamentoMensal,
-    getConvitesFechamentoMensalExpirados,
     definirPapelJogador,
     getJogadorPorWhatsappId,
     podeUsarComandos,

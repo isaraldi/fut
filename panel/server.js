@@ -26,6 +26,7 @@ const multer = require('multer');
 const SqliteSessionStore = require('./sqlite-session-store');
 const {
     db,
+    getResumoMensal, aprovarInteressadaMensal,
     getConfig,
     setConfig,
     getGrupos,
@@ -287,7 +288,7 @@ app.post('/confirmados/enviar-lista', requireLogin, (req, res) => {
 // ---------- HOME (resumo geral) ----------
 
 app.get('/', requireLogin, (req, res) => {
-    const mes = mesReferenciaAtual();
+    const mes = mesReferenciaAtual(new Date(), Number(getConfig('enquete_dia_semana')));
 
     const proximoJogo = db
         .prepare('SELECT * FROM enquetes ORDER BY id DESC LIMIT 1')
@@ -428,7 +429,7 @@ app.get('/pagamentos', requireLogin, (req, res) => {
 });
 
 app.get('/pagamentos/mensalistas', requireLogin, (req, res) => {
-    const mes = req.query.mes || mesReferenciaAtual();
+    const mes = req.query.mes || mesReferenciaAtual(new Date(), Number(getConfig('enquete_dia_semana')));
 
     const jogadores = db
         .prepare(
@@ -446,7 +447,7 @@ app.get('/pagamentos/mensalistas', requireLogin, (req, res) => {
 });
 
 app.post('/pagamentos/mensalistas/:jogadorId/toggle', requireLogin, (req, res) => {
-    const mes = req.body.mes || mesReferenciaAtual();
+    const mes = req.body.mes || mesReferenciaAtual(new Date(), Number(getConfig('enquete_dia_semana')));
     const jogadorId = Number(req.params.jogadorId);
 
     const atual = db
@@ -627,6 +628,7 @@ app.get('/elenco/:id/historico', requireLogin, (req, res) => {
 // ---------- COMANDOS DO BOT (referência + whitelist de quem pode usar) ----------
 
 const COMANDOS_DO_BOT = [
+    { comando: '!mensal', onde: 'Grupo ou DM', descricao: 'Mostra renovações, pendências, desistências, novas aprovadas e fila do mensal por ordem de reação.' },
     { comando: '!enquete', onde: 'Grupo', descricao: 'Abre uma nova enquete de confirmação pro jogo.' },
     { comando: '!sincronizar', onde: 'Grupo', descricao: 'Sincroniza o elenco com os membros atuais do grupo do WhatsApp.' },
     { comando: '!fechar', onde: 'Grupo ou DM', descricao: 'Fecha a enquete: manda quem realmente vai jogar (respeitando o limite de vagas) e trava novos votos.' },
@@ -644,7 +646,7 @@ const TOKENS_DISPONIVEIS = [
     { token: '{hora}', onde: 'Título da enquete (Enquete > Configuração)', descricao: 'Horário do jogo configurado em Jogo.' },
     { token: '{mes_anterior}', onde: 'Fechamento do mensal (Mensagens)', descricao: 'Mês que acabou de fechar, formato AAAA-MM (ex: 2026-08).' },
     { token: '{mes_atual}', onde: 'Fechamento do mensal (Mensagens)', descricao: 'Mês que está começando, formato AAAA-MM (ex: 2026-09).' },
-    { token: '{mensalistas_mes_anterior}', onde: 'Fechamento do mensal (Mensagens)', descricao: 'Lista numerada de quem pagou o mês anterior — as convidadas a renovar.' },
+    { token: '{mensalistas_mes_anterior}', onde: 'Fechamento do mensal (Mensagens)', descricao: 'Lista das mensalistas atuais convidadas a renovar (independentemente do pagamento).' },
     { token: '{valor_mensal}', onde: 'Fechamento do mensal (Mensagens)', descricao: 'Valor da mensalidade configurado em Jogo > Valores, formatado em R$.' },
     { token: '{data_limite_pagamento}', onde: 'Fechamento do mensal (Mensagens)', descricao: 'Dia limite de pagamento configurado ali mesmo, formato DD/MM do mês que está começando (ex: 07/09).' },
     { token: '{fechamento_mensal_prazo_horas}', onde: 'Fechamento do mensal (Mensagens)', descricao: 'Prazo (em horas) configurado ali mesmo pra reagir antes de virar avulsa automaticamente (ex: 36).' },
@@ -866,17 +868,16 @@ app.post('/enquete/config/opcoes/:id/excluir', requireLogin, (req, res) => {
 
 // ---------- MENSAGENS AGENDADAS ----------
 
-// a próxima quinta de fechamento do mensal: a calculada pro mês corrente, ou (se já passou)
-// a do mês seguinte — só pra mostrar no painel, não é usada em nenhuma decisão de negócio
+// Inclui o fechamento do mês anterior quando ele cai no dia 1º deste mês.
 function proximoFechamentoMensal() {
     const agora = new Date();
     const hoje = new Date(agora.getFullYear(), agora.getMonth(), agora.getDate());
-    const candidato = fechamentoMensalDoMes(agora.getFullYear(), agora.getMonth());
-    if (candidato >= hoje) return candidato;
-
-    const proxMesIndex = agora.getMonth() === 11 ? 0 : agora.getMonth() + 1;
-    const anoDoProxMes = agora.getMonth() === 11 ? agora.getFullYear() + 1 : agora.getFullYear();
-    return fechamentoMensalDoMes(anoDoProxMes, proxMesIndex);
+    const dia = Number(getConfig('enquete_dia_semana'));
+    for (const deslocamento of [-1, 0, 1]) {
+        const mes = new Date(agora.getFullYear(), agora.getMonth() + deslocamento, 1);
+        const candidato = fechamentoMensalDoMes(mes.getFullYear(), mes.getMonth(), dia);
+        if (candidato >= hoje) return candidato;
+    }
 }
 
 app.get('/mensagens', requireLogin, (req, res) => {
@@ -918,6 +919,7 @@ app.get('/mensagens/automaticas', requireLogin, (req, res) => {
     const proximoFechamento = proximoFechamentoMensal();
     res.render('mensagens-automaticas', {
         usuario: req.session.usuario,
+        resumoMensal: getResumoMensal(),
         fechamentoMensalAtivo: getConfig('fechamento_mensal_ativo') === '1',
         fechamentoMensalMensagem: getConfig('fechamento_mensal_mensagem'),
         fechamentoMensalHora: getConfig('fechamento_mensal_hora'),
@@ -935,6 +937,11 @@ app.get('/mensagens/automaticas', requireLogin, (req, res) => {
         timesMensagem: getConfig('times_mensagem'),
         ok: req.query.ok,
     });
+});
+
+app.post('/mensagens/mensal/:id/aprovar', requireLogin, (req, res) => {
+    const aprovada = aprovarInteressadaMensal(Number(req.params.id));
+    redirectOk(res, '/mensagens/automaticas', aprovada ? 'Entrada no mensal confirmada!' : 'Aguarde as renovações pendentes e confirme a primeira interessada da fila. Confira se há vaga.');
 });
 
 app.post('/mensagens/fechamento-mensal', requireLogin, (req, res) => {

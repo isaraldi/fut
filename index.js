@@ -21,12 +21,8 @@ const {
   marcarMensagemSemanalEnviada,
   marcarPagamentoMensalista,
   marcarPagamentoAvulso,
-  getMensalistasPagos,
-  criarConviteFechamentoMensal,
   getConviteFechamentoMensal,
-  registrarRespostaConviteFechamentoMensal,
-  getConvitesFechamentoMensalExpirados,
-  definirPapelJogador,
+  criarCicloMensal, getCicloMensalAtual, expirarRenovacoesMensais, responderChamadaMensal, getResumoMensal,
   getJogadorPorWhatsappId,
   podeUsarComandos,
   getConfirmadosDaEnquete,
@@ -45,7 +41,7 @@ const {
 } = require('./db');
 const {
   montarPlanoDeTimes, montarRodizio, acharPorNomes, montarTextoListaConfirmadas, montarTextoListaAtual, montarTextoListaEspera, montarTextoTimes,
-  fechamentoMensalDoMes, mesReferenciaAtual, mesAnterior,
+  fechamentoMensalDoMes, mesReferenciaAtual, mesAnterior, montarTextoMensal,
 } = require('./mensagens-prontas');
 
 // 💥 erro não tratado (bug real, não um erro esperado de rede/WhatsApp) — mais seguro encerrar
@@ -392,27 +388,24 @@ async function checarMensagensAgendadas() {
   }
 }
 
-// 💰 FECHAMENTO DO MENSAL — roda a cada minuto: no dia em que o mensal fecha (quinta-feira
-// seguinte à última quarta-feira do mês — ver fechamentoMensalDoMes em mensagens-prontas.js),
-// manda a mensagem configurada pro grupo, 1x por dia. Confere tanto o fechamento calculado a
-// partir do mês corrente quanto do mês anterior, porque no caso raro em que o mês anterior
-// termina numa quarta-feira, a quinta de fechamento cai no dia 1º do mês corrente — sem isso,
-// esse fechamento nunca bateria com "hoje" e a mensagem nunca sairia.
+// Fecha no dia seguinte ao último jogo do mês. Verifica também o mês anterior,
+// pois o fechamento pode cair no dia 1º do mês seguinte.
+let enviandoFechamentoMensal = false;
 function mesmaData(a, b) {
   return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 }
 
 async function checarFechamentoMensal() {
-  if (getConfig('fechamento_mensal_ativo') !== '1') return;
+  if (enviandoFechamentoMensal || getConfig('fechamento_mensal_ativo') !== '1') return;
 
   const grupoId = getConfig('enquete_grupo_id');
   if (!grupoId) return;
 
   const agora = new Date();
-  const fechamentoDoMesAtual = fechamentoMensalDoMes(agora.getFullYear(), agora.getMonth());
+  const fechamentoDoMesAtual = fechamentoMensalDoMes(agora.getFullYear(), agora.getMonth(), Number(getConfig('enquete_dia_semana')));
   const mesAnteriorIndex = agora.getMonth() === 0 ? 11 : agora.getMonth() - 1;
   const anoDoMesAnterior = agora.getMonth() === 0 ? agora.getFullYear() - 1 : agora.getFullYear();
-  const fechamentoDoMesAnterior = fechamentoMensalDoMes(anoDoMesAnterior, mesAnteriorIndex);
+  const fechamentoDoMesAnterior = fechamentoMensalDoMes(anoDoMesAnterior, mesAnteriorIndex, Number(getConfig('enquete_dia_semana')));
 
   if (!mesmaData(agora, fechamentoDoMesAtual) && !mesmaData(agora, fechamentoDoMesAnterior)) return;
 
@@ -427,12 +420,12 @@ async function checarFechamentoMensal() {
   const minutosAlvo = horaAlvo * 60 + minutoAlvo;
   if (minutosAgora < minutosAlvo) return;
 
-  // convite pra renovar é sempre sobre quem pagou o ciclo que está terminando, não o que
-  // está começando — mesReferenciaAtual() já devolve o mês novo a partir do dia do fechamento
-  const mesNovo = mesReferenciaAtual(agora);
+  // A chamada usa as mensalistas atuais; o mês de pagamento já vira no fechamento.
+  const mesNovo = mesReferenciaAtual(agora, Number(getConfig('enquete_dia_semana')));
   const mesAnteriorRef = mesAnterior(mesNovo);
   const valorMensal = parseFloat(getConfig('valor_mensal'));
-  const pagantes = getMensalistasPagos(mesAnteriorRef);
+  if (db.prepare('SELECT 1 FROM fechamento_mensal_ciclos WHERE mes_anterior = ?').get(mesAnteriorRef)) return;
+  const pagantes = db.prepare("SELECT id, nome FROM jogadores WHERE papel = 'mensalista' AND ativo = 1 ORDER BY nome").all();
   const prazoHoras = parseInt(getConfig('fechamento_mensal_prazo_horas'), 10) || 36;
 
   const diaLimite = parseInt(getConfig('pagamento_dia_limite'), 10) || 7;
@@ -440,78 +433,60 @@ async function checarFechamentoMensal() {
   const dataLimitePagamento = `${String(diaLimite).padStart(2, '0')}/${mesNovoNumero}`;
 
   const template = getConfig('fechamento_mensal_mensagem');
-  const texto = template
+  const textoBase = template
     .replace(/{mes_anterior}/g, mesAnteriorRef)
     .replace(/{mes_atual}/g, mesNovo)
     .replace(/{data_limite_pagamento}/g, dataLimitePagamento)
     .replace(/{fechamento_mensal_prazo_horas}/g, String(prazoHoras))
     .replace('{valor_mensal}', Number.isFinite(valorMensal) ? `R$${valorMensal.toFixed(2)}` : '(valor não configurado)')
-    .replace('{mensalistas_mes_anterior}', pagantes.length ? pagantes.map((j, i) => `${i + 1}. ${j.nome}`).join('\n') : 'Ninguém pagou o mês anterior.');
+    .replace('{mensalistas_mes_anterior}', pagantes.length ? pagantes.map((j, i) => `${i + 1}. ${j.nome}`).join('\n') : 'Nenhuma mensalista atual.');
+  const texto = textoBase + '\n\n👍 Mensalistas atuais: confirmem a renovação dentro do prazo para manter a prioridade. Demais interessadas: reajam 👍 para entrar na fila por ordem de resposta. 👎 ou retirar o 👍 significa desistência. Depois do prazo, pedidos de renovação também entram na fila. Consulte com !mensal. Novas entradas dependem da organização.';
 
+  enviandoFechamentoMensal = true;
   console.log('💰 Fechamento do mensal atingido, enviando mensagem automática...');
   try {
     const sent = await comTimeoutDeSessao(client.sendMessage(grupoId, texto), 30 * 1000, 'Envio do fechamento do mensal');
     const messageId = sent.id._serialized;
-    for (const jogador of pagantes) {
-      criarConviteFechamentoMensal(jogador.id, messageId, mesAnteriorRef);
-    }
+    criarCicloMensal(messageId, mesAnteriorRef, prazoHoras);
     setConfig('fechamento_mensal_ultimo_envio', hojeLocal);
     registrarLog('mensagem', 'sucesso', `Mensagem de fechamento do mensal enviada (${pagantes.length} convidada(s) a renovar — mês ${mesAnteriorRef})`, grupoId);
     console.log(`💰 Mensagem de fechamento do mensal enviada (${pagantes.length} convidada(s))`);
   } catch (err) {
     registrarLog('mensagem', 'erro', `Falha ao enviar mensagem de fechamento do mensal: ${err.message}`, grupoId);
     console.error('Erro ao enviar mensagem de fechamento do mensal:', err);
+  } finally {
+    enviandoFechamentoMensal = false;
   }
 }
 
-// ⏰⬇️ EXPIRAÇÃO DO PRAZO DE RENOVAÇÃO — quem não reagiu à mensagem de fechamento do mensal
-// dentro do prazo configurado (padrão 36h) vira avulsa automaticamente, liberando a vaga.
-// Uma reação tardia (depois de já ter expirado) ainda é aceita normalmente pelo handler de
-// 'message_reaction' — o convite não fica "travado" só porque expirou uma vez.
+// O prazo é congelado por ciclo. Só respostas da chamada mais recente são aceitas.
 async function checarConvitesFechamentoMensalExpirados() {
-  const prazoHoras = parseInt(getConfig('fechamento_mensal_prazo_horas'), 10) || 36;
-  const expirados = getConvitesFechamentoMensalExpirados(prazoHoras);
-
-  for (const convite of expirados) {
-    registrarRespostaConviteFechamentoMensal(convite.id, 'nao');
-    const mudou = definirPapelJogador(convite.jogador_id, 'avulso');
-    registrarLog(
-      'mensagem', 'sucesso',
-      `${convite.jogador_nome} não reagiu ao fechamento do mensal em ${prazoHoras}h — virou avulsa automaticamente${mudou ? '' : ' (sem mudança de papel)'}`,
-    );
-    console.log(`💰⏰ ${convite.jogador_nome} não reagiu em ${prazoHoras}h — virou avulsa automaticamente`);
-  }
+  expirarRenovacoesMensais();
 }
 
-// 👍👎 REAÇÃO NA MENSAGEM DE FECHAMENTO DO MENSAL — 👍 confirma renovação (garante papel
-// mensalista), 👎 libera a vaga (vira avulsa). Só age se a reação for numa mensagem de
-// fechamento de fato e vier de quem foi convidada nela (getConviteFechamentoMensal) — reação
-// de qualquer outra pessoa, em qualquer outra mensagem, é ignorada.
-client.on('message_reaction', async (reaction) => {
+// Processa na ordem de chegada: resolver identidades envolve awaits e não pode inverter a fila.
+let filaReacoesMensais = Promise.resolve();
+client.on('message_reaction', (reaction) => {
+  filaReacoesMensais = filaReacoesMensais.then(async () => {
   try {
-    const resposta = reaction.reaction === '👍' ? 'sim' : reaction.reaction === '👎' ? 'nao' : null;
-    if (!resposta) return;
-
+    // Retirar a reação ou trocar por outro emoji cancela uma manifestação anterior.
+    const resposta = reaction.reaction === '👍' ? 'sim' : 'nao';
     const messageId = getIdSerialized(reaction.msgId);
-    if (!messageId) return;
-
+    const ciclo = getCicloMensalAtual();
+    if (!messageId || !ciclo || ciclo.message_id !== messageId) return;
     const idCanonico = await resolverIdCanonico(reaction.senderId);
     const jogador = getJogadorPorWhatsappId(idCanonico);
     if (!jogador) return;
-
-    const convite = getConviteFechamentoMensal(messageId, jogador.id);
-    if (!convite) return;
-
-    registrarRespostaConviteFechamentoMensal(convite.id, resposta);
-    const papelNovo = resposta === 'sim' ? 'mensalista' : 'avulso';
-    const mudou = definirPapelJogador(jogador.id, papelNovo);
-
-    const resumo = resposta === 'sim' ? 'confirmou renovação — continua mensalista' : 'não renovou — virou avulsa';
-    registrarLog('mensagem', 'sucesso', `${jogador.nome} reagiu ${reaction.reaction} ao fechamento do mensal: ${resumo}${mudou ? '' : ' (sem mudança de papel)'}`);
-    console.log(`💰 ${jogador.nome} ${resumo}`);
+    if (reaction.reaction !== '👍' && reaction.reaction !== '👎') {
+      const convite = getConviteFechamentoMensal(messageId, jogador.id);
+      if (!convite || convite.resposta !== 'sim') return;
+    }
+    responderChamadaMensal(messageId, jogador.id, resposta);
   } catch (err) {
     console.error('Erro ao processar reação de fechamento do mensal:', err);
   }
+  });
+  return filaReacoesMensais;
 });
 
 // 🧾 COMPROVANTE DE PAGAMENTO — OCR local (tesseract.js, roda em WASM, sem shell out)
@@ -618,7 +593,7 @@ async function processarPossivelComprovante(msg) {
     }
 
     if (tipo === 'mensal') {
-      const mes = mesReferenciaAtual(); // mês corrente, ou o seguinte se o mensal já fechou
+      const mes = mesReferenciaAtual(new Date(), Number(getConfig('enquete_dia_semana'))); // mês corrente, ou o seguinte se o mensal já fechou
       marcarPagamentoMensalista(jogador.id, mes);
       registrarLog('comprovante', 'sucesso', `Comprovante de ${jogador.nome} reconhecido — mensalidade de ${mes} marcada como paga`, msg.from);
       console.log(`🧾 Comprovante de ${jogador.nome} reconhecido — mensalidade de ${mes} marcada como paga`);
@@ -928,6 +903,11 @@ client.on('message', async msg => {
   }
 
   // funciona em grupo OU em DM direto com o bot
+  if (text === '!mensal') {
+    if (!(await remetenteAutorizado(msg))) return negarComando(msg);
+    return msg.reply(montarTextoMensal(getResumoMensal()));
+  }
+
   if (text === '!lista') {
     if (!(await remetenteAutorizado(msg))) return negarComando(msg);
     return enviarListaAtual(msg);
