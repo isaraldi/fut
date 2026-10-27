@@ -1,0 +1,27 @@
+<fieldset class="jogadora-fieldset">
+    <legend>Cadastro</legend>
+    <label for="<%= prefixo %>-nome">Nome</label>
+    <input id="<%= prefixo %>-nome" type="text" name="nome" required autocomplete="name">
+    <label for="<%= prefixo %>-telefone">Telefone (opcional)</label>
+    <input id="<%= prefixo %>-telefone" type="tel" name="telefone" autocomplete="tel">
+</fieldset>
+<fieldset class="jogadora-fieldset">
+    <legend>Perfil para os times</legend>
+    <div class="form-row">
+        <div>
+            <label for="<%= prefixo %>-posicao">Posição</label>
+            <select id="<%= prefixo %>-posicao" name="posicao">
+                <option value="indefinida">Indefinida</option>
+                <option value="goleira">Goleira</option>
+                <option value="defesa">Defesa</option>
+                <option value="meio">Meio</option>
+                <option value="ataque">Ataque</option>
+            </select>
+        </div>
+        <div>
+            <label for="<%= prefixo %>-nivel">Nível de balanceamento</label>
+            <input id="<%= prefixo %>-nivel" type="number" name="nivel" min="1" max="5" step="1" value="3" required>
+            <p class="hint">De 1 a 5, usado no equilíbrio dos times.</p>
+        </div>
+    </div>
+</fieldset>

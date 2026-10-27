@@ -280,6 +280,7 @@ const configuracoesPorPagina = {
     '/enquete/config': ['/enquete/config/auto', '/enquete/config/titulo'],
     '/mensagens/automaticas': ['/mensagens/lista-confirmada', '/mensagens/lista-atual', '/mensagens/lista-espera', '/mensagens/times', '/mensagens/fechamento-mensal'],
     '/elenco/config': ['/elenco/config'],
+    '/elenco': [],
 };
 
 app.post('/configuracoes/salvar', requireLogin, (req, res) => {
@@ -299,12 +300,13 @@ app.post('/configuracoes/salvar', requireLogin, (req, res) => {
     const validas = alteracoes.every(item => item && typeof item.action === 'string' &&
         item.campos && typeof item.campos === 'object' && !Array.isArray(item.campos) &&
         Object.values(item.campos).every(valor => typeof valor === 'string') &&
-        (permitidas.includes(item.action) || (pagina === '/enquete/config' && /^\/enquete\/config\/opcoes\/\d+$/.test(item.action))));
+        (permitidas.includes(item.action) || (pagina === '/elenco' && /^\/elenco\/\d+\/atualizar$/.test(item.action)) || (pagina === '/enquete/config' && /^\/enquete\/config\/opcoes\/\d+$/.test(item.action))));
     if (!validas) return res.status(400).json({ erro: 'Há configurações inválidas. Recarregue a página.' });
     try {
         db.transaction(() => {
             for (const { action, campos } of alteracoes) {
                 if (salvarConfiguracao[action]) salvarConfiguracao[action](campos);
+                else if (pagina === '/elenco') salvarJogadora(Number(action.split('/')[2]), campos);
                 else {
                     if (!campos.texto?.trim()) throw new Error('Opção sem texto');
                     const id = Number(action.split('/').pop());
@@ -692,6 +694,27 @@ app.post('/elenco/config/sincronizar', requireLogin, (req, res) => {
 app.post('/elenco/config', requireLogin, (req, res) => {
     salvarConfiguracao['/elenco/config'](req.body);
     redirectOk(res, '/elenco/config', 'Configuração salva!');
+});
+
+// A edição individual e o lote usam as mesmas validações e histórico de participação.
+function salvarJogadora(id, campos) {
+    const atual = db.prepare('SELECT papel FROM jogadores WHERE id = ? AND ativo = 1').get(id);
+    const nome = (campos.nome || '').trim();
+    const nivel = Number(campos.nivel);
+    if (!atual || !nome || !Number.isInteger(nivel) || nivel < 1 || nivel > 5 ||
+        !['mensalista', 'avulso'].includes(campos.papel)) throw new Error('Dados da jogadora inválidos');
+    db.prepare('UPDATE jogadores SET nome = ?, telefone = ?, nivel = ?, papel = ?, posicao = ? WHERE id = ?')
+        .run(nome, (campos.telefone || '').trim() || null, nivel, campos.papel, posicaoValida(campos.posicao), id);
+    if (atual.papel !== campos.papel) registrarMudancaPapel(id, atual.papel, campos.papel);
+}
+
+app.post('/elenco/:id/atualizar', requireLogin, (req, res) => {
+    try {
+        db.transaction(() => salvarJogadora(Number(req.params.id), req.body)).immediate();
+    } catch {
+        return res.status(400).send('Confira os dados da jogadora e tente novamente.');
+    }
+    redirectOk(res, '/elenco', 'Jogadora atualizada!');
 });
 
 app.post('/elenco/salvar-todas', requireLogin, (req, res) => {

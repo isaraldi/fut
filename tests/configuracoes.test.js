@@ -89,7 +89,30 @@ async function main() {
         assert.equal(dados.getConfig('elenco_auto_incluir_grupo'), '1');
         assert.equal((await lote('/elenco/config', [alterar('/elenco/config', {})])).status, 200);
         assert.equal(dados.getConfig('elenco_auto_incluir_grupo'), '0');
-        console.log('OK: salvamento conjunto, blocos independentes, rollback, ações separadas, checkbox e CSRF.');
+        const jogadora = Number(dados.db.prepare("INSERT INTO jogadores (nome, papel, whatsapp_id) VALUES ('Jogadora de teste', 'avulso', 'teste@c.us')").run().lastInsertRowid);
+        const rotaJogadora = `/elenco/${jogadora}/atualizar`;
+        const cadastro = { nome: 'Nome atualizado', telefone: '11900000000', nivel: '4', papel: 'mensalista', posicao: 'defesa' };
+        assert.equal((await lote('/elenco', [alterar(rotaJogadora, cadastro)])).status, 200);
+        let salva = dados.db.prepare('SELECT * FROM jogadores WHERE id = ?').get(jogadora);
+        assert.equal(salva.nome, cadastro.nome);
+        assert.equal(salva.telefone, cadastro.telefone);
+        assert.equal(salva.nivel, 4);
+        assert.equal(salva.papel, 'mensalista');
+        assert.equal(salva.posicao, 'defesa');
+        assert.equal(salva.whatsapp_id, 'teste@c.us');
+        assert.equal(dados.getPapelHistorico(jogadora).length, 1);
+        assert.equal((await lote('/elenco', [alterar(rotaJogadora, cadastro)])).status, 200);
+        assert.equal(dados.getPapelHistorico(jogadora).length, 1);
+        assert.equal((await lote('/elenco', [
+            alterar(rotaJogadora, { ...cadastro, papel: 'avulso' }),
+            alterar('/elenco/999999/atualizar', cadastro),
+        ])).status, 400);
+        assert.equal(dados.db.prepare('SELECT papel FROM jogadores WHERE id = ?').get(jogadora).papel, 'mensalista');
+        assert.equal(dados.getPapelHistorico(jogadora).length, 1);
+        assert.equal((await lote('/elenco', [alterar(rotaJogadora, { ...cadastro, nivel: '9' })])).status, 400);
+        assert.equal((await lote('/elenco', [alterar(rotaJogadora, cadastro)], 'invalido')).status, 403);
+        assert.equal((await lote('/elenco', [alterar('/elenco/1/excluir', {})])).status, 400);
+        console.log('OK: salvamento conjunto, rollback, ações separadas, checkbox, edição de jogadoras, histórico e CSRF.');
     } finally {
         if (dados?.db.open) dados.db.close();
         if (servidor && servidor.exitCode === null) {

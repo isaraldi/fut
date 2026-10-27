@@ -1,121 +1,97 @@
 <div class="page-header">
     <div>
         <h1>Jogadoras</h1>
-        <p><%= jogadores.length %> cadastrado<%= jogadores.length === 1 ? '' : 's' %></p>
+        <p><%= jogadores.length %> cadastrada<%= jogadores.length === 1 ? '' : 's' %></p>
     </div>
+    <button type="button" data-jogadora-adicionar>Adicionar jogadora</button>
 </div>
 
-<div class="card">
-    <h1>Adicionar jogadora</h1>
-    <form method="post" action="/elenco"><input type="hidden" name="_csrf" value="<%= csrfToken %>">
-        <div class="form-row">
-            <div>
-                <label for="elenco-campo-1">Nome</label>
-                <input id="elenco-campo-1" type="text" name="nome" required>
-            </div>
-            <div>
-                <label for="elenco-campo-2">Telefone (opcional)</label>
-                <input id="elenco-campo-2" type="tel" name="telefone" autocomplete="tel">
-            </div>
+<div class="card elenco-lista">
+    <div class="elenco-toolbar">
+        <div class="elenco-busca">
+            <label for="elenco-busca">Buscar jogadora</label>
+            <input id="elenco-busca" type="search" placeholder="Buscar por nome" autocomplete="off">
         </div>
-        <div class="form-row">
-            <div>
-                <label for="elenco-campo-3">Nível (1-5)</label>
-                <input id="elenco-campo-3" type="number" name="nivel" min="1" max="5" value="3">
-            </div>
-            <div>
-                <label for="elenco-campo-4">Categoria</label>
-                <select id="elenco-campo-4" name="papel">
-                    <option value="mensalista">Mensalista</option>
-                    <option value="avulso" selected>Avulsa</option>
-                </select>
-            </div>
-            <div>
-                <label for="elenco-campo-5">Posição</label>
-                <select id="elenco-campo-5" name="posicao">
-                    <option value="indefinida" selected>Indefinida</option>
-                    <option value="goleira">Goleira</option>
-                    <option value="defesa">Defesa</option>
-                    <option value="meio">Meio</option>
-                    <option value="ataque">Ataque</option>
-                </select>
-            </div>
+        <div class="elenco-filtros" role="group" aria-label="Filtrar participação">
+            <% [['todas', 'Todas'], ['mensalista', 'Mensalistas'], ['avulso', 'Avulsas']].forEach(([valor, rotulo]) => { %>
+                <button type="button" class="secondary" data-elenco-filtro="<%= valor %>" aria-pressed="<%= valor === 'todas' %>"><%= rotulo %> <span data-elenco-contagem="<%= valor %>"><%= valor === 'todas' ? jogadores.length : jogadores.filter(j => j.papel === valor).length %></span></button>
+            <% }) %>
         </div>
-        <input type="submit" value="Adicionar jogadora">
-    </form>
-</div>
-
-<%
-    const mensalistas = jogadores.filter(j => j.papel === 'mensalista');
-    const avulsas = jogadores.filter(j => j.papel === 'avulso');
-%>
-<% if (jogadores.length === 0) { %>
-    <div class="card">
-        <h1>Lista de jogadoras</h1>
-        <p class="empty">Ninguém cadastrado ainda — vote em uma enquete no WhatsApp ou adicione manualmente acima.</p>
     </div>
-<% } else { %>
-    <form method="post" action="/elenco/salvar-todas"><input type="hidden" name="_csrf" value="<%= csrfToken %>">
-        <% [['Mensalistas', mensalistas], ['Avulsas', avulsas]].forEach(([titulo, grupo]) => { %>
-            <div class="card">
-                <h1><%= titulo %> <span class="muted">(<%= grupo.length %>)</span></h1>
-                <% if (grupo.length === 0) { %>
-                    <p class="empty">Nenhuma jogadora <%= titulo.toLowerCase() %>.</p>
-                <% } else { %>
-                    <table>
-                        <thead>
-                            <tr><th>Nome</th><th>Telefone</th><th>Nível</th><th>Categoria</th><th>Posição</th><th></th></tr>
-                        </thead>
-                        <tbody>
-                            <% grupo.forEach(j => { %>
-                                <tr class="jogador-row">
-                                    <td>
-                                        <input type="hidden" name="id" value="<%= j.id %>">
-                                        <input type="text" class="field" name="nome" aria-label="Nome de <%= j.nome %>" value="<%= j.nome %>" tabindex="-1" required>
-                                    </td>
-                                    <td><input type="text" class="field" name="telefone" aria-label="Telefone de <%= j.nome %>" value="<%= j.telefone || '' %>" tabindex="-1" placeholder="—"></td>
-                                    <td><input type="number" class="field field-number" name="nivel" aria-label="Nível de <%= j.nome %>" min="1" max="5" value="<%= j.nivel %>" tabindex="-1"></td>
-                                    <td>
-                                        <select class="field select-badge badge <%= j.papel %>" name="papel" aria-label="Categoria de <%= j.nome %>" data-badge-field tabindex="-1">
-                                            <option value="mensalista" <%= j.papel === 'mensalista' ? 'selected' : '' %>>Mensalista</option>
-                                            <option value="avulso" <%= j.papel === 'avulso' ? 'selected' : '' %>>Avulsa</option>
-                                        </select>
-                                    </td>
-                                    <td>
-                                        <select class="field select-badge badge <%= j.posicao %>" name="posicao" aria-label="Posição de <%= j.nome %>" data-badge-field tabindex="-1">
-                                            <option value="indefinida" <%= j.posicao === 'indefinida' ? 'selected' : '' %>>Indefinida</option>
-                                            <option value="goleira" <%= j.posicao === 'goleira' ? 'selected' : '' %>>Goleira</option>
-                                            <option value="defesa" <%= j.posicao === 'defesa' ? 'selected' : '' %>>Defesa</option>
-                                            <option value="meio" <%= j.posicao === 'meio' ? 'selected' : '' %>>Meio</option>
-                                            <option value="ataque" <%= j.posicao === 'ataque' ? 'selected' : '' %>>Ataque</option>
-                                        </select>
-                                    </td>
-                                    <td style="white-space:nowrap">
-                                        <button type="button" class="icon-btn secondary edit-toggle" title="Editar" aria-label="Editar <%= j.nome %>">
-                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg>
-                                        </button>
-                                        <a href="/elenco/<%= j.id %>/historico" class="icon-btn secondary" title="Histórico" aria-label="Histórico de <%= j.nome %>">
-                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
-                                        </a>
-                                        <button class="icon-btn danger" type="submit" form="delete-<%= j.id %>" title="Excluir" aria-label="Excluir <%= j.nome %>">
-                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
-                                        </button>
-                                    </td>
-                                </tr>
-                            <% }) %>
-                        </tbody>
-                    </table>
-                <% } %>
-            </div>
-        <% }) %>
-        <div class="save-bar">
-            <button type="submit">Salvar todas</button>
+    <p class="hint">Mensalistas têm prioridade nas vagas; avulsas participam por jogo. A participação não indica se o pagamento está em dia.</p>
+    <p class="hint" role="status" data-elenco-resultado><%= jogadores.length %> jogadora(s)</p>
+    <% if (!jogadores.length) { %>
+        <p class="empty">Nenhuma jogadora cadastrada. Use “Adicionar jogadora” para começar.</p>
+    <% } else { %>
+        <table class="elenco-tabela">
+            <thead><tr><th>Jogadora</th><th>Participação</th><th><span class="sr-only">Ações</span></th></tr></thead>
+            <tbody>
+                <% jogadores.forEach(j => { %>
+                    <tr data-jogadora-row data-jogadora-id="<%= j.id %>">
+                        <td><strong data-jogadora-nome><%= j.nome %></strong><span class="elenco-alterada" data-jogadora-alterada hidden>Alterada</span></td>
+                        <td>
+                            <form data-config-form id="jogadora-<%= j.id %>" method="post" action="/elenco/<%= j.id %>/atualizar">
+                                <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                                <input type="text" hidden name="nome" value="<%= j.nome %>">
+                                <input type="text" hidden name="telefone" value="<%= j.telefone || '' %>">
+                                <input type="text" hidden name="nivel" value="<%= j.nivel %>">
+                                <input type="text" hidden name="posicao" value="<%= j.posicao %>">
+                                <select name="papel" class="elenco-participacao <%= j.papel %>" aria-label="Participação de <%= j.nome %>">
+                                    <option value="mensalista" <%= j.papel === 'mensalista' ? 'selected' : '' %>>Mensalista</option>
+                                    <option value="avulso" <%= j.papel === 'avulso' ? 'selected' : '' %>>Avulsa</option>
+                                </select>
+                                <button type="submit">Salvar</button>
+                            </form>
+                        </td>
+                        <td class="elenco-acoes"><button type="button" class="secondary" data-jogadora-editar aria-label="Editar <%= j.nome %>">Editar</button></td>
+                    </tr>
+                <% }) %>
+            </tbody>
+        </table>
+        <p class="empty" data-elenco-vazio hidden>Nenhuma jogadora encontrada. Altere a busca ou o filtro.</p>
+    <% } %>
+</div>
+<noscript><p class="hint">Ative JavaScript para usar a busca e editar os dados completos.</p></noscript>
+
+<dialog id="jogadora-nova" class="jogadora-drawer" aria-labelledby="jogadora-nova-titulo">
+    <div class="jogadora-drawer-header">
+        <h2 id="jogadora-nova-titulo">Adicionar jogadora</h2>
+        <button type="button" class="secondary" data-dialog-fechar aria-label="Fechar cadastro">Fechar</button>
+    </div>
+    <form method="post" action="/elenco">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <%- include('_jogadora-dados', { prefixo: 'nova' }) %>
+        <label for="nova-papel">Participação</label>
+        <select id="nova-papel" name="papel">
+            <option value="avulso" selected>Avulsa</option>
+            <option value="mensalista">Mensalista</option>
+        </select>
+        <div class="jogadora-drawer-footer">
+            <button type="button" class="secondary" data-dialog-fechar>Cancelar</button>
+            <button type="submit">Adicionar jogadora</button>
         </div>
     </form>
+</dialog>
 
-    <% jogadores.forEach(j => { %>
-        <form id="delete-<%= j.id %>" method="post" action="/elenco/<%= j.id %>/excluir" data-confirm="Remover {nome}?" data-confirm-nome="<%= j.nome %>"><input type="hidden" name="_csrf" value="<%= csrfToken %>"></form>
-    <% }) %>
-
-    <script src="/elenco.js" defer></script>
-<% } %>
+<dialog id="jogadora-edicao" class="jogadora-drawer" aria-labelledby="jogadora-edicao-titulo">
+    <div class="jogadora-drawer-header">
+        <h2 id="jogadora-edicao-titulo">Editar jogadora</h2>
+        <button type="button" class="secondary" data-dialog-fechar aria-label="Fechar edição">Fechar</button>
+    </div>
+    <form method="dialog" id="jogadora-editor">
+        <%- include('_jogadora-dados', { prefixo: 'editar' }) %>
+        <p class="hint">Ao concluir, confirme as mudanças em “Salvar alterações”.</p>
+        <div class="jogadora-drawer-footer">
+            <button type="button" class="secondary" data-dialog-fechar>Cancelar</button>
+            <button type="submit">Concluir edição</button>
+        </div>
+    </form>
+    <div class="jogadora-drawer-extra">
+        <a data-jogadora-historico href="/elenco">Histórico de participação</a>
+        <form id="jogadora-remover" method="post" action="/elenco" data-confirm="Excluir {nome} e seu histórico de pagamentos e presenças? Esta ação não pode ser desfeita.">
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+            <button type="submit" class="danger">Remover jogadora</button>
+        </form>
+    </div>
+</dialog>
+<script src="/elenco.js" defer></script>
