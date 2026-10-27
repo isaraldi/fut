@@ -40,6 +40,8 @@ const {
   marcarEnqueteDesafixada,
   registrarTentativaDesafixar,
 } = require('./db');
+const { criarLlmLocal, mensagemPrivadaRecebida } = require('./llm-local');
+const llmLocal = criarLlmLocal({ getConfig });
 const {
   montarPlanoDeTimes, montarRodizio, acharPorNomes, montarTextoListaConfirmadas, montarTextoListaAtual, montarTextoListaEspera, montarTextoTimes,
   fechamentoMensalDoMes, mesReferenciaAtual, mesAnterior, montarTextoMensal,
@@ -567,7 +569,25 @@ async function processarPossivelComprovante(msg) {
     const valorMensalCfg = parseFloat(getConfig('valor_mensal'));
     const valorAvulsoCfg = parseFloat(getConfig('valor_avulso'));
     const valoresConfigurados = Number.isFinite(valorMensalCfg) || Number.isFinite(valorAvulsoCfg);
-    const valoresEncontrados = extrairValoresBRL(textoLower);
+    let valoresEncontrados = extrairValoresBRL(textoLower);
+    if (mensagemPrivadaRecebida(msg) && llmLocal.habilitada('comprovantes')) {
+      let analise;
+      try {
+        analise = await llmLocal.interpretarComprovante(text, valoresEncontrados);
+      } catch {
+        registrarLog('comprovante', 'aviso', 'Análise local indisponível ou inválida — conferir comprovante manualmente; pagamento não alterado', msg.from);
+        return;
+      }
+      if (!analise.confirmado) {
+        registrarLog('comprovante', 'aviso', 'Análise local ambígua, pagamento não concluído ou valor sem confirmação no OCR — pagamento não alterado', msg.from);
+        return;
+      }
+      valoresEncontrados = [analise.valor];
+      if (!valoresConfigurados) {
+        registrarLog('comprovante', 'aviso', 'Configure os valores de mensal e avulso antes de aceitar comprovantes pela análise local', msg.from);
+        return;
+      }
+    }
 
     let tipo;
     if (valoresConfigurados) {
@@ -970,6 +990,28 @@ client.on('message', async msg => {
     processarPossivelComprovante(msg).catch((err) =>
       console.error('Erro ao processar possível comprovante:', err),
     );
+    return;
+  }
+
+  // A LLM interpreta somente conversas privadas recebidas no número do bot.
+  // Consultas livres não fecham listas, sorteiam times ou alteram pagamentos.
+  if (mensagemPrivadaRecebida(msg) && llmLocal.habilitada('mensagens')
+    && !msg.hasMedia && text && !text.startsWith('!')) {
+    if (!(await remetenteAutorizado(msg))) return;
+    let intencao;
+    try {
+      intencao = await llmLocal.interpretarMensagem(msg.body);
+    } catch {
+      await msg.reply('Não consegui interpretar agora. Use !lista, !espera ou !mensal.');
+      return;
+    }
+    if (!intencao) return;
+    await sincronizadorWhatsApp.sincronizar();
+    // Revalida a whitelist após a espera pela inferência.
+    if (!(await remetenteAutorizado(msg))) return;
+    if (intencao === 'lista') return enviarListaAtual(msg);
+    if (intencao === 'espera') return enviarListaDeEspera(msg);
+    if (intencao === 'mensal') return msg.reply(montarTextoMensal(getResumoMensal()));
   }
 });
 
