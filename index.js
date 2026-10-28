@@ -554,6 +554,10 @@ async function processarPossivelComprovante(msg) {
     const valoresConfigurados = Number.isFinite(valorMensalCfg) || Number.isFinite(valorAvulsoCfg);
     let valoresEncontrados = ocr.valores;
     if (usarVisao) {
+      if (ocr.pendente) {
+        registrarLog('comprovante', 'aviso', 'OCR indica agendamento, falha ou pendência — conferir manualmente; pagamento não alterado', msg.from);
+        return;
+      }
       if (!valoresConfigurados) {
         registrarLog('comprovante', 'aviso', 'Configure os valores de mensal e avulso antes de aceitar comprovantes pela análise local', msg.from);
         return;

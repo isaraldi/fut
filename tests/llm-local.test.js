@@ -60,13 +60,13 @@ async function main() {
   assert.equal(await primeira, 'lista');
   modo = 'normal';
   const media = { mimetype: 'image/png', data: 'aW1hZ2Vt' };
-  conteudo = { estado: 'concluido', valor_centavos: 5000,
+  conteudo = { estado: 'concluido', valor_brl: '50,00',
     texto_visivel: 'Comprovante PIX. Pagamento realizado com sucesso. R$50,00' };
   assert.deepEqual(await llm.interpretarImagemComprovante(media), { confirmado: true, valor: 50 });
   assert.deepEqual(imagemEnviada, [media.data]);
-  conteudo.valor_centavos = 6000;
+  conteudo.valor_brl = '60,00';
   assert.equal((await llm.interpretarImagemComprovante(media)).confirmado, false);
-  conteudo.valor_centavos = 5000;
+  conteudo.valor_brl = '50,00';
   conteudo.estado = 'agendado';
   assert.equal((await llm.interpretarImagemComprovante(media)).confirmado, false);
   conteudo.estado = 'concluido';
@@ -83,10 +83,12 @@ async function main() {
   assert.equal(avaliarOcrComprovante(claro, undefined).seguro, false);
   assert.equal(avaliarOcrComprovante(claro + ' Saldo R$100,00', 95).seguro, false);
   assert.equal(avaliarOcrComprovante('PIX agendado R$50,00', 95).seguro, false);
+  assert.equal(avaliarOcrComprovante('PIX agendado R$50,00', 95).pendente, true);
   assert.equal(avaliarOcrComprovante(claro + ' Não confirmado', 95).seguro, false);
   assert.equal(avaliarOcrComprovante('', 0).seguro, false);
   assert.equal(avaliarOcrComprovante('foto do jogo', 95).temPalavraChave, false);
   assert.deepEqual(extrairValoresBRL('R$ 1.234,56 R$1000,00 R$50,00'), [1234.56, 1000, 50]);
+  assert.deepEqual(extrairValoresBRL('R$50,000'), []);
   await assert.rejects(llm.interpretarMensagem('a'.repeat(12001)), /limite/);
   config.llm_mensagens_ativa = '0';
   config.llm_comprovantes_ativa = '0';

@@ -67,6 +67,8 @@ Mantenha a API restrita à máquina/rede privada necessária, pois ela não exig
   que a legenda indique pagamento (por exemplo, `comprovante`).
   As mesmas validações de cadastro, valores configurados, enquete e competência são
   aplicadas depois. Não há conciliação bancária nem detecção garantida de fraude.
+  Se o OCR indicar agendamento, falha ou pendência, o caso vai para conferência manual,
+  sem permitir que o modelo visual autorize o pagamento.
 - Análise inconclusiva, erro, modelo ocupado ou valor inválido: registra aviso e não
   marca pagamento. A conferência é manual pelo painel; não existe fila automática
   para reprocessar essas imagens.
