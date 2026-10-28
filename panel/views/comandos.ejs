@@ -4,9 +4,15 @@
     </div>
 </div>
 
+<nav class="jogo-abas" aria-label="Seções de comandos">
+    <a href="/comandos" <%- aba === 'comandos' ? 'aria-current="page"' : '' %>>Comandos</a>
+    <a href="/comandos?aba=permissoes" <%- aba === 'permissoes' ? 'aria-current="page"' : '' %>>Permissões</a>
+</nav>
+
+<% if (aba === 'comandos') { %>
 <div class="card">
     <h1>Comandos disponíveis</h1>
-    <p class="hint">Envie os comandos no grupo ou no privado do bot, conforme a tabela. Só jogadoras autorizadas abaixo podem usá-los.</p>
+    <p class="hint">Envie os comandos no grupo ou no privado do bot, conforme a tabela. Só jogadoras autorizadas na aba Permissões podem usá-los.</p>
     <table>
         <thead>
             <tr><th>Comando</th><th>Onde funciona</th><th>O que faz</th></tr>
@@ -59,6 +65,7 @@
     </table>
 </div>
 
+<% } else { %>
 <div class="card">
     <h1>Quem pode usar comandos</h1>
     <p class="hint">Autorize quem pode usar os comandos do bot. É preciso ter cadastro no elenco. Ninguém é autorizado por padrão; libere ao menos seu próprio cadastro.</p>
@@ -98,3 +105,4 @@
         </table>
     <% } %>
 </div>
+<% } %>

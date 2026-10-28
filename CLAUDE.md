@@ -16,6 +16,38 @@ There is no build step, linter, or test suite configured (`npm test` is a placeh
 - In production (local Docker container) both run together via `docker-entrypoint.sh`, which `wait -n`s on both — if either process dies, the other is killed too and the container restarts.
 - Deploy: production is a local Docker container named `fut` (image `fut-bot`, built from this `Dockerfile`), not Fly.io anymore. It publishes `127.0.0.1:4000->4000`, runs with `--restart unless-stopped`, and mounts the named volume `fut_data` at `/app/storage`. The env vars below are passed to the container at `docker run` time (not baked into the image). There is no compose file; to ship a change, rebuild the image and recreate the container with the same options (check them with `docker inspect fut` first). The panel is reached from outside through Tailscale, which runs on the Windows host (not inside WSL/the container) and proxies to `127.0.0.1:4000`, terminating HTTPS.
 
+### Environments: local first, production only on explicit request
+
+| Environment | Container | Host URL | Data | Processes |
+| --- | --- | --- | --- | --- |
+| Production | `fut` | `http://127.0.0.1:4000` | `fut_data` mounted at `/app/storage` | Real WhatsApp bot and panel |
+| Local testing | `fut-painel-local` | `http://127.0.0.1:4001` | Separate `fut_dev_data` volume at `/app/data` | Panel only; no bot |
+
+**Apply and validate every implementation in `fut-painel-local` first. Only update
+production when the user explicitly requests deployment to production/container `fut`.**
+Requests to implement, fix, or update locally do not authorize restarting/replacing
+`fut` or writing to `fut_data`. Approval for one production deployment does not
+automatically authorize later deployments.
+
+Both containers run on the same machine. Do not confuse "local Docker" with the
+testing environment: port **4000 is production**, and port **4001 is local testing**.
+Check the screenshot/URL and inspect the target container's ports, mounts and startup
+command before taking action. Never print environment secrets from the inspection.
+
+The local panel mounts this repository at `/source`. Its startup command copies
+`db.js`, `mensagens-prontas.js` and `panel/` into `/app`, then runs only the panel as
+the unprivileged `node` user. Source changes do not refresh that running copy by
+themselves. During development, restart **only `fut-painel-local`** when needed to
+load the changes, then verify `http://127.0.0.1:4001`. Inspect the current command
+first rather than assuming this startup behavior never changes.
+
+Keep test data and production data separate. Do not mount `fut_data` or production
+WhatsApp authentication into test containers, and do not start `index.js` for panel
+validation. The local panel alone cannot validate the live bot, OCR or WhatsApp
+behavior; use isolated checks for those and report their limits. State which
+environment was updated when reporting completion; local validation is not a
+production deployment.
+
 ### Required env vars (`.env`, not committed)
 
 `SESSION_SECRET`, `ADMIN_USER`, `ADMIN_PASSWORD`, `PORT` are read by `panel/server.js`. `GRUPO_OFICIAL_ID`/`GRUPO_TESTE_ID` exist in `.env` but nothing in the code currently reads them — the group to use is instead picked at runtime via the panel (`enquete_grupo_id` config, set the first time `!enquete` runs in a group, or picked from the synced group list).

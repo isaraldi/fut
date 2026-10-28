@@ -59,11 +59,28 @@ Bot de WhatsApp e painel administrativo para organizar um futebol recorrente: en
 
 ## Implantação
 
-- A implantação descrita no `CLAUDE.md` usa Docker local: container `fut`, imagem `fut-bot`, porta `127.0.0.1:4000:4000`, volume `fut_data` e política `--restart unless-stopped`. Não há Compose; Fly.io não é mais o destino descrito.
+### Ambientes e destino das alterações
+
+| Ambiente | Container | Endereço no host | Persistência | Processos |
+| --- | --- | --- | --- | --- |
+| Produção | `fut` | `http://127.0.0.1:4000` | Volume `fut_data` em `/app/storage` | Bot real do WhatsApp e painel |
+| Teste local | `fut-painel-local` | `http://127.0.0.1:4001` | Volume separado `fut_dev_data` em `/app/data` | Somente painel, sem iniciar o bot |
+
+- **Toda implementação deve ser aplicada e validada primeiro no `fut-painel-local`, na porta 4001.** Pedidos como “implemente”, “corrija”, “atualize o local” ou relatos de que a alteração não apareceu referem-se primeiro a esse ambiente de teste.
+- **Só atualizar produção quando o usuário pedir explicitamente a implantação em produção/no container `fut`.** Aprovar uma implementação ou um teste local não autoriza alterar, substituir ou reiniciar `fut`, nem escrever no volume `fut_data`. Uma autorização para uma implantação específica não autoriza implantações futuras automaticamente.
+- Ambos os containers rodam na mesma máquina. “Docker local” não significa ambiente de teste: `fut` continua sendo produção, mesmo acessado por `127.0.0.1`.
+- Antes de atualizar qualquer ambiente, confirme o container, a porta, os volumes e o comando de inicialização com `docker inspect`, sem exibir variáveis ou segredos. Quando houver print ou URL, confira a porta para identificar o ambiente correto.
+- O `fut-painel-local` monta este repositório em `/source` e, ao iniciar, copia `db.js`, `mensagens-prontas.js` e `panel/` para `/app`. Alterar arquivos no repositório não atualiza a cópia já carregada. No fluxo de desenvolvimento, reinicie **somente `fut-painel-local`** quando necessário para carregar as mudanças e valide `http://127.0.0.1:4001`. Confira o comando atual antes de presumir que esse mecanismo continua igual.
+- Preserve o isolamento: testes não devem montar `fut_data` ou a autenticação de produção, nem iniciar `index.js`. O painel local sozinho não valida conexão do bot, OCR ou comportamento real do WhatsApp; use verificações isoladas para essas partes e informe essa limitação.
+- Ao concluir, diga em qual ambiente a mudança foi aplicada. Se passou apenas pelo teste local, informe que produção ainda não foi atualizada.
+
+### Produção
+
+- A implantação descrita no `CLAUDE.md` usa o container `fut`, imagem `fut-bot`, porta `127.0.0.1:4000:4000`, volume `fut_data` e política `--restart unless-stopped`. Não há Compose; Fly.io não é mais o destino descrito.
 - Antes de uma implantação autorizada, confirme o estado atual com `docker inspect fut`; preserve opções, volume e variáveis ao reconstruir a imagem e recriar o container. Não exponha segredos da inspeção.
 - `docker-entrypoint.sh` inicia bot e painel e usa `wait -n`: se um processo termina, encerra o outro para permitir o reinício do container.
 - O acesso externo descrito usa Tailscale no host Windows, com proxy para `127.0.0.1:4000` e terminação HTTPS. Confira a infraestrutura real antes de alterá-la.
-- Alterar código não implica autorização para reiniciar serviços ou fazer deploy em produção.
+- Alterar código não implica autorização para reiniciar serviços de produção ou fazer deploy em produção. A atualização do painel de teste segue o fluxo local acima.
 
 ## Renovação do mensal
 

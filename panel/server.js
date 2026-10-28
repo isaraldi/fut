@@ -816,6 +816,7 @@ const TOKENS_DISPONIVEIS = [
 
 app.get('/comandos', requireLogin, (req, res) => {
     res.render('comandos', {
+        aba: req.query.aba === 'permissoes' ? 'permissoes' : 'comandos',
         usuario: req.session.usuario,
         comandos: COMANDOS_DO_BOT,
         tokens: TOKENS_DISPONIVEIS,
@@ -827,10 +828,10 @@ app.get('/comandos', requireLogin, (req, res) => {
 app.post('/comandos/:id/toggle', requireLogin, (req, res) => {
     const id = Number(req.params.id);
     const jogador = db.prepare('SELECT pode_comandar FROM jogadores WHERE id = ?').get(id);
-    if (!jogador) return res.redirect('/comandos');
+    if (!jogador) return res.redirect('/comandos?aba=permissoes');
 
     definirPermissaoComando(id, !jogador.pode_comandar);
-    redirectOk(res, '/comandos', 'Permissão atualizada!');
+    redirectOk(res, '/comandos?aba=permissoes', 'Permissão atualizada!');
 });
 
 // ---------- USUÁRIOS DO PAINEL (login/senha de quem acessa) ----------
