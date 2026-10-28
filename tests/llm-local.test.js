@@ -36,10 +36,21 @@ async function main() {
     },
   });
   assert.equal(await llm.interpretarMensagem('Me manda a lista'), 'lista');
-  conteudo = { intencao: 'fechar' };
+  conteudo = { intencao: 'executar_sql' };
   await assert.rejects(llm.interpretarMensagem('feche tudo'), /inválida/);
   conteudo = { intencao: 'nenhuma' };
   assert.equal(await llm.interpretarMensagem('oi'), null);
+  for (const intencao of ['times', 'fechar', 'enquete', 'sincronizar', 'limparfaltas', 'confirmarlista', 'cancelarlista', 'ajuda']) {
+    conteudo = { intencao, nomes: [] };
+    assert.equal((await llm.interpretarPedido('pedido fictício')).intencao, intencao);
+  }
+  conteudo = { intencao: 'faltam', nomes: ['Ana', 'Bia'] };
+  assert.deepEqual(await llm.interpretarPedido('Defina as faltas como Ana e Bia'), { intencao: 'faltam', nomes: ['Ana', 'Bia'] });
+  await assert.rejects(llm.interpretarPedido('Ana está faltando'), /inválidos/);
+  conteudo = { intencao: 'faltam', nomes: ['ninguém'] };
+  await assert.rejects(llm.interpretarPedido('ninguém está faltando'), /inválidos/);
+  conteudo = { intencao: 'enquete', nomes: ['Ana'] };
+  await assert.rejects(llm.interpretarPedido('Ana abre enquete'), /inválidos/);
   conteudo = { estado: 'concluido', valor_centavos: 5000 };
   assert.deepEqual(await llm.interpretarComprovante('PIX realizado R$50,00', [50, 1000]), { confirmado: true, valor: 50 });
   assert.equal((await llm.interpretarComprovante('R$20,00', [20])).confirmado, false);
