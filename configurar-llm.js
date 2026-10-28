@@ -18,6 +18,7 @@ try {
     if (acao === 'ativar') {
       setConfig('llm_url', new URL(endereco).origin);
       setConfig('llm_modelo', 'qwen3:4b-instruct');
+      setConfig('llm_modelo_visao', 'qwen3-vl:2b-instruct');
     }
     setConfig('llm_mensagens_ativa', acao === 'ativar' ? '1' : '0');
     setConfig('llm_comprovantes_ativa', acao === 'ativar' ? '1' : '0');

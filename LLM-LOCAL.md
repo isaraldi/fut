@@ -1,7 +1,8 @@
 # LLM local
 
 Requer Node.js 20 (como a imagem Docker do projeto) e Ollama acessível pelo processo do bot.
-Usa `qwen3:4b-instruct` no Windows; imagens continuam passando pelo Tesseract local.
+Usa `qwen3:4b-instruct` para mensagens e `qwen3-vl:2b-instruct` para imagens duvidosas.
+O Tesseract local é sempre a primeira tentativa de leitura.
 Nenhuma configuração é ativada automaticamente.
 
 ## Ativar
@@ -20,7 +21,14 @@ e volume do banco:
 node configurar-llm.js ativar http://172.19.176.1:11434
 ```
 
-O comando grava `llm_url`, `llm_modelo`, `llm_mensagens_ativa` e
+Baixe também o modelo de visão no PowerShell conectado ao servidor Ollama:
+
+```powershell
+$env:OLLAMA_HOST = "172.19.176.1:11434"
+ollama pull qwen3-vl:2b-instruct
+```
+
+O comando de configuração grava `llm_url`, `llm_modelo`, `llm_modelo_visao`, `llm_mensagens_ativa` e
 `llm_comprovantes_ativa` na tabela `configuracoes`. Não inicia nem reinicia processos.
 Para código novo entrar em uso, o bot precisa de implantação/reinício autorizado separado.
 Não execute o comando no banco local supondo que ele configura o volume Docker de produção.
@@ -50,17 +58,25 @@ Mantenha a API restrita à máquina/rede privada necessária, pois ela não exig
   `lista`, `espera` e `mensal`; as respostas vêm das funções existentes, não de texto
   livre gerado pelo modelo. Pedidos de fechar enquete, pagamentos e sorteios continuam
   usando comandos explícitos/painel.
-- Comprovantes enviados em conversa privada exigem os sinais de pagamento e R$ do OCR. A LLM identifica pagamento
-  concluído e o valor da transferência; o valor precisa existir no OCR e corresponder
-  aos valores configurados no painel. Cadastro, enquete e competência continuam sendo
-  validados pelo código. Não há conciliação bancária nem detecção garantida de fraude.
+- No privado, OCR com confiança de pelo menos 85, palavra de pagamento, indicação de
+  conclusão, um único valor em R$ e sem indicação de pendência resolve sem LLM.
+  A confiança do Tesseract é um indicador de legibilidade, não garantia de autenticidade.
+  OCR duvidoso ou falho envia a **imagem original** para o modelo visual, que precisa
+  identificar conclusão e valor único em R$ no texto visível. Imagem sem texto legível
+  também tenta visão; imagem com texto sem sinais de comprovante é ignorada, a menos
+  que a legenda indique pagamento (por exemplo, `comprovante`).
+  As mesmas validações de cadastro, valores configurados, enquete e competência são
+  aplicadas depois. Não há conciliação bancária nem detecção garantida de fraude.
 - Análise inconclusiva, erro, modelo ocupado ou valor inválido: registra aviso e não
   marca pagamento. A conferência é manual pelo painel; não existe fila automática
   para reprocessar essas imagens.
-- Uma inferência por vez, sem fila ilimitada, timeout de 60 segundos, entrada de até
-  12 mil caracteres e saída estruturada. Modelo ocupado nas mensagens orienta usar
+- Uma inferência por vez, sem fila ilimitada, timeout de 60 segundos para mensagens e
+  180 segundos para imagens; PNG/JPEG/WebP em base64 de até 14 MiB (aproximadamente
+  10 MiB de arquivo), entrada textual de até 12 mil caracteres e saída estruturada.
+  Modelo ocupado nas mensagens orienta usar
   os comandos originais. Nenhum histórico de conversa é enviado.
-- OCR pode conter dados pessoais do comprovante; ele é enviado ao Ollama configurado.
+- A imagem original pode conter dados pessoais; ela é enviada ao Ollama local configurado
+  somente quando a leitura de comprovante privado precisar da visão.
   As respostas e prompts da LLM não são registrados em logs pelo cliente.
 
 ## Desativar e verificar

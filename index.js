@@ -41,6 +41,7 @@ const {
   registrarTentativaDesafixar,
 } = require('./db');
 const { criarLlmLocal, mensagemPrivadaRecebida } = require('./llm-local');
+const { avaliarOcrComprovante } = require('./comprovantes-ocr');
 const llmLocal = criarLlmLocal({ getConfig });
 const {
   montarPlanoDeTimes, montarRodizio, acharPorNomes, montarTextoListaConfirmadas, montarTextoListaAtual, montarTextoListaEspera, montarTextoTimes,
@@ -500,27 +501,6 @@ function getOcrWorker() {
   return ocrWorkerPromise;
 }
 
-// sinais de que a imagem é um comprovante de pagamento e não só uma foto qualquer do grupo —
-// sem isso, QUALQUER imagem postada por uma mensalista marcaria pagamento sozinha
-const PALAVRAS_COMPROVANTE = [
-  'comprovante', 'pix', 'transferência', 'transferencia', 'recibo',
-  'pagamento', 'ted', 'boleto', 'transação', 'transacao',
-];
-
-// extrai todos os valores em R$ que aparecem no texto do OCR (aceita "R$ 1.234,56", "R$50,00" etc)
-function extrairValoresBRL(texto) {
-  const valores = [];
-  const regex = /r\$\s*(\d{1,3}(?:\.\d{3})*(?:,\d{2})?|\d+(?:,\d{2})?)/gi;
-  let match;
-  while ((match = regex.exec(texto)) !== null) {
-    let bruto = match[1];
-    bruto = bruto.includes(',') ? bruto.replace(/\./g, '').replace(',', '.') : bruto;
-    const numero = parseFloat(bruto);
-    if (Number.isFinite(numero)) valores.push(numero);
-  }
-  return valores;
-}
-
 // compara com tolerância de 1 centavo, pra escapar de arredondamento
 function valorBate(valorExtraido, valorConfigurado) {
   return Math.abs(valorExtraido - valorConfigurado) < 0.01;
@@ -536,24 +516,26 @@ async function processarPossivelComprovante(msg) {
     caminhoTemp = path.join(os.tmpdir(), `comprovante-${Date.now()}-${Math.random().toString(36).slice(2)}.${extensao}`);
     fs.writeFileSync(caminhoTemp, Buffer.from(media.data, 'base64'));
 
-    const worker = await getOcrWorker();
-    const { data: { text } } = await worker.recognize(caminhoTemp);
-    const textoLower = text.toLowerCase();
+    const usarVisao = mensagemPrivadaRecebida(msg) && llmLocal.habilitada('comprovantes');
+    let text = '';
+    let confidence = 0;
+    try {
+      const worker = await getOcrWorker();
+      const resultado = await worker.recognize(caminhoTemp);
+      text = resultado.data.text || '';
+      confidence = resultado.data.confidence;
+    } catch (err) {
+      if (!usarVisao) throw err;
+      // Falha de OCR em DM: a imagem original ainda pode ser lida pelo modelo visual.
+    }
+    const ocr = avaliarOcrComprovante(text, confidence);
+    const legenda = avaliarOcrComprovante(msg.body || '', 0);
+    // Sem texto legível, tenta visão em DM; texto sem sinais de comprovante é ruído.
+    if (!ocr.temPalavraChave && !ocr.temValor
+      && !(usarVisao && (!text.trim() || legenda.temPalavraChave))) return;
 
-    const temPalavraChave = PALAVRAS_COMPROVANTE.some((p) => textoLower.includes(p));
-    const temValor = /r\$\s?\d/.test(textoLower);
-
-    // nenhum sinal de comprovante (foto do jogo, meme, etc) — não loga, isso é ruído
-    if (!temPalavraChave && !temValor) return;
-
-    // achou só um dos dois sinais — provavelmente é um comprovante, mas o OCR não confirmou
-    // os dois; vale registrar pra você conferir manualmente, mas não marca pagamento sozinho
-    if (!(temPalavraChave && temValor)) {
-      registrarLog(
-        'comprovante', 'aviso',
-        `Imagem parece comprovante mas não deu pra confirmar (OCR: "${resumoTexto(text, 100)}")`,
-        msg.from,
-      );
+    if (!usarVisao && !(ocr.temPalavraChave && ocr.temValor)) {
+      registrarLog('comprovante', 'aviso', 'Imagem parece comprovante mas o OCR não confirmou palavra de pagamento e valor em R$ — conferir manualmente', msg.from);
       return;
     }
 
@@ -570,23 +552,26 @@ async function processarPossivelComprovante(msg) {
     const valorMensalCfg = parseFloat(getConfig('valor_mensal'));
     const valorAvulsoCfg = parseFloat(getConfig('valor_avulso'));
     const valoresConfigurados = Number.isFinite(valorMensalCfg) || Number.isFinite(valorAvulsoCfg);
-    let valoresEncontrados = extrairValoresBRL(textoLower);
-    if (mensagemPrivadaRecebida(msg) && llmLocal.habilitada('comprovantes')) {
-      let analise;
-      try {
-        analise = await llmLocal.interpretarComprovante(text, valoresEncontrados);
-      } catch {
-        registrarLog('comprovante', 'aviso', 'Análise local indisponível ou inválida — conferir comprovante manualmente; pagamento não alterado', msg.from);
-        return;
-      }
-      if (!analise.confirmado) {
-        registrarLog('comprovante', 'aviso', 'Análise local ambígua, pagamento não concluído ou valor sem confirmação no OCR — pagamento não alterado', msg.from);
-        return;
-      }
-      valoresEncontrados = [analise.valor];
+    let valoresEncontrados = ocr.valores;
+    if (usarVisao) {
       if (!valoresConfigurados) {
         registrarLog('comprovante', 'aviso', 'Configure os valores de mensal e avulso antes de aceitar comprovantes pela análise local', msg.from);
         return;
+      }
+      if (!ocr.seguro) {
+        let analise;
+        try {
+          analise = await llmLocal.interpretarImagemComprovante(media);
+        } catch {
+          registrarLog('comprovante', 'aviso', 'OCR duvidoso e análise da imagem indisponível ou inválida — conferir manualmente; pagamento não alterado', msg.from);
+          return;
+        }
+        if (!analise || !analise.confirmado) {
+          registrarLog('comprovante', 'aviso', 'OCR duvidoso e imagem sem confirmação de pagamento concluído e valor único em R$ — pagamento não alterado', msg.from);
+          return;
+        }
+        valoresEncontrados = [analise.valor];
+        registrarLog('comprovante', 'aviso', 'OCR duvidoso: imagem original analisada pelo modelo visual local; aplicando validações de pagamento', msg.from);
       }
     }
 
