@@ -43,6 +43,7 @@ const {
 const { criarLlmLocal, mensagemPrivadaRecebida } = require('./llm-local');
 const { avaliarOcrComprovante } = require('./comprovantes-ocr');
 const llmLocal = criarLlmLocal({ getConfig });
+const { criarExecutorComandosIa, grupoPermitidoIa } = require('./comandos-ia');
 const {
   montarPlanoDeTimes, montarRodizio, acharPorNomes, montarTextoListaConfirmadas, montarTextoListaAtual, montarTextoListaEspera, montarTextoTimes,
   fechamentoMensalDoMes, mesReferenciaAtual, mesAnterior, montarTextoMensal,
@@ -305,6 +306,7 @@ async function abrirEnquete(groupId, msgParaErro, origem = 'manual') {
   } catch (err) {
     console.error('Erro ao fixar enquete:', err);
   }
+  return true;
 }
 
 // ⏰ ENVIO AUTOMÁTICO — roda a cada minuto (chamado pelo setInterval em 'ready') e,
@@ -895,19 +897,21 @@ async function tratarListaEditada(msg, text) {
     if (comando) await negarComando(msg);
     return comando;
   }
-  if (msg.from !== getConfig('enquete_grupo_id') || !msg.from.endsWith('@g.us')) {
+  const privada = mensagemPrivadaRecebida(msg) && llmLocal.habilitada('mensagens');
+  const grupo = getConfig('enquete_grupo_id');
+  if (!grupo?.endsWith('@g.us') || (!privada && msg.from !== grupo)) {
     if (comando) await msg.reply('Use este comando no grupo configurado para o jogo.');
     return comando;
   }
   try {
     await sincronizadorWhatsApp.sincronizar();
     const autor = await resolverIdCanonico(getUserId(msg));
-    const args = { grupo: msg.from, autor };
+    const args = { grupo, autor };
     let resposta;
     if (text === '!confirmarlista') resposta = confirmarLista(args);
     else if (text === '!cancelarlista') resposta = cancelarLista(args);
     else resposta = prepararLista({ ...args, texto: msg.body, messageId: getIdSerialized(msg.id) });
-    if (resposta) await msg.reply(resposta);
+    if (resposta) await msg.reply(privada ? orientarCorrecaoPrivada(resposta) : resposta);
   } catch (erro) {
     const resposta = erro instanceof ErroLista ? erro.message : 'Não consegui concluir a solicitação. Confira com !lista antes de tentar novamente.';
     if (!(erro instanceof ErroLista)) registrarLog('lista', 'erro', 'Falha no processamento ou resposta da correção de lista pelo WhatsApp.');
@@ -915,6 +919,78 @@ async function tratarListaEditada(msg, text) {
   }
   return true;
 }
+
+function orientarCorrecaoPrivada(texto) {
+  return texto.replaceAll('!confirmarlista', '“confirmar a correção da lista”')
+    .replaceAll('!cancelarlista', '“cancelar a correção da lista”');
+}
+
+async function obterContextoIa(msg) {
+  const grupo = getConfig('enquete_grupo_id');
+  const autor = await resolverIdCanonico(getUserId(msg));
+  const enquete = db.prepare('SELECT id FROM enquetes ORDER BY id DESC LIMIT 1').get();
+  const pendente = db.prepare("SELECT message_id FROM listas_importacoes WHERE grupo_id = ? AND autor_id = ? AND estado = 'pendente' AND expira_em >= ? LIMIT 1")
+    .get(grupo || '', autor, Date.now());
+  return { grupo, autor, enqueteId: enquete?.id || null, correcaoPendente: !!pendente, correcaoId: pendente?.message_id || null };
+}
+
+async function corrigirListaPorIa(msg, contexto, confirmar) {
+  try {
+    const args = { grupo: contexto.grupo, autor: contexto.autor };
+    const resposta = confirmar ? confirmarLista(args) : cancelarLista(args);
+    if (resposta) await msg.reply(orientarCorrecaoPrivada(resposta));
+  } catch (erro) {
+    if (!(erro instanceof ErroLista)) throw erro;
+    await msg.reply(orientarCorrecaoPrivada(erro.message));
+  }
+}
+
+async function registrarFaltasPorIa(msg, pedido, contexto) {
+  if (!pedido.nomes.length) return registrarFaltas(msg, '');
+  const confirmados = getConfirmadosDaEnquete(contexto.enqueteId);
+  const nomes = pedido.nomes.join(', ');
+  const { naoEncontradas, ambiguas } = acharPorNomes(confirmados, nomes);
+  if (naoEncontradas.length || ambiguas.length) {
+    return msg.reply('Não consegui identificar todas as jogadoras entre as confirmadas. Envie os nomes completos de todas que estão faltando; não alterei as faltas.');
+  }
+  return registrarFaltas(msg, nomes);
+}
+
+const executorComandosIa = criarExecutorComandosIa({
+  llm: llmLocal,
+  grupoAutorizado: grupo => grupoPermitidoIa(getConfig, grupo),
+  botMencionado: async msg => {
+    const bot = getBotId();
+    if (!bot) return false;
+    if (msg.mentionedIds.includes(bot)) return true;
+    const botCanonico = await resolverIdCanonico(bot);
+    for (const mencionado of msg.mentionedIds) {
+      if (typeof mencionado === 'string' && await resolverIdCanonico(mencionado) === botCanonico) return true;
+    }
+    return false;
+  },
+  autorizado: remetenteAutorizado,
+  obterContexto: obterContextoIa,
+  sincronizar: () => sincronizadorWhatsApp.sincronizar(),
+  registrarErro: () => registrarLog('comando', 'erro', 'Falha ao executar pedido interpretado pela IA; conferir estado antes de repetir.'),
+  acoes: {
+    lista: msg => enviarListaAtual(msg),
+    espera: msg => enviarListaDeEspera(msg),
+    mensal: msg => msg.reply(montarTextoMensal(getResumoMensal())),
+    times: msg => enviarTimesSorteados(msg),
+    fechar: msg => enviarListaDeConfirmadas(msg),
+    enquete: async (msg, pedido, contexto) => {
+      if (await abrirEnquete(contexto.grupo, msg) === true) {
+        await msg.reply('Enquete aberta no grupo configurado.');
+      }
+    },
+    sincronizar: (msg, pedido, contexto) => sincronizarElencoDoGrupo(msg, contexto.grupo),
+    faltam: registrarFaltasPorIa,
+    limparfaltas: msg => registrarFaltas(msg, 'ninguém'),
+    confirmarlista: (msg, pedido, contexto) => corrigirListaPorIa(msg, contexto, true),
+    cancelarlista: (msg, pedido, contexto) => corrigirListaPorIa(msg, contexto, false),
+  },
+});
 
 client.on('message', async msg => {
   console.log('msg from:', msg.from);
@@ -983,26 +1059,8 @@ client.on('message', async msg => {
     return;
   }
 
-  // A LLM interpreta somente conversas privadas recebidas no número do bot.
-  // Consultas livres não fecham listas, sorteiam times ou alteram pagamentos.
-  if (mensagemPrivadaRecebida(msg) && llmLocal.habilitada('mensagens')
-    && !msg.hasMedia && text && !text.startsWith('!')) {
-    if (!(await remetenteAutorizado(msg))) return;
-    let intencao;
-    try {
-      intencao = await llmLocal.interpretarMensagem(msg.body);
-    } catch {
-      await msg.reply('Não consegui interpretar agora. Use !lista, !espera ou !mensal.');
-      return;
-    }
-    if (!intencao) return;
-    await sincronizadorWhatsApp.sincronizar();
-    // Revalida a whitelist após a espera pela inferência.
-    if (!(await remetenteAutorizado(msg))) return;
-    if (intencao === 'lista') return enviarListaAtual(msg);
-    if (intencao === 'espera') return enviarListaDeEspera(msg);
-    if (intencao === 'mensal') return msg.reply(montarTextoMensal(getResumoMensal()));
-  }
+  await executorComandosIa.tratar(msg);
+
 });
 
 // 🗳️ CAPTURA VOTO DA ENQUETE NATIVA
@@ -1086,8 +1144,8 @@ async function sincronizarElencoDeChat(chat) {
 }
 
 // comando !sincronizar mandado direto no grupo
-async function sincronizarElencoDoGrupo(msg) {
-  const chat = await msg.getChat();
+async function sincronizarElencoDoGrupo(msg, grupoId) {
+  const chat = grupoId ? await client.getChatById(grupoId) : await msg.getChat();
   if (!chat.isGroup) return;
 
   const { total, novos, inativados } = await sincronizarElencoDeChat(chat);

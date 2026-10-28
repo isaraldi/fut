@@ -116,8 +116,10 @@ async function main() {
         const atual = Number(db.prepare('INSERT INTO enquetes (message_id, group_id, titulo, vagas_maximo) VALUES (?, ?, ?, 3)').run('nova-enquete', grupo, 'Jogo novo de teste').lastInsertRowid);
         // Exercita o handler real, com respostas capturadas em vez de enviadas ao WhatsApp.
         const fonte = fs.readFileSync(path.join(raiz, 'index.js'), 'utf8');
-        const trecho = fonte.slice(fonte.indexOf('async function tratarListaEditada('), fonte.indexOf("client.on('message', async msg"));
+        const trecho = fonte.slice(fonte.indexOf('async function tratarListaEditada('), fonte.indexOf('async function obterContextoIa('));
         const sandbox = { ...listas, getConfig: dados.getConfig,
+            mensagemPrivadaRecebida: require('../llm-local').mensagemPrivadaRecebida,
+            llmLocal: { habilitada: () => true },
             sincronizadorWhatsApp: { sincronizar: async () => {} },
             remetenteAutorizado: async msg => dados.podeUsarComandos(msg.author),
             resolverIdCanonico: async id => id, getUserId: msg => msg.author,
@@ -138,6 +140,12 @@ async function main() {
         await sandbox.tratarListaEditada({ ...mensagem, body: '!confirmarlista' }, '!confirmarlista');
         assert.equal(dados.getConfirmadosDaEnquete(atual)[0].nome, 'Gabriela Rocha');
         assert.match(respostas[1], /corrigida/);
+        const privada = { ...mensagem, id: 'lista-privada', from: 'teste@c.us', body: mensagem.body.replace('Gabriela Rocha', 'Helena Costa') };
+        await sandbox.tratarListaEditada(privada, privada.body.toLowerCase());
+        assert.match(respostas.at(-1), /confirmar a correção da lista/);
+        assert.equal(dados.getConfirmadosDaEnquete(atual)[0].nome, 'Gabriela Rocha');
+        await sandbox.tratarListaEditada({ ...privada, body: '!confirmarlista' }, '!confirmarlista');
+        assert.equal(dados.getConfirmadosDaEnquete(atual)[0].nome, 'Helena Costa');
         console.log('OK: formato, prévia sem alterar escalação, convidadas, confirmação autorizada, fila manual, pagamentos, faltas, expiração, concorrência, deduplicação e integração do handler.');
     } finally {
         if (dados?.db.open) dados.db.close();
