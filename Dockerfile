@@ -23,7 +23,7 @@ COPY . .
 
 ENV NODE_ENV=production
 
-RUN mkdir -p /app/data /app/.wwebjs_auth /app/.wwebjs_cache \
+RUN mkdir -p /app/data /app/.wwebjs_auth /app/.wwebjs_cache /app/public \
     && chmod +x /app/docker-entrypoint.sh \
     && chown -R node:node /app
 

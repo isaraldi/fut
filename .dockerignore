@@ -5,3 +5,7 @@ node_modules
 data
 .env
 .idea
+*.db
+*.db-shm
+*.db-wal
+public/uploads

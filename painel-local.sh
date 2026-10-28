@@ -20,11 +20,17 @@ docker run --rm -d \
     --mount "type=bind,src=$raiz,dst=/source,readonly" \
     --mount type=volume,src=fut_dev_data,dst=/app/data \
     --entrypoint /bin/sh \
-    fut-bot:latest -c '
-        cp /source/db.js /source/mensagens-prontas.js /app/
-        cp -R /source/panel/. /app/panel/
+    fut-bot:latest -ec '
+        cp -R /source/src /app/
+        mkdir -p /app/public /app/data/uploads
+        cp -R /source/public/. /app/public/
+        if [ -d /app/public/uploads ] && [ ! -L /app/public/uploads ]; then
+            cp -an /app/public/uploads/. /app/data/uploads/
+            rm -rf /app/public/uploads
+        fi
+        ln -sfn /app/data/uploads /app/public/uploads
         chown -R node:node /app/data
-        exec gosu node node panel/server.js
+        exec gosu node node src/server.js
     '
 
 echo "Painel local: http://localhost:$porta/login"

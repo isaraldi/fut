@@ -15,16 +15,14 @@ async function main() {
     let dados;
     try {
         fs.mkdirSync(path.join(temporario, 'data'));
-        for (const arquivo of ['db.js', 'mensagens-prontas.js']) {
-            fs.copyFileSync(path.join(raiz, arquivo), path.join(temporario, arquivo));
-        }
-        fs.cpSync(path.join(raiz, 'panel'), path.join(temporario, 'panel'), { recursive: true });
+        fs.cpSync(path.join(raiz, 'public'), path.join(temporario, 'public'), { recursive: true });
+        fs.cpSync(path.join(raiz, 'src'), path.join(temporario, 'src'), { recursive: true });
         fs.symlinkSync(path.join(raiz, 'node_modules'), path.join(temporario, 'node_modules'), 'dir');
         const reserva = net.createServer();
         await new Promise(resolve => reserva.listen(0, '127.0.0.1', resolve));
         const porta = reserva.address().port;
         await new Promise(resolve => reserva.close(resolve));
-        servidor = spawn(process.execPath, ['panel/server.js'], {
+        servidor = spawn(process.execPath, ['src/server.js'], {
             cwd: temporario,
             env: { ...process.env, NODE_ENV: 'development', PORT: String(porta),
                 ADMIN_USER: 'teste-configuracoes', ADMIN_PASSWORD: 'senha-isolada', SESSION_SECRET: 'sessao-isolada' },
@@ -43,7 +41,7 @@ async function main() {
             headers: { Cookie: cookie }, body: new URLSearchParams(corpo) });
         assert.equal((await post('/login', { _csrf: csrf, usuario: 'teste-configuracoes', senha: 'senha-isolada' })).status, 302);
         const carregar = createRequire(path.join(temporario, 'teste.js'));
-        dados = carregar('./db');
+        dados = carregar('./src/api/services/fut.service');
         const html = async rota => {
             const resposta = await fetch(base + rota, { headers: { Cookie: cookie } });
             assert.equal(resposta.status, 200, rota);
@@ -60,7 +58,7 @@ async function main() {
         votar.run(jogo, ana, 'mensalista', '2026-10-01 10:00:00');
         votar.run(jogo, bia, 'avulso', '2026-10-01 10:00:01');
         votar.run(jogo, clara, 'avulso', '2026-10-01 10:00:02');
-        const mes = carregar('./mensagens-prontas').mesReferenciaAtual(new Date(), Number(dados.getConfig('enquete_dia_semana')));
+        const mes = carregar('./src/utils/mensagens-prontas').mesReferenciaAtual(new Date(), Number(dados.getConfig('enquete_dia_semana')));
         // Um pagamento mensal de uma avulsa não quita a mensalidade de outra jogadora.
         dados.db.prepare('INSERT INTO pagamentos (jogador_id, mes_referencia, pago) VALUES (?, ?, 1)').run(bia, mes);
         let inicio = await html('/');
@@ -90,10 +88,10 @@ async function main() {
         dados.setAusentesDaEnquete(jogo, []);
         const ejs = require('ejs');
         const tresTimes = Array.from({ length: 15 }, (_, i) => ({ id: i + 100, nome: 'Teste ' + i, nivel: 3, posicao: 'meio' }));
-        const plano = carregar('./mensagens-prontas').montarPlanoDeTimes(tresTimes, 5);
+        const plano = carregar('./src/utils/mensagens-prontas').montarPlanoDeTimes(tresTimes, 5);
         const destinos = {};
         plano.times.forEach((time, i) => time.forEach(j => { destinos[j.id] = 'ABC'[i]; }));
-        const modelo = fs.readFileSync(path.join(raiz, 'panel/views/_jogo-times.ejs'), 'utf8');
+        const modelo = fs.readFileSync(path.join(raiz, 'src/views/_jogo-times.ejs'), 'utf8');
         const escala = ejs.render(modelo, { enquete: { id: jogo }, plano, confirmados: tresTimes, destinos, modoManual: false, csrfToken: 'teste' });
         assert.match(escala, /data-time-card="C"/);
         assert.equal((escala.match(/data-time-jogadora data-nivel/g) || []).length, 15);

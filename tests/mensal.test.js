@@ -12,10 +12,10 @@ let dados;
 async function main() {
 try {
     fs.mkdirSync(path.join(temporario, 'data'));
-    for (const arquivo of ['db.js', 'mensagens-prontas.js', 'sincronizacao-whatsapp.js']) fs.copyFileSync(path.join(raiz, arquivo), path.join(temporario, arquivo));
+    fs.cpSync(path.join(raiz, 'src'), path.join(temporario, 'src'), { recursive: true });
     fs.symlinkSync(path.join(raiz, 'node_modules'), path.join(temporario, 'node_modules'), 'dir');
     const carregar = createRequire(path.join(temporario, 'teste.js'));
-    const { fechamentoMensalDoMes, mesReferenciaAtual, montarTextoMensal } = carregar('./mensagens-prontas');
+    const { fechamentoMensalDoMes, mesReferenciaAtual, montarTextoMensal } = carregar('./src/utils/mensagens-prontas');
     const data = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
     // Todos os dias da semana, meses curtos, bissextos e viradas de ano.
     for (const ano of [2024, 2025, 2026, 2027]) {
@@ -42,7 +42,7 @@ try {
         message_id TEXT NOT NULL, mes_anterior TEXT NOT NULL, resposta TEXT, respondido_em TEXT,
         criado_em TEXT NOT NULL DEFAULT (datetime('now')), UNIQUE(jogador_id, message_id))`);
     legado.close();
-    dados = carregar('./db');
+    dados = carregar('./src/api/services/fut.service');
     const { db, criarCicloMensal, responderChamadaMensal, getResumoMensal, aprovarInteressadaMensal, getConfig, setConfig } = dados;
     assert.equal(getResumoMensal(), null);
     const inserir = db.prepare('INSERT INTO jogadores (nome, papel) VALUES (?, ?)');
@@ -61,7 +61,7 @@ try {
     const { execFileSync } = require('node:child_process');
     const persistida = execFileSync(process.execPath, ['-e',
         "const d = require(process.argv[1]); console.log(JSON.stringify(d.getResumoMensal().fila.map(j => j.nome))); d.db.close();",
-        path.join(temporario, 'db.js')], { encoding: 'utf8' });
+        path.join(temporario, 'src/api/services/fut.service.js')], { encoding: 'utf8' });
     assert.deepEqual(JSON.parse(persistida), ['Clara', 'Dora']);
     const primeira = getResumoMensal().fila[0];
     responder(clara, 'sim', 30);
@@ -106,7 +106,7 @@ try {
     assert.equal(getResumoMensal().mesNovo, '2027-01');
 
     // A mesma fila atende eventos ao vivo e leituras após reconexão.
-    const { criarSincronizadorWhatsApp } = carregar('./sincronizacao-whatsapp');
+    const { criarSincronizadorWhatsApp } = carregar('./src/api/subscribers/sincronizacao-whatsapp');
     for (const id of [clara, dora]) db.prepare('UPDATE jogadores SET whatsapp_id = ? WHERE id = ?').run(id + '@c.us', id);
     let relogio = Date.now();
     const sincronizador = criarSincronizadorWhatsApp({
@@ -126,14 +126,14 @@ try {
 
     // Renderiza a view com e sem ciclo (também valida o formulário e seus campos).
     const ejs = require('ejs');
-    const template = fs.readFileSync(path.join(raiz, 'panel/views/mensal.ejs'), 'utf8');
+    const template = fs.readFileSync(path.join(raiz, 'src/views/mensal.ejs'), 'utf8');
     const vars = { usuario: 'teste', ok: '', csrfToken: 'teste', resumoMensal: getResumoMensal(), aba: 'renovacao', mensalistas: [], avulsas: [],
         fechamentoMensalAtivo: true, fechamentoMensalMensagem: 'teste', fechamentoMensalHora: '09:00', fechamentoMensalPrazoHoras: '36',
         pagamentoDiaLimite: '7', proximoFechamentoMensalTexto: '30/10/2026', enqueteAutoEnviar: false, enqueteEnvioDiaSemana: 1,
         enqueteEnvioHora: '09:00', enqueteTituloTemplate: 'teste', enqueteOpcoes: [], listaConfirmadaMensagem: '', listaAtualMensagem: '', listaEsperaMensagem: '', timesMensagem: '' };
     assert.match(ejs.render(template, vars), /Confirmar entrada no mensal/);
     assert.match(ejs.render(template, { ...vars, resumoMensal: null }), /após o envio/);
-    const modelos = fs.readFileSync(path.join(raiz, 'panel/views/mensagens-automaticas.ejs'), 'utf8');
+    const modelos = fs.readFileSync(path.join(raiz, 'src/views/mensagens-automaticas.ejs'), 'utf8');
     assert.match(ejs.render(modelos, vars), /href="\/mensal\?aba=renovacao"/);
 
     // Simula atualização de instalação antiga e confirma idempotência da migração.
@@ -141,14 +141,14 @@ try {
     setConfig('enquete_titulo_template', 'JOGO DE QUARTA - {data}');
     db.prepare("DELETE FROM configuracoes WHERE chave = 'mensal_calendario_v2'").run();
     db.close();
-    delete require.cache[carregar.resolve('./db')];
-    dados = carregar('./db');
+    for (const chave of Object.keys(require.cache)) if (chave.startsWith(temporario + path.sep)) delete require.cache[chave];
+    dados = carregar('./src/api/services/fut.service');
     assert.equal(dados.getConfig('enquete_dia_semana'), '4');
     assert.equal(dados.getConfig('enquete_titulo_template'), 'JOGO DE {dia} - {data}');
     dados.setConfig('enquete_dia_semana', '2');
     dados.db.close();
-    delete require.cache[carregar.resolve('./db')];
-    dados = carregar('./db');
+    for (const chave of Object.keys(require.cache)) if (chave.startsWith(temporario + path.sep)) delete require.cache[chave];
+    dados = carregar('./src/api/services/fut.service');
     assert.equal(dados.getConfig('enquete_dia_semana'), '2');
     console.log('OK: calendário, prioridade, fila, desistência, aprovação, prazo, migração e renderização EJS.');
 } finally {

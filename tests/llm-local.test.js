@@ -1,7 +1,7 @@
 // Sem WhatsApp, banco ou chamadas reais ao Ollama.
 const assert = require('node:assert/strict');
-const { criarLlmLocal, mensagemPrivadaRecebida } = require('../llm-local');
-const { avaliarOcrComprovante, extrairValoresBRL } = require('../comprovantes-ocr');
+const { criarLlmLocal, mensagemPrivadaRecebida } = require('../src/api/services/llm-local');
+const { avaliarOcrComprovante, extrairValoresBRL } = require('../src/utils/comprovantes-ocr');
 
 async function main() {
   for (const from of ['123@c.us', '123@lid']) {

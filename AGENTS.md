@@ -14,19 +14,23 @@ Estas regras se aplicam a todo este repositório. Foram adaptadas do `CLAUDE.md`
 
 Bot de WhatsApp e painel administrativo para organizar um futebol recorrente: enquetes de presença, mensalistas e avulsos, pagamentos, comprovantes por OCR e balanceamento de times.
 
-- `index.js`: cliente `whatsapp-web.js`, comandos, enquetes, agendamentos e OCR.
-- `panel/server.js`: painel Express com views EJS em `panel/views/`.
-- `db.js`: camada compartilhada de acesso síncrono ao SQLite com `better-sqlite3`. Bot e painel usam o mesmo módulo e banco; não há uma API entre eles.
-- `panel/sqlite-session-store.js`: sessões do painel persistidas no SQLite.
-- `mensagens-prontas.js`: formatação de mensagens e `balancearTimes`, compartilhados pelos dois processos.
+- `src/app.js`: classe que monta o Express; `src/server.js`: inicialização HTTP; `src/bot.js`: inicialização do WhatsApp.
+- `src/routes/` e `src/api/controllers/`: rotas, autenticação HTTP, entrada/saída e delegação aos serviços.
+- `src/api/services/`: regras de negócio compartilhadas e casos de uso do painel/bot, sem objetos Express.
+- `src/api/repositories/`: SQL e statements SQLite; `src/api/models/schema.js`: schema e migrações.
+- `src/loaders/database.js`: conexão compartilhada por processo com `better-sqlite3`. Bot e painel continuam acessando o mesmo banco, sem API intermediária.
+- `src/config/`, `src/jobs/`, `src/api/subscribers/`, `src/helpers/` e `src/utils/`: configuração, rotinas, eventos, adaptadores e funções auxiliares.
+- As views EJS ficam em `src/views/` e os arquivos estáticos em `public/`. A URL dos uploads continua `/uploads/`, com persistência no volume do ambiente.
+- O código da aplicação fica em `src/`; utilitários administrativos ficam em `scripts/`. Não recrie atalhos de compatibilidade JavaScript na raiz.
 - `patches/whatsapp-web.js+1.34.7.patch`: correção de busca de mensagens em votos de enquete.
+- Consulte `ARQUITETURA.md` para o fluxo entre camadas e os comandos atuais.
 
 ## Comandos e verificação
 
 - `npm install`: instala dependências e executa `patch-package` no `postinstall`.
-- `node index.js`: inicia o bot e pode conectar ao WhatsApp e executar agendamentos reais. A primeira autenticação exibe QR code; a sessão usa `LocalAuth` em `.wwebjs_auth/`.
-- `node panel/server.js`: inicia o painel na variável `PORT`, com padrão 4000.
-- Não há build, linter ou suíte de testes configurados. `npm test` é apenas um placeholder que termina com erro; não o apresente como teste funcional.
+- `node src/bot.js`: inicia o bot e pode conectar ao WhatsApp e executar agendamentos reais. A primeira autenticação exibe QR code; a sessão usa `LocalAuth` em `.wwebjs_auth/`.
+- `node src/server.js`: inicia o painel na variável `PORT`, com padrão 4000.
+- Não há build ou linter configurado. `npm test` executa os testes isolados de `tests/*.test.js` com o runner nativo do Node. `npm run dev` inicia somente o painel com Nodemon.
 - Para alterações JavaScript, use `node --check caminho/do/arquivo.js` nos arquivos alterados e faça verificações funcionais proporcionais à mudança, preferindo dados temporários e ambiente isolado.
 - Não inicie o bot real apenas para verificar sintaxe: ele pode enviar mensagens e modificar dados. Não envie mensagens de teste a grupos reais sem autorização.
 
@@ -39,12 +43,12 @@ Bot de WhatsApp e painel administrativo para organizar um futebol recorrente: en
 - O OCR em `processarPossivelComprovante` usa `tesseract.js` em WASM. Exige palavra relacionada a pagamento (`PALAVRAS_COMPROVANTE`) e valor em `R$`; imagens sem indícios de comprovante podem ser ignoradas.
 - O valor extraído, comparado com `valor_mensal` e `valor_avulso`, determina o tipo de pagamento. Não use o papel cadastrado do jogador para decidir entre mensalidade e avulso.
 - Preserve `registrarLog` nos resultados do processamento de comprovantes: sucesso, ambiguidade, remetente não cadastrado e valor incompatível.
-- Mantenha `process.env.TZ = 'America/Sao_Paulo'` no início de `index.js` e `panel/server.js`, antes das demais operações. Agendamentos, dias da semana e competência dos pagamentos usam horário de Brasília.
+- Mantenha `process.env.TZ = 'America/Sao_Paulo'` no início de `src/bot.js` e `src/server.js`, antes das demais operações. Agendamentos, dias da semana e competência dos pagamentos usam horário de Brasília.
 
 ## Painel e segurança
 
 - Preserve autenticação e sessões no SQLite, inclusive após reinícios. O administrador inicial vem de `ADMIN_USER`/`ADMIN_PASSWORD`; o painel também usa `SESSION_SECRET` e `PORT`.
-- Todo novo `<form method="post">` em `panel/views/` deve incluir `<input type="hidden" name="_csrf" value="<%= csrfToken %>">`.
+- Todo novo `<form method="post">` em `src/views/` deve incluir `<input type="hidden" name="_csrf" value="<%= csrfToken %>">`.
 - Formulários multipart são exceção apenas à verificação global: a rota deve validar o token depois de o `multer` interpretar o corpo, antes de aceitar a operação.
 - Preserve `helmet({ contentSecurityPolicy: false })`. As views possuem scripts inline sem nonce; habilitar CSP padrão exige adaptar essas views antes.
 - Em produção, o cookie de sessão usa `secure: true` e `sameSite: 'lax'`. Preserve `app.set('trust proxy', 1)` e o encaminhamento de `X-Forwarded-Proto` pelo proxy para que o login HTTPS funcione.
@@ -52,7 +56,7 @@ Bot de WhatsApp e painel administrativo para organizar um futebol recorrente: en
 ## Dependências e persistência
 
 - Não descarte o patch do `whatsapp-web.js`. Ao atualizar a biblioteca, confira e reconcilie/regere o patch para a nova versão.
-- O banco usado por `db.js` fica em `data/fut.db`. Não presuma que o arquivo `fut.db` na raiz é o banco em uso.
+- O banco aberto por `src/loaders/database.js` fica em `data/fut.db`. Não presuma que o arquivo `fut.db` na raiz é o banco em uso.
 - Em produção, o volume Docker `fut_data` está montado em `/app/storage`. O entrypoint cria links de `/app/data` e `/app/.wwebjs_auth` para esse volume. Banco e autenticação do WhatsApp são persistentes; preserve-os em mudanças de infraestrutura.
 - Não apague ou reinicialize banco, volume ou autenticação como parte de uma correção comum. Use cópias temporárias para verificações que escrevam dados.
 - O entrypoint prepara links e permissões como root e depois executa os processos com `gosu node`. Novos processos devem seguir esse padrão de usuário sem privilégios.
@@ -70,8 +74,8 @@ Bot de WhatsApp e painel administrativo para organizar um futebol recorrente: en
 - **Só atualizar produção quando o usuário pedir explicitamente a implantação em produção/no container `fut`.** Aprovar uma implementação ou um teste local não autoriza alterar, substituir ou reiniciar `fut`, nem escrever no volume `fut_data`. Uma autorização para uma implantação específica não autoriza implantações futuras automaticamente.
 - Ambos os containers rodam na mesma máquina. “Docker local” não significa ambiente de teste: `fut` continua sendo produção, mesmo acessado por `127.0.0.1`.
 - Antes de atualizar qualquer ambiente, confirme o container, a porta, os volumes e o comando de inicialização com `docker inspect`, sem exibir variáveis ou segredos. Quando houver print ou URL, confira a porta para identificar o ambiente correto.
-- O `fut-painel-local` monta este repositório em `/source` e, ao iniciar, copia `db.js`, `mensagens-prontas.js` e `panel/` para `/app`. Alterar arquivos no repositório não atualiza a cópia já carregada. No fluxo de desenvolvimento, reinicie **somente `fut-painel-local`** quando necessário para carregar as mudanças e valide `http://127.0.0.1:4001`. Confira o comando atual antes de presumir que esse mecanismo continua igual.
-- Preserve o isolamento: testes não devem montar `fut_data` ou a autenticação de produção, nem iniciar `index.js`. O painel local sozinho não valida conexão do bot, OCR ou comportamento real do WhatsApp; use verificações isoladas para essas partes e informe essa limitação.
+- O `fut-painel-local` monta este repositório em `/source` e, ao iniciar, copia `src/` e `public/` para `/app`. Alterar arquivos no repositório não atualiza a cópia já carregada. No fluxo de desenvolvimento, reinicie **somente `fut-painel-local`** quando necessário para carregar as mudanças e valide `http://127.0.0.1:4001`. Confira o comando atual antes de presumir que esse mecanismo continua igual.
+- Preserve o isolamento: testes não devem montar `fut_data` ou a autenticação de produção, nem iniciar `src/bot.js`. O painel local sozinho não valida conexão do bot, OCR ou comportamento real do WhatsApp; use verificações isoladas para essas partes e informe essa limitação.
 - Ao concluir, diga em qual ambiente a mudança foi aplicada. Se passou apenas pelo teste local, informe que produção ainda não foi atualizada.
 
 ### Produção

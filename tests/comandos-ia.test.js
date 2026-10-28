@@ -1,5 +1,5 @@
 const assert = require('node:assert/strict');
-const { criarExecutorComandosIa, grupoPermitidoIa } = require('../comandos-ia');
+const { criarExecutorComandosIa, grupoPermitidoIa } = require('../src/api/services/comandos-ia');
 
 async function main() {
   const config = { enquete_grupo_id: 'principal@g.us' };

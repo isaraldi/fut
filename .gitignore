@@ -7,4 +7,4 @@ data/
 *.db-shm
 *.db-wal
 .idea/
-panel/public/uploads/
+public/uploads/

@@ -12,14 +12,12 @@ async function main() {
     let dados;
     try {
         fs.mkdirSync(path.join(temporario, 'data'));
-        for (const nome of ['db.js', 'mensagens-prontas.js', 'sincronizacao-whatsapp.js']) {
-            fs.copyFileSync(path.join(raiz, nome), path.join(temporario, nome));
-        }
+        fs.cpSync(path.join(raiz, 'src'), path.join(temporario, 'src'), { recursive: true });
         fs.symlinkSync(path.join(raiz, 'node_modules'), path.join(temporario, 'node_modules'), 'dir');
         const carregar = createRequire(path.join(temporario, 'teste.js'));
-        dados = carregar('./db');
+        dados = carregar('./src/api/services/fut.service');
         const { db } = dados;
-        const { criarSincronizadorWhatsApp } = carregar('./sincronizacao-whatsapp');
+        const { criarSincronizadorWhatsApp } = carregar('./src/api/subscribers/sincronizacao-whatsapp');
         db.prepare('DELETE FROM enquete_opcoes').run();
         db.prepare("INSERT INTO enquete_opcoes (texto, conta) VALUES ('Vou', 1), ('Não vou', 0)").run();
         const inserir = db.prepare('INSERT INTO jogadores (nome, whatsapp_id, papel) VALUES (?, ?, ?)');
@@ -173,8 +171,8 @@ async function main() {
         insConvite.run(ana, 'migracao-desistiu', '2026-09', new Date(antigo + 10000).toISOString());
         db.prepare("DELETE FROM configuracoes WHERE chave = 'whatsapp_interacoes_v1'").run();
         db.close();
-        delete require.cache[carregar.resolve('./db')];
-        dados = carregar('./db');
+        for (const chave of Object.keys(require.cache)) if (chave.startsWith(temporario + path.sep)) delete require.cache[chave];
+        dados = carregar('./src/api/services/fut.service');
         assert.equal(dados.getConviteFechamentoMensal('migracao-expirou', ana).expirada, 1);
         assert.equal(dados.getConviteFechamentoMensal('migracao-desistiu', ana).expirada, 0);
         console.log('OK: recuperação após reinício, timestamps, deduplicação, fila, prazo expirado, ações manuais, enquete fechada, falhas e ciclos antigos.');

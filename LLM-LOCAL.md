@@ -18,7 +18,7 @@ Depois de disponibilizar estes arquivos no ambiente do bot, configure no mesmo a
 e volume do banco:
 
 ```sh
-node configurar-llm.js ativar http://172.19.176.1:11434
+node scripts/configurar-llm.js ativar http://172.19.176.1:11434
 ```
 
 Baixe também o modelo de visão no PowerShell conectado ao servidor Ollama:
@@ -49,11 +49,23 @@ Mantenha a API restrita à máquina/rede privada necessária, pois ela não exig
 
 ## Grupos autorizados
 
+No painel, acesse **Configurações → Comandos e permissões → Grupos da IA**. Escolha
+**Usar os grupos selecionados abaixo**, marque todos os grupos desejados e salve.
+A aba mostra a permissão salva de cada grupo. Os grupos são os sincronizados pelo bot;
+permissões já salvas pelo utilitário também aparecem quando o nome não está disponível.
+
+Para voltar ao comportamento padrão, selecione **Seguir o grupo da enquete**.
+Para atender somente no privado, use a seleção de grupos sem marcar nenhum.
+A tela não ativa a IA nem altera as pessoas autorizadas ou o destino das enquetes.
+Todos os grupos consultam e alteram os dados do mesmo futebol; não são campeonatos
+ou jogos independentes por grupo. Nos grupos, a menção real ao bot continua obrigatória.
+
+
 Sem configuração explícita, somente `enquete_grupo_id` (grupo do jogo no painel) está
 habilitado. Para escolher grupos adicionais, execute no ambiente e banco do bot:
 
 ```sh
-node configurar-llm.js grupos 123456789@g.us 987654321@g.us
+node scripts/configurar-llm.js grupos 123456789@g.us 987654321@g.us
 ```
 
 Os IDs acima são exemplos; substitua pelos IDs reais dos grupos desejados. A lista
@@ -61,7 +73,7 @@ substitui as permissões anteriores, inclusive a permissão padrão do grupo do 
 Para manter só o privado:
 
 ```sh
-node configurar-llm.js grupos nenhum
+node scripts/configurar-llm.js grupos nenhum
 ```
 
 Essa opção grava `llm_grupos_autorizados` na tabela `configuracoes`; não altera as
@@ -143,7 +155,7 @@ novamente após a inferência, antes de responder ou executar ações.
 ## Desativar e verificar
 
 ```sh
-node configurar-llm.js desativar
+node scripts/configurar-llm.js desativar
 node tests/llm-local.test.js
 node tests/comandos-ia.test.js
 node tests/listas-whatsapp.test.js

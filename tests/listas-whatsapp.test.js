@@ -13,13 +13,11 @@ async function main() {
     let dados;
     try {
         fs.mkdirSync(path.join(temporario, 'data'));
-        for (const nome of ['db.js', 'mensagens-prontas.js', 'listas-whatsapp.js', 'sincronizacao-whatsapp.js']) {
-            fs.copyFileSync(path.join(raiz, nome), path.join(temporario, nome));
-        }
+        fs.cpSync(path.join(raiz, 'src'), path.join(temporario, 'src'), { recursive: true });
         fs.symlinkSync(path.join(raiz, 'node_modules'), path.join(temporario, 'node_modules'), 'dir');
         const carregar = createRequire(path.join(temporario, 'teste.js'));
-        dados = carregar('./db');
-        const listas = carregar('./listas-whatsapp');
+        dados = carregar('./src/api/services/fut.service');
+        const listas = carregar('./src/api/services/listas-whatsapp');
         const { db } = dados;
         const grupo = 'teste@g.us';
         const autor = 'organizadora@c.us';
@@ -45,7 +43,7 @@ async function main() {
         assert(listas.pareceLista('\n' + texto));
         assert(!listas.pareceLista('Podemos trocar uma jogadora?'));
         assert.equal(listas.interpretarLista(texto).confirmadas.length, 3);
-        const padrao = carregar('./mensagens-prontas').montarTextoListaAtual({ titulo }, dados.getConfirmadosDaEnquete(enquete), dados.getListaDeEsperaDaEnquete(enquete));
+        const padrao = carregar('./src/utils/mensagens-prontas').montarTextoListaAtual({ titulo }, dados.getConfirmadosDaEnquete(enquete), dados.getListaDeEsperaDaEnquete(enquete));
         assert.equal(listas.interpretarLista(padrao).espera.length, 1);
         assert.throws(() => preparar(texto.replace('Total: 3', 'Total: 2')), /total/i);
         assert.equal(listas.interpretarLista(texto.replace('Avulsas (1)', 'Avulsas (2)')).avisos.length, 1);
@@ -89,7 +87,7 @@ async function main() {
         assert.equal(preparar(), null); // mesma lista não gera prévia nem novas convidadas
         assert.equal(db.prepare("SELECT COUNT(*) n FROM jogadores WHERE nome = 'Emilia Costa'").get().n, 1);
         // A recuperação antiga do WhatsApp não desfaz a substituição confirmada.
-        const sync = carregar('./sincronizacao-whatsapp').criarSincronizadorWhatsApp({ client: {}, resolverIdCanonico: async id => id, agora: () => relogio + 100 });
+        const sync = carregar('./src/api/subscribers/sincronizacao-whatsapp').criarSincronizadorWhatsApp({ client: {}, resolverIdCanonico: async id => id, agora: () => relogio + 100 });
         await sync.receberVoto({ parentMsgKey: 'enquete-lista', voter: 'clara@c.us', interractedAtTs: relogio - 100, selectedOptions: [{ name: 'Eu vou' }] });
         assert(!db.prepare('SELECT id FROM votos WHERE enquete_id = ? AND jogador_id = ?').get(enquete, clara));
         // Retornar uma avulsa depois do ajuste deixa-a atrás da distribuição manual.
@@ -115,10 +113,10 @@ async function main() {
         assert(db.prepare('SELECT fechada_em FROM enquetes WHERE id = ?').get(enquete).fechada_em);
         const atual = Number(db.prepare('INSERT INTO enquetes (message_id, group_id, titulo, vagas_maximo) VALUES (?, ?, ?, 3)').run('nova-enquete', grupo, 'Jogo novo de teste').lastInsertRowid);
         // Exercita o handler real, com respostas capturadas em vez de enviadas ao WhatsApp.
-        const fonte = fs.readFileSync(path.join(raiz, 'index.js'), 'utf8');
+        const fonte = fs.readFileSync(path.join(raiz, 'src/api/services/whatsapp.service.js'), 'utf8');
         const trecho = fonte.slice(fonte.indexOf('async function tratarListaEditada('), fonte.indexOf('async function obterContextoIa('));
         const sandbox = { ...listas, getConfig: dados.getConfig,
-            mensagemPrivadaRecebida: require('../llm-local').mensagemPrivadaRecebida,
+            mensagemPrivadaRecebida: require('../src/api/services/llm-local').mensagemPrivadaRecebida,
             llmLocal: { habilitada: () => true },
             sincronizadorWhatsApp: { sincronizar: async () => {} },
             remetenteAutorizado: async msg => dados.podeUsarComandos(msg.author),

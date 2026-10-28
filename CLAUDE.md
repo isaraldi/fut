@@ -8,11 +8,11 @@ A WhatsApp bot + admin panel for managing a recurring pickup soccer game ("fut")
 
 ## Commands
 
-There is no build step, linter, or test suite configured (`npm test` is a placeholder).
+There is no build step or linter. `npm test` runs the isolated tests via the native Node test runner. See `ARQUITETURA.md` for the MVC structure in `src/`; application code lives in `src/` and administrative utilities live in `scripts/`. There are no root JavaScript compatibility entries.
 
 - `npm install` — runs `patch-package` automatically via `postinstall` (see whatsapp-web.js patch below).
-- `node index.js` — runs the WhatsApp bot (prints a QR code to the terminal on first run; session persists via `LocalAuth` in `.wwebjs_auth/`).
-- `node panel/server.js` — runs the admin web panel (Express + EJS) on `PORT` (default 4000).
+- `node src/bot.js` — runs the WhatsApp bot (prints a QR code to the terminal on first run; session persists via `LocalAuth` in `.wwebjs_auth/`).
+- `node src/server.js` — runs the admin web panel (Express + EJS) on `PORT` (default 4000).
 - In production (local Docker container) both run together via `docker-entrypoint.sh`, which `wait -n`s on both — if either process dies, the other is killed too and the container restarts.
 - Deploy: production is a local Docker container named `fut` (image `fut-bot`, built from this `Dockerfile`), not Fly.io anymore. It publishes `127.0.0.1:4000->4000`, runs with `--restart unless-stopped`, and mounts the named volume `fut_data` at `/app/storage`. The env vars below are passed to the container at `docker run` time (not baked into the image). There is no compose file; to ship a change, rebuild the image and recreate the container with the same options (check them with `docker inspect fut` first). The panel is reached from outside through Tailscale, which runs on the Windows host (not inside WSL/the container) and proxies to `127.0.0.1:4000`, terminating HTTPS.
 
@@ -35,14 +35,14 @@ Check the screenshot/URL and inspect the target container's ports, mounts and st
 command before taking action. Never print environment secrets from the inspection.
 
 The local panel mounts this repository at `/source`. Its startup command copies
-`db.js`, `mensagens-prontas.js` and `panel/` into `/app`, then runs only the panel as
+`src/` and `public/` into `/app`, then runs only the panel as
 the unprivileged `node` user. Source changes do not refresh that running copy by
 themselves. During development, restart **only `fut-painel-local`** when needed to
 load the changes, then verify `http://127.0.0.1:4001`. Inspect the current command
 first rather than assuming this startup behavior never changes.
 
 Keep test data and production data separate. Do not mount `fut_data` or production
-WhatsApp authentication into test containers, and do not start `index.js` for panel
+WhatsApp authentication into test containers, and do not start `src/bot.js` for panel
 validation. The local panel alone cannot validate the live bot, OCR or WhatsApp
 behavior; use isolated checks for those and report their limits. State which
 environment was updated when reporting completion; local validation is not a
@@ -50,16 +50,16 @@ production deployment.
 
 ### Required env vars (`.env`, not committed)
 
-`SESSION_SECRET`, `ADMIN_USER`, `ADMIN_PASSWORD`, `PORT` are read by `panel/server.js`. `GRUPO_OFICIAL_ID`/`GRUPO_TESTE_ID` exist in `.env` but nothing in the code currently reads them — the group to use is instead picked at runtime via the panel (`enquete_grupo_id` config, set the first time `!enquete` runs in a group, or picked from the synced group list).
+`SESSION_SECRET`, `ADMIN_USER`, `ADMIN_PASSWORD`, `PORT` are read by `src/server.js`. `GRUPO_OFICIAL_ID`/`GRUPO_TESTE_ID` exist in `.env` but nothing in the code currently reads them — the group to use is instead picked at runtime via the panel (`enquete_grupo_id` config, set the first time `!enquete` runs in a group, or picked from the synced group list).
 
 ## Architecture
 
 ### Two processes, one SQLite database
 
-- `index.js` — the WhatsApp bot, built on `whatsapp-web.js` (puppeteer-driven WhatsApp Web client). Owns the `client.on('message', ...)` handler, poll (`enquete`) lifecycle, scheduled messages, and receipt OCR.
-- `panel/server.js` — the admin panel. Express + EJS views in `panel/views/`, session-authenticated (single admin login, bootstrapped from `ADMIN_USER`/`ADMIN_PASSWORD` on first run). Sessions are stored in the same SQLite DB via `panel/sqlite-session-store.js` (not the default in-memory store) so logins survive process restarts.
-- `db.js` — the shared data layer (better-sqlite3, synchronous). Both processes require it directly and call its exported functions; there is no API boundary between bot and panel, just this shared module. Table set includes `jogadores` (players), `enquetes`/`votos`/`enquete_opcoes` (polls), `pagamentos`/`pagamentos_avulsos` (payments), `configuracoes` (key/value config), `logs`, `mensagens_agendadas`, `papel_historico`, `sessions`, `grupos`, `avaliacoes`.
-- `mensagens-prontas.js` — pure text/formatting helpers shared by both processes: team balancing (`balancearTimes`) and building the WhatsApp message text for confirmed lists / team lineups.
+- `src/bot.js` — the WhatsApp bot, built on `whatsapp-web.js` (puppeteer-driven WhatsApp Web client). Creates the client and registers handlers from `src/api/services/whatsapp.service.js` through the subscriber; business logic includes the poll lifecycle, scheduled messages and receipt OCR.
+- `src/server.js` — the admin panel. Express + EJS views in `src/views/`, session-authenticated (single admin login, bootstrapped from `ADMIN_USER`/`ADMIN_PASSWORD` on first run). Sessions are stored in the same SQLite DB via `src/api/repositories/sqlite-session-store.js` (not the default in-memory store) so logins survive process restarts.
+- `src/api/services/fut.service.js` — the shared data layer (better-sqlite3, synchronous). Both processes require it directly and call its exported functions; there is no API boundary between bot and panel, just this shared module. Table set includes `jogadores` (players), `enquetes`/`votos`/`enquete_opcoes` (polls), `pagamentos`/`pagamentos_avulsos` (payments), `configuracoes` (key/value config), `logs`, `mensagens_agendadas`, `papel_historico`, `sessions`, `grupos`, `avaliacoes`.
+- `src/utils/mensagens-prontas.js` — pure text/formatting helpers shared by both processes: team balancing (`balancearTimes`) and building the WhatsApp message text for confirmed lists / team lineups.
 
 ### Persistence (Docker volume)
 
@@ -67,7 +67,7 @@ The `fut_data` Docker volume is mounted at `/app/storage`. `docker-entrypoint.sh
 
 ### Config lives in the DB, not in code
 
-All bot behavior (poll schedule, title template, payment amounts, vacancy limits, auto-close, command whitelist) is driven by the SQLite `configuracoes` key/value table, read/written via `getConfig`/`setConfig` in `db.js`. There is no in-code per-group config object — an earlier prototype (`groupConfigs`, reaction-based confirmation, mock player levels) was removed as dead code; don't reintroduce that pattern.
+All bot behavior (poll schedule, title template, payment amounts, vacancy limits, auto-close, command whitelist) is driven by the SQLite `configuracoes` key/value table, read/written via `getConfig`/`setConfig` in `src/api/services/fut.service.js`. There is no in-code per-group config object — an earlier prototype (`groupConfigs`, reaction-based confirmation, mock player levels) was removed as dead code; don't reintroduce that pattern.
 
 ### Command authorization
 
@@ -75,11 +75,11 @@ Commands (`!lista`, `!fechar`, `!espera`, `!times`, `!enquete`, `!sincronizar`) 
 
 ### Group vs. DM handling gotcha
 
-Several bot features are meant to work both inside the WhatsApp group and in a direct message to the bot's own number (marked in code with the comment "funciona em grupo OU em DM direto com o bot"). Do not gate such handlers on `msg.from.endsWith('@g.us')` — that check silently swallows DMs with no log/error, since the gated function is simply never invoked. This is a real bug pattern that has bitten this codebase before (receipt-image handling in `index.js` was originally group-only by accident).
+Several bot features are meant to work both inside the WhatsApp group and in a direct message to the bot's own number (marked in code with the comment "funciona em grupo OU em DM direto com o bot"). Do not gate such handlers on `msg.from.endsWith('@g.us')` — that check silently swallows DMs with no log/error, since the gated function is simply never invoked. This is a real bug pattern that has bitten this codebase before (receipt-image handling in `src/bot.js` was originally group-only by accident).
 
 ### Receipt OCR (comprovante) flow
 
-`processarPossivelComprovante` in `index.js` runs `tesseract.js` (WASM, no external shell-out) on incoming images. It only acts if OCR text contains both a payment keyword (`PALAVRAS_COMPROVANTE`) and an `R$` amount — otherwise it's silently ignored (assumed to be an unrelated photo/meme) or logged as an unconfirmed guess. The extracted `R$` value is matched against the configured `valor_mensal`/`valor_avulso` (panel → Jogo → Valores) to decide whether it's a monthly or drop-in payment — the receipt's amount decides the payment type, not the player's registered role. All outcomes (success, ambiguous, sender not on roster, amount mismatch) go through `registrarLog`, visible on the panel's Logs page.
+`processarPossivelComprovante` in `src/api/services/whatsapp.service.js` runs `tesseract.js` (WASM, no external shell-out) on incoming images. It only acts if OCR text contains both a payment keyword (`PALAVRAS_COMPROVANTE`) and an `R$` amount — otherwise it's silently ignored (assumed to be an unrelated photo/meme) or logged as an unconfirmed guess. The extracted `R$` value is matched against the configured `valor_mensal`/`valor_avulso` (panel → Jogo → Valores) to decide whether it's a monthly or drop-in payment — the receipt's amount decides the payment type, not the player's registered role. All outcomes (success, ambiguous, sender not on roster, amount mismatch) go through `registrarLog`, visible on the panel's Logs page.
 
 ### whatsapp-web.js is patched
 
@@ -87,19 +87,19 @@ Several bot features are meant to work both inside the WhatsApp group and in a d
 
 ### Timezone
 
-Both `index.js` and `panel/server.js` force `process.env.TZ = 'America/Sao_Paulo'` at the very top, before anything else runs. All date/day-of-week logic (poll scheduling, "which month is this payment for", weekly messages) assumes Brasília local time.
+Both `src/bot.js` and `src/server.js` force `process.env.TZ = 'America/Sao_Paulo'` at the very top, before anything else runs. All date/day-of-week logic (poll scheduling, "which month is this payment for", weekly messages) assumes Brasília local time.
 
 ### Non-root container
 
-The Dockerfile installs `gosu`; `docker-entrypoint.sh` runs as root only long enough to symlink/`chown` the volume (`/app/storage`), then drops to the unprivileged `node` user (via `gosu node`) to actually run `index.js`, `panel/server.js`, and the Chromium instance underneath. New processes/services started from the entrypoint must follow the same pattern — don't add a bare `node ...` line there without the `gosu node` prefix, or it'll run as root.
+The Dockerfile installs `gosu`; `docker-entrypoint.sh` runs as root only long enough to symlink/`chown` the volume (`/app/storage`), then drops to the unprivileged `node` user (via `gosu node`) to actually run `src/bot.js`, `src/server.js`, and the Chromium instance underneath. New processes/services started from the entrypoint must follow the same pattern — don't add a bare `node ...` line there without the `gosu node` prefix, or it'll run as root.
 
 ### CSRF protection is manual, per-form
 
-`csurf` is deprecated, so CSRF uses a hand-rolled synchronizer token: `panel/server.js` generates a random token per session (`req.session.csrfToken`), exposes it as `csrfToken` to every view, and a global middleware rejects any POST whose body's `_csrf` doesn't match. **Every new `<form method="post">` in `panel/views/` must include `<input type="hidden" name="_csrf" value="<%= csrfToken %>">`** or it will get a 403. The one exception is multipart forms (`enctype="multipart/form-data"`, currently only the logo upload) — the global middleware skips those because `express.urlencoded` can't parse multipart bodies, so the route itself re-checks the token after `multer` runs; follow that same pattern for any future file-upload route.
+`csurf` is deprecated, so CSRF uses a hand-rolled synchronizer token: `src/loaders/express.js` generates a random token per session (`req.session.csrfToken`), exposes it as `csrfToken` to every view, and a global middleware rejects any POST whose body's `_csrf` doesn't match. **Every new `<form method="post">` in `src/views/` must include `<input type="hidden" name="_csrf" value="<%= csrfToken %>">`** or it will get a 403. The one exception is multipart forms (`enctype="multipart/form-data"`, currently only the logo upload) — the global middleware skips those because `express.urlencoded` can't parse multipart bodies, so the route itself re-checks the token after `multer` runs; follow that same pattern for any future file-upload route.
 
 ### Helmet is on, CSP is off
 
-`panel/server.js` uses `helmet({ contentSecurityPolicy: false })`. CSP is explicitly disabled because most views have inline `<script>` blocks with no nonce — enabling the default CSP would silently break them. The other headers (frame options, no-sniff, HSTS, etc.) are active.
+`src/loaders/express.js` uses `helmet({ contentSecurityPolicy: false })`. CSP is explicitly disabled because most views have inline `<script>` blocks with no nonce — enabling the default CSP would silently break them. The other headers (frame options, no-sniff, HSTS, etc.) are active.
 
 ### Secure session cookie needs the proxy headers
 

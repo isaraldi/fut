@@ -8,9 +8,9 @@ const raiz = path.resolve(__dirname, '..');
 const pasta = fs.mkdtempSync(path.join(os.tmpdir(), 'fut-caixa-'));
 try {
     fs.mkdirSync(path.join(pasta, 'data'));
-    for (const arquivo of ['db.js', 'mensagens-prontas.js']) fs.copyFileSync(path.join(raiz, arquivo), path.join(pasta, arquivo));
+    fs.cpSync(path.join(raiz, 'src'), path.join(pasta, 'src'), { recursive: true });
     fs.symlinkSync(path.join(raiz, 'node_modules'), path.join(pasta, 'node_modules'), 'dir');
-    const c = require(path.join(pasta, 'db'));
+    const c = require(path.join(pasta, 'src/api/services/fut.service'));
     const { db } = c;
     const id = db.prepare("INSERT INTO jogadores (nome) VALUES ('Teste')").run().lastInsertRowid;
     c.setConfig('valor_mensal', '60'); c.setConfig('valor_avulso', '15.50');
@@ -61,11 +61,11 @@ try {
     const anterior = legado.prepare("INSERT INTO jogadores(nome) VALUES ('Legado')").run().lastInsertRowid;
     legado.prepare("INSERT INTO pagamentos(jogador_id, mes_referencia, pago, atualizado_em) VALUES (?, '2025-01', 1, '2025-01-05 12:00:00')").run(anterior);
     legado.close();
-    const modulo = require.resolve(path.join(pasta, 'db'));
-    delete require.cache[modulo];
+    const modulo = require.resolve(path.join(pasta, 'src/api/services/fut.service'));
+    for (const chave of Object.keys(require.cache)) if (chave.startsWith(pasta + path.sep)) delete require.cache[chave];
     let migrado = require(modulo);
     assert.deepEqual(migrado.db.prepare('SELECT origem, valor_centavos, registrado_em FROM pagamentos_historico').get(), { origem:'anterior', valor_centavos:null, registrado_em:'2025-01-05 12:00:00' });
-    migrado.db.close(); delete require.cache[modulo];
+    migrado.db.close(); for (const chave of Object.keys(require.cache)) if (chave.startsWith(pasta + path.sep)) delete require.cache[chave];
     migrado = require(modulo);
     assert.equal(migrado.db.prepare('SELECT COUNT(*) n FROM pagamentos_historico').get().n, 1);
     migrado.db.close();
