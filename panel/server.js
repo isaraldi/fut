@@ -533,9 +533,26 @@ app.post('/jogos/:id/confirmar/:jogadorId/remover', requireLogin, (req, res) => 
 // ---------- PAGAMENTOS ----------
 
 app.get('/pagamentos', requireLogin, (req, res) => {
-    const aba = req.query.aba === 'avulsas' ? 'avulsas' : 'mensalistas';
+    const aba = ['avulsas', 'historico'].includes(req.query.aba) ? req.query.aba : 'mensalistas';
+    if (aba === 'historico') {
+        const busca = String(req.query.busca || '').trim().slice(0, 100);
+        const tipo = ['mensal', 'avulso'].includes(req.query.tipo) ? req.query.tipo : '';
+        const jogoId = /^\d+$/.test(req.query.jogo || '') ? req.query.jogo : '';
+        const pagina = Math.min(1000000, Math.max(1, parseInt(req.query.pagina, 10) || 1));
+        const condicoes = [], valores = [];
+        if (busca) { condicoes.push('instr(lower(nome), lower(?)) > 0'); valores.push(busca); }
+        if (tipo) { condicoes.push('tipo = ?'); valores.push(tipo); }
+        if (jogoId) { condicoes.push("tipo = 'avulso' AND referencia = ?"); valores.push(jogoId); }
+        const where = condicoes.length ? ' WHERE ' + condicoes.join(' AND ') : '';
+        const total = db.prepare('SELECT COUNT(*) n FROM pagamentos_historico' + where).get(...valores).n;
+        const historico = db.prepare('SELECT * FROM pagamentos_historico' + where + ' ORDER BY registrado_em DESC, id DESC LIMIT 50 OFFSET ?').all(...valores, (pagina - 1) * 50);
+        const jogos = db.prepare("SELECT referencia AS id, MAX(jogo) titulo FROM pagamentos_historico WHERE tipo = 'avulso' GROUP BY referencia ORDER BY CAST(referencia AS INTEGER) DESC").all();
+        return res.render('pagamentos', { aba, historico, busca, tipo, jogoId, pagina, total, jogos });
+    }
     if (aba === 'avulsas') {
-        const enquete = db.prepare('SELECT * FROM enquetes ORDER BY id DESC LIMIT 1').get();
+        const jogos = db.prepare('SELECT id, titulo FROM enquetes ORDER BY id DESC').all();
+        const enquete = req.query.jogo ? db.prepare('SELECT * FROM enquetes WHERE id = ?').get(Number(req.query.jogo) || 0)
+            : db.prepare('SELECT * FROM enquetes ORDER BY id DESC LIMIT 1').get();
 
         let jogadores = [];
         if (enquete) {
@@ -550,7 +567,7 @@ app.get('/pagamentos', requireLogin, (req, res) => {
             }));
         }
 
-        return res.render('pagamentos', { aba, jogadores, enquete, mes: null, ok: req.query.ok });
+        return res.render('pagamentos', { aba, jogadores, enquete, jogos, mes: null, ok: req.query.ok });
     }
     const mes = req.query.mes || mesReferenciaAtual(new Date(), Number(getConfig('enquete_dia_semana')));
 
@@ -598,7 +615,7 @@ app.post('/pagamentos/avulsos/:jogadorId/toggle', requireLogin, (req, res) => {
         return res.redirect('/caixa?erro=' + encodeURIComponent(erro.message));
     }
 
-    redirectOk(res, '/pagamentos?aba=avulsas', 'Pagamento atualizado!');
+    redirectOk(res, '/pagamentos?aba=avulsas&jogo=' + enqueteId, 'Pagamento atualizado!');
 });
 
 // ---------- CAIXA ----------

@@ -1,0 +1,36 @@
+<%
+const dataRegistro = valor => new Date(valor.replace(' ', 'T') + 'Z').toLocaleString('pt-BR', { timeZone:'America/Sao_Paulo', dateStyle:'short', timeStyle:'short' });
+const linkPagina = numero => '/pagamentos?' + new URLSearchParams({ aba:'historico', busca, tipo, jogo:jogoId, pagina:String(numero) }).toString();
+%>
+<div class="card">
+    <form method="get" action="/pagamentos" class="historico-filtros">
+        <input type="hidden" name="aba" value="historico">
+        <div><label for="historico-busca">Jogadora</label><input type="search" name="busca" id="historico-busca" value="<%= busca %>" placeholder="Buscar por nome"></div>
+        <div><label for="historico-tipo">Tipo</label><select name="tipo" id="historico-tipo"><option value="">Todos</option><option value="mensal" <%= tipo === 'mensal' ? 'selected' : '' %>>Mensalidade</option><option value="avulso" <%= tipo === 'avulso' ? 'selected' : '' %>>Avulsa</option></select></div>
+        <div><label for="historico-jogo">Jogo · avulsas</label><select name="jogo" id="historico-jogo"><option value="">Todos os jogos</option><% for (const jogo of jogos) { %><option value="<%= jogo.id %>" <%= jogoId === jogo.id ? 'selected' : '' %>><%= jogo.titulo || 'Jogo #' + jogo.id %></option><% } %></select></div>
+        <button type="submit" class="secondary">Filtrar</button>
+    </form>
+</div>
+<div class="card">
+    <h2>Histórico de pagamentos</h2>
+    <p class="hint">Data e hora do registro no sistema, em Brasília. Mensalidades são vinculadas ao mês; avulsas, ao jogo.</p>
+    <% if (!historico.length) { %><p class="empty">Nenhum registro encontrado.</p><% } else { %>
+    <div style="overflow-x:auto"><table><thead><tr><th>Registrado em</th><th>Jogadora</th><th>Referência</th><th>Valor</th><th>Origem</th><th>Registro</th></tr></thead><tbody>
+    <% for (const item of historico) { %><tr>
+        <td style="white-space:nowrap"><%= dataRegistro(item.registrado_em) %></td>
+        <td><%= item.nome %></td>
+        <td><%= item.tipo === 'mensal' ? 'Mensalidade · ' + item.referencia.split('-').reverse().join('/') : (item.jogo || 'Jogo #' + item.referencia) %></td>
+        <td style="white-space:nowrap"><%= item.valor_centavos === null ? 'Não disponível' : (item.valor_centavos / 100).toLocaleString('pt-BR', { style:'currency', currency:'BRL' }) %></td>
+        <td><%= item.origem === 'comprovante' ? 'Comprovante · bot' : item.origem === 'manual' ? 'Manual · painel' : 'Origem não disponível' %></td>
+        <td><span class="badge <%= item.pago ? 'pago' : 'pendente' %>"><%= item.pago ? 'Marcado pago' : 'Marcado pendente' %></span><% if (item.origem === 'anterior') { %><small class="hint" style="display:block">Última situação anterior ao histórico</small><% } %></td>
+    </tr><% } %>
+    </tbody></table></div>
+    <p class="hint">Cada linha registra uma alteração, sem apagar as anteriores. Nos registros antigos, a data corresponde à última atualização disponível; origem e valor não foram recuperados.</p>
+    <nav aria-label="Páginas do histórico" style="display:flex;gap:16px;align-items:center">
+        <% if (pagina > 1) { %><a href="<%= linkPagina(pagina - 1) %>">Anterior</a><% } %>
+        <span>Página <%= pagina %> · <%= total %> registros</span>
+        <% if (pagina * 50 < total) { %><a href="<%= linkPagina(pagina + 1) %>">Próxima</a><% } %>
+    </nav>
+    <% } %>
+</div>
+<style>.historico-filtros { display:flex;gap:12px;align-items:end;flex-wrap:wrap; }.historico-filtros>div { flex:1;min-width:160px; } .historico-filtros select { max-width:100%; } @media(max-width:650px) { .historico-filtros>div { width:100%;flex-basis:100%;min-width:0; } }</style>

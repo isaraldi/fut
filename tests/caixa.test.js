@@ -22,8 +22,12 @@ try {
     c.marcarPagamentoMensalista(id, '2026-10');
     c.marcarPagamentoMensalista(id, '2026-10');
     assert.equal(db.prepare('SELECT COUNT(*) n FROM caixa_lancamentos').get().n, 2);
+    assert.equal(db.prepare('SELECT COUNT(*) n FROM pagamentos_historico').get().n, 2);
+    assert.equal(db.prepare('SELECT origem FROM pagamentos_historico ORDER BY id DESC LIMIT 1').get().origem, 'comprovante');
     c.definirPagamentoCaixa('mensal', id, '2026-10');
     assert.equal(db.prepare('SELECT COUNT(*) n FROM caixa_lancamentos WHERE cancelado_em IS NOT NULL').get().n, 1);
+    assert.equal(db.prepare('SELECT origem, pago FROM pagamentos_historico ORDER BY id DESC LIMIT 1').get().origem, 'manual');
+    assert.equal(db.prepare('SELECT pago FROM pagamentos_historico ORDER BY id DESC LIMIT 1').get().pago, 0);
     c.setConfig('valor_mensal', '90');
     c.marcarPagamentoMensalista(id, '2026-10');
     assert.equal(db.prepare("SELECT valor_centavos v FROM caixa_lancamentos WHERE origem IS NOT NULL").get().v, 6000);
@@ -47,6 +51,23 @@ try {
     c.marcarPagamentoAvulso(id, enquete);
     db.prepare('DELETE FROM jogadores WHERE id = ?').run(id);
     assert.equal(saldo(), 17575); // exclusão do cadastro não apaga movimentações
+    assert(db.prepare('SELECT COUNT(*) n FROM pagamentos_historico').get().n > 4);
     db.close();
+    // Migração recupera registros antigos uma única vez, sem inventar valores/origem.
+    const Database = require(path.join(raiz, 'node_modules', 'better-sqlite3'));
+    const legado = new Database(path.join(pasta, 'data', 'fut.db'));
+    legado.prepare("DELETE FROM configuracoes WHERE chave = 'pagamentos_historico_v1'").run();
+    legado.prepare('DELETE FROM pagamentos_historico').run();
+    const anterior = legado.prepare("INSERT INTO jogadores(nome) VALUES ('Legado')").run().lastInsertRowid;
+    legado.prepare("INSERT INTO pagamentos(jogador_id, mes_referencia, pago, atualizado_em) VALUES (?, '2025-01', 1, '2025-01-05 12:00:00')").run(anterior);
+    legado.close();
+    const modulo = require.resolve(path.join(pasta, 'db'));
+    delete require.cache[modulo];
+    let migrado = require(modulo);
+    assert.deepEqual(migrado.db.prepare('SELECT origem, valor_centavos, registrado_em FROM pagamentos_historico').get(), { origem:'anterior', valor_centavos:null, registrado_em:'2025-01-05 12:00:00' });
+    migrado.db.close(); delete require.cache[modulo];
+    migrado = require(modulo);
+    assert.equal(migrado.db.prepare('SELECT COUNT(*) n FROM pagamentos_historico').get().n, 1);
+    migrado.db.close();
     console.log('Caixa: testes passaram.');
 } finally { fs.rmSync(pasta, { recursive:true, force:true }); }

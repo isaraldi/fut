@@ -2,11 +2,14 @@
     <div><h1>Pagamentos</h1><p>Registre mensalidades e pagamentos por jogo.</p></div>
     <a class="button-link secondary" href="/mensal">Gerenciar mensalistas</a>
 </div>
-<nav class="jogo-abas" aria-label="Tipos de pagamento">
+<nav class="jogo-abas pagamentos-abas" aria-label="Tipos de pagamento">
     <a href="/pagamentos" <%- aba === 'mensalistas' ? 'aria-current="page"' : '' %>>Mensalidades</a>
     <a href="/pagamentos?aba=avulsas" <%- aba === 'avulsas' ? 'aria-current="page"' : '' %>>Avulsas por jogo</a>
+    <a href="/pagamentos?aba=historico" <%- aba === 'historico' ? 'aria-current="page"' : '' %>>Histórico</a>
 </nav>
-<% if (aba === 'mensalistas') { %>
+<% if (aba === 'historico') { %>
+    <%- include('_pagamentos-historico') %>
+<% } else if (aba === 'mensalistas') { %>
     <div class="card">
         <form method="get" action="/pagamentos">
             <label for="pagamento-mes">Mês de referência</label>
@@ -15,6 +18,12 @@
     </div>
     <%- include('_pagamentos-mensalistas') %>
 <% } else { %>
-    <p class="hint"><%= enquete ? 'Jogadoras com vaga na última enquete: ' + enquete.titulo : 'Nenhum jogo registrado.' %></p>
+    <div class="card"><form method="get" action="/pagamentos">
+        <input type="hidden" name="aba" value="avulsas">
+        <label for="pagamento-jogo">Jogo</label><div class="financeiro-mes">
+        <select id="pagamento-jogo" name="jogo"><% for (const jogo of jogos) { %><option value="<%= jogo.id %>" <%= enquete && enquete.id === jogo.id ? 'selected' : '' %>><%= jogo.titulo %></option><% } %></select><button type="submit" class="secondary">Consultar</button></div>
+    </form></div>
     <%- include('_pagamentos-avulsos') %>
 <% } %>
+
+<style>.pagamentos-abas { flex-wrap:wrap; }</style>

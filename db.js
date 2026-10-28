@@ -661,7 +661,7 @@ function excluirMensagemAgendada(id) {
 // marca (só liga, nunca desliga) o pagamento da mensalidade de um mês — usado tanto pelo
 // toggle manual do painel quanto pela leitura automática de comprovante no grupo
 function marcarPagamentoMensalista(jogadorId, mesReferencia) {
-    definirPagamentoCaixa('mensal', jogadorId, mesReferencia, true);
+    definirPagamentoCaixa('mensal', jogadorId, mesReferencia, true, 'comprovante');
 }
 
 // mensalistas que pagaram um mês de referência — base tanto do token {mensalistas_mes_anterior}
@@ -812,7 +812,7 @@ function definirPapelJogador(jogadorId, papelNovo) {
 
 // mesma ideia, mas pro pagamento avulso de um jogo específico
 function marcarPagamentoAvulso(jogadorId, enqueteId) {
-    definirPagamentoCaixa('avulso', jogadorId, enqueteId, true);
+    definirPagamentoCaixa('avulso', jogadorId, enqueteId, true, 'comprovante');
 }
 
 function getJogadorPorWhatsappId(whatsappId) {
@@ -1028,6 +1028,35 @@ db.exec(`CREATE TABLE IF NOT EXISTS caixa_lancamentos (
 );
 CREATE INDEX IF NOT EXISTS caixa_data ON caixa_lancamentos(data, id);`);
 
+// Histórico independente do caixa: preserva nomes, jogos e correções mesmo após exclusões.
+db.exec(`CREATE TABLE IF NOT EXISTS pagamentos_historico (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    jogador_id INTEGER NOT NULL,
+    nome TEXT NOT NULL,
+    tipo TEXT NOT NULL CHECK(tipo IN ('mensal', 'avulso')),
+    referencia TEXT NOT NULL,
+    jogo TEXT,
+    pago INTEGER NOT NULL,
+    origem TEXT NOT NULL CHECK(origem IN ('manual', 'comprovante', 'anterior')),
+    valor_centavos INTEGER,
+    registrado_em TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS pagamentos_historico_data ON pagamentos_historico(registrado_em, id);`);
+
+// O legado só permite recuperar a última situação, sem supor origem ou valor.
+db.transaction(() => {
+    if (getConfig('pagamentos_historico_v1') === '1') return;
+    db.prepare(`INSERT INTO pagamentos_historico
+        (jogador_id, nome, tipo, referencia, pago, origem, registrado_em)
+        SELECT p.jogador_id, j.nome, 'mensal', p.mes_referencia, p.pago, 'anterior', p.atualizado_em
+        FROM pagamentos p JOIN jogadores j ON j.id = p.jogador_id`).run();
+    db.prepare(`INSERT INTO pagamentos_historico
+        (jogador_id, nome, tipo, referencia, jogo, pago, origem, registrado_em)
+        SELECT p.jogador_id, j.nome, 'avulso', CAST(p.enquete_id AS TEXT), e.titulo, p.pago, 'anterior', p.atualizado_em
+        FROM pagamentos_avulsos p JOIN jogadores j ON j.id = p.jogador_id JOIN enquetes e ON e.id = p.enquete_id`).run();
+    setConfig('pagamentos_historico_v1', '1');
+}).immediate();
+
 function dinheiroCentavos(valor, permitirNegativo = false) {
     const texto = String(valor ?? '').trim().replace(',', '.');
     if (!(permitirNegativo ? /^-?\d{1,9}(\.\d{1,2})?$/ : /^\d{1,9}(\.\d{1,2})?$/).test(texto)) {
@@ -1076,8 +1105,9 @@ function cancelarLancamentoCaixa(id) {
 }
 
 // Bot e painel passam pela mesma transação: repetir comprovante não duplica entrada.
-function definirPagamentoCaixa(tipo, jogadorId, referencia, pago) {
+function definirPagamentoCaixa(tipo, jogadorId, referencia, pago, origemRegistro = 'manual') {
     if (!['mensal', 'avulso'].includes(tipo)) throw new Error('Tipo de pagamento inválido.');
+    if (!['manual', 'comprovante'].includes(origemRegistro)) throw new Error('Origem de pagamento inválida.');
     return db.transaction(() => {
         const tabela = tipo === 'mensal' ? 'pagamentos' : 'pagamentos_avulsos';
         const coluna = tipo === 'mensal' ? 'mes_referencia' : 'enquete_id';
@@ -1103,6 +1133,16 @@ function definirPagamentoCaixa(tipo, jogadorId, referencia, pago) {
                     VALUES (?, 'entrada', ?, ?, ?, ?)`).run(dataCaixaAtual(), valor, descricao, tipo === 'mensal' ? 'Mensalidades' : 'Avulsas', origem);
             }
         }
+        const jogadora = db.prepare('SELECT nome FROM jogadores WHERE id = ?').get(jogadorId);
+        const jogo = tipo === 'avulso' ? db.prepare('SELECT titulo FROM enquetes WHERE id = ?').get(referencia)?.titulo : null;
+        let valor = db.prepare('SELECT valor_centavos FROM caixa_lancamentos WHERE origem = ?').get(origem)?.valor_centavos ?? null;
+        if (valor === null && novoPago) {
+            try { valor = dinheiroCentavos(getConfig(tipo === 'mensal' ? 'valor_mensal' : 'valor_avulso')); }
+            catch { /* Sem preço configurado, registra o pagamento sem estimar o valor. */ }
+        }
+        db.prepare(`INSERT INTO pagamentos_historico
+            (jogador_id, nome, tipo, referencia, jogo, pago, origem, valor_centavos)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).run(jogadorId, jogadora.nome, tipo, String(referencia), jogo, Number(novoPago), origemRegistro, valor);
     }).immediate();
 }
 

@@ -68,6 +68,17 @@ async function main() {
         assert(anterior.includes('Nenhuma movimentação neste mês.'));
         assert(anterior.includes('160,00')); // saldo atual permanece igual ao mudar o filtro
         assert((await fetch(base + '/caixa', { redirect:'manual' })).headers.get('location').includes('/login'));
+        const enquete = dados.db.prepare("INSERT INTO enquetes(message_id,group_id,titulo) VALUES ('historico-teste','teste','Jogo de teste antigo')").run().lastInsertRowid;
+        dados.marcarPagamentoAvulso(jogadora, enquete);
+        const hist = await (await get('/pagamentos?aba=historico')).text();
+        assert(hist.includes('Manual · painel'));
+        assert(hist.includes('Comprovante · bot'));
+        assert(hist.includes('Jogo de teste antigo'));
+        assert(hist.includes('Mensalidade · 10/2026'));
+        const filtro = await (await get('/pagamentos?aba=historico&tipo=avulso&jogo=' + enquete)).text();
+        assert(!filtro.includes('Mensalidade · 10/2026'));
+        assert((await (await get('/pagamentos?aba=historico&busca=Inexistente')).text()).includes('Nenhum registro encontrado.'));
+        assert.equal((await get('/pagamentos?aba=avulsas&jogo=' + enquete)).status, 200);
         const puppeteer = require('puppeteer');
         const browser = await puppeteer.launch({ headless:true, executablePath:'/usr/bin/chromium', args:['--no-sandbox','--disable-dev-shm-usage'] });
         try {
@@ -78,6 +89,8 @@ async function main() {
                 const resposta = await pagina.goto(base + '/caixa');
                 assert([200,304].includes(resposta.status()));
                 assert.equal(await pagina.$eval('h1', el => el.textContent), 'Caixa');
+                await pagina.goto(base + '/pagamentos?aba=historico');
+                assert.equal(await pagina.$eval('h1', el => el.textContent), 'Pagamentos');
                 assert(await pagina.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'Página não deve transbordar');
             }
         } finally { await browser.close(); }
