@@ -1,7 +1,17 @@
 const assert = require('node:assert/strict');
-const { criarExecutorComandosIa } = require('../comandos-ia');
+const { criarExecutorComandosIa, grupoPermitidoIa } = require('../comandos-ia');
 
 async function main() {
+  const config = { enquete_grupo_id: 'principal@g.us' };
+  const getConfig = chave => config[chave] ?? null;
+  assert.equal(grupoPermitidoIa(getConfig, 'principal@g.us'), true);
+  assert.equal(grupoPermitidoIa(getConfig, 'outro@g.us'), false);
+  config.llm_grupos_autorizados = '["principal@g.us","outro@g.us"]';
+  assert.equal(grupoPermitidoIa(getConfig, 'outro@g.us'), true);
+  for (const valor of ['[]', 'inválido', '{}', '["principal@g.us",123]']) {
+    config.llm_grupos_autorizados = valor;
+    assert.equal(grupoPermitidoIa(getConfig, 'principal@g.us'), false);
+  }
   let permitido = true;
   let ativo = true;
   let falhar = false;
@@ -87,6 +97,41 @@ async function main() {
   await executor.tratar(msg);
   assert.equal(erros, 1);
   assert.match(respostas.at(-1), /Confira a situação atual/);
+  let autorizadoGrupo = true;
+  let remetentePermitido = true;
+  let revogarGrupo = false;
+  let chamadasGrupo = 0;
+  let acoesGrupo = 0;
+  const mensagemGrupo = { ...msg, from: 'principal@g.us', mentionedIds: ['bot@c.us'] };
+  const executorGrupo = criarExecutorComandosIa({
+    llm: { habilitada: () => true, interpretarPedido: async () => {
+      chamadasGrupo++;
+      if (revogarGrupo) autorizadoGrupo = false;
+      return { intencao: 'lista', nomes: [] };
+    } },
+    grupoAutorizado: origem => autorizadoGrupo && origem === 'principal@g.us',
+    botMencionado: async m => m.mentionedIds.includes('bot@c.us'),
+    autorizado: async () => remetentePermitido,
+    obterContexto: async () => ({ grupo: 'principal@g.us', enqueteId: 1 }),
+    sincronizar: async () => {}, registrarErro: () => { throw new Error('Erro inesperado'); },
+    acoes: { lista: async m => { assert.equal(m, mensagemGrupo); acoesGrupo++; } },
+  });
+  for (const mudanca of [
+    { mentionedIds: [] }, { mentionedIds: undefined, body: '@Bot sorteia os times' },
+    { mentionedIds: ['outra@c.us'] }, { from: 'outro@g.us' },
+    { hasMedia: true }, { fromMe: true }, { isStatus: true },
+  ]) await executorGrupo.tratar({ ...mensagemGrupo, ...mudanca });
+  remetentePermitido = false;
+  await executorGrupo.tratar(mensagemGrupo);
+  assert.equal(chamadasGrupo, 0);
+  remetentePermitido = true;
+  await executorGrupo.tratar(mensagemGrupo);
+  assert.equal(chamadasGrupo, 1);
+  assert.equal(acoesGrupo, 1);
+  revogarGrupo = true;
+  await executorGrupo.tratar(mensagemGrupo);
+  assert.equal(chamadasGrupo, 2);
+  assert.equal(acoesGrupo, 1);
   console.log('Comandos por IA: rotas, privado, autorização, contexto e falhas OK');
 }
 

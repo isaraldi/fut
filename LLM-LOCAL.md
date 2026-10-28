@@ -47,17 +47,41 @@ Esse processo usa CPU. As variáveis são temporárias; o endereço NAT pode mud
 de reiniciar o WSL. Atualize o endereço no servidor e na configuração se necessário.
 Mantenha a API restrita à máquina/rede privada necessária, pois ela não exige login.
 
+## Grupos autorizados
+
+Sem configuração explícita, somente `enquete_grupo_id` (grupo do jogo no painel) está
+habilitado. Para escolher grupos adicionais, execute no ambiente e banco do bot:
+
+```sh
+node configurar-llm.js grupos 123456789@g.us 987654321@g.us
+```
+
+Os IDs acima são exemplos; substitua pelos IDs reais dos grupos desejados. A lista
+substitui as permissões anteriores, inclusive a permissão padrão do grupo do jogo.
+Para manter só o privado:
+
+```sh
+node configurar-llm.js grupos nenhum
+```
+
+Essa opção grava `llm_grupos_autorizados` na tabela `configuracoes`; não altera as
+flags de ativação da IA, a whitelist de pessoas ou o grupo de destino das enquetes.
+Configuração inválida bloqueia o uso em grupos. Mudanças de permissão são verificadas
+novamente após a inferência, antes de responder ou executar ações.
+
 ## Uso e limites
 
-- A LLM atua somente em conversas privadas com o número do bot: `me manda a lista`,
-  `quem está na espera?`, `como estão as renovações do mensal?`.
-  Mensagens e imagens de grupos nunca são enviadas à LLM, mesmo com o prefixo `bot`.
+- A LLM recebe mensagens privadas e pedidos de grupos autorizados feitos por pessoas
+  na whitelist que **mencionem o bot usando a menção real do WhatsApp**. Por exemplo:
+  `@Bot, sorteie os times`. Digitar o nome do bot sem selecioná-lo na menção não aciona IA.
+  Conversas sem menção e imagens de grupos nunca são enviadas à LLM.
   Os comandos explícitos e o processamento original de comprovantes por OCR nos grupos
   continuam funcionando.
 - Apenas remetentes na whitelist podem executar pedidos. As permissões são verificadas
   antes e depois da inferência. A IA escolhe uma operação permitida e extrai nomes;
   as respostas e alterações usam as funções existentes. Não executa SQL nem código gerado.
-- Todos os comandos existentes têm equivalentes em linguagem natural no privado:
+- Todos os comandos existentes têm equivalentes em linguagem natural. No grupo,
+  acrescente a menção real ao bot:
 
   | Comando | Exemplo de pedido |
   | --- | --- |
@@ -77,7 +101,9 @@ Mantenha a API restrita à máquina/rede privada necessária, pois ela não exig
   `O que você faz?` mostra a ajuda. Envie um pedido por mensagem. Conversas casuais,
   relatos, hipóteses e pedidos negados são classificados como sem ação.
 - Enquetes são publicadas no grupo configurado no painel; sincronização usa esse grupo.
-  Respostas de lista, fechamento, times e consultas vão para o privado que fez o pedido.
+  Os demais pedidos usam o jogo atual do bot e respondem na conversa de origem (grupo
+  ou privado). Autorizar outro grupo permite que ele consulte/opere esse mesmo futebol;
+  não cria um jogo ou banco independente para cada grupo.
   Configuração ausente ou grupo/jogo alterado durante a inferência impede a ação.
 - Faltas substituem a lista completa de faltas, como no comando original. Os nomes
   precisam aparecer no pedido e ser encontrados sem ambiguidade entre as confirmadas;
@@ -88,6 +114,7 @@ Mantenha a API restrita à máquina/rede privada necessária, pois ela não exig
   natural. Havendo prévia pendente, `sim` ou `pode aplicar` também confirma. Somente o
   autor pode confirmar; expiração e validação de mudanças continuam no módulo original.
   A IA não altera nomes ou votos diretamente nem gera uma lista substituta.
+  Nos grupos, a confirmação em linguagem natural também precisa mencionar o bot.
 - Não existem comandos para registrar pagamentos por mensagem de texto. Comprovantes
   continuam no fluxo de OCR/visão descrito abaixo; dizer `paguei` não marca como pago.
 - No privado, OCR com confiança de pelo menos 85, palavra de pagamento, indicação de

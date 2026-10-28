@@ -43,7 +43,7 @@ const {
 const { criarLlmLocal, mensagemPrivadaRecebida } = require('./llm-local');
 const { avaliarOcrComprovante } = require('./comprovantes-ocr');
 const llmLocal = criarLlmLocal({ getConfig });
-const { criarExecutorComandosIa } = require('./comandos-ia');
+const { criarExecutorComandosIa, grupoPermitidoIa } = require('./comandos-ia');
 const {
   montarPlanoDeTimes, montarRodizio, acharPorNomes, montarTextoListaConfirmadas, montarTextoListaAtual, montarTextoListaEspera, montarTextoTimes,
   fechamentoMensalDoMes, mesReferenciaAtual, mesAnterior, montarTextoMensal,
@@ -958,6 +958,17 @@ async function registrarFaltasPorIa(msg, pedido, contexto) {
 
 const executorComandosIa = criarExecutorComandosIa({
   llm: llmLocal,
+  grupoAutorizado: grupo => grupoPermitidoIa(getConfig, grupo),
+  botMencionado: async msg => {
+    const bot = getBotId();
+    if (!bot) return false;
+    if (msg.mentionedIds.includes(bot)) return true;
+    const botCanonico = await resolverIdCanonico(bot);
+    for (const mencionado of msg.mentionedIds) {
+      if (typeof mencionado === 'string' && await resolverIdCanonico(mencionado) === botCanonico) return true;
+    }
+    return false;
+  },
   autorizado: remetenteAutorizado,
   obterContexto: obterContextoIa,
   sincronizar: () => sincronizadorWhatsApp.sincronizar(),

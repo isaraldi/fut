@@ -4,20 +4,37 @@ const AJUDA_IA = 'Você pode pedir: lista do jogo, lista de espera, resumo do me
 const CONSULTAS = new Set(['lista', 'espera', 'mensal', 'ajuda']);
 const DO_GRUPO = new Set(['enquete', 'sincronizar', 'confirmarlista', 'cancelarlista']);
 
-function criarExecutorComandosIa({ llm, autorizado, obterContexto, sincronizar, acoes, registrarErro }) {
+function grupoPermitidoIa(getConfig, grupo) {
+  const configuracao = getConfig('llm_grupos_autorizados');
+  if (configuracao === null || configuracao === undefined || configuracao === '') {
+    return !!grupo && grupo === getConfig('enquete_grupo_id');
+  }
+  try {
+    const grupos = JSON.parse(configuracao);
+    return Array.isArray(grupos) && grupos.every(id => typeof id === 'string' && id.endsWith('@g.us'))
+      && grupos.includes(grupo);
+  } catch { return false; }
+}
+
+function criarExecutorComandosIa({ llm, autorizado, obterContexto, sincronizar, acoes, registrarErro,
+  grupoAutorizado = () => false, botMencionado = async () => false }) {
   async function tratar(msg) {
-    if (!mensagemPrivadaRecebida(msg) || !llm.habilitada('mensagens') || msg.hasMedia
+    const grupo = !msg.fromMe && !msg.isStatus && typeof msg.from === 'string' && msg.from.endsWith('@g.us');
+    if ((!mensagemPrivadaRecebida(msg) && !grupo) || !llm.habilitada('mensagens') || msg.hasMedia
       || !msg.body?.trim() || msg.body.trim().startsWith('!')) return false;
+    if (grupo && (!grupoAutorizado(msg.from) || !Array.isArray(msg.mentionedIds) || !msg.mentionedIds.length)) return false;
     if (!(await autorizado(msg))) return true;
+    if (grupo && !(await botMencionado(msg))) return false;
     const contexto = await obterContexto(msg);
     let pedido;
     try {
       pedido = await llm.interpretarPedido(msg.body, { correcaoPendente: contexto.correcaoPendente });
     } catch {
+      if (!llm.habilitada('mensagens') || !(await autorizado(msg)) || (grupo && !grupoAutorizado(msg.from))) return true;
       await msg.reply('Não consegui interpretar agora. Tente novamente em instantes. Você também pode usar os comandos tradicionais.');
       return true;
     }
-    if (!pedido || !(await autorizado(msg))) return true;
+    if (!pedido || !llm.habilitada('mensagens') || !(await autorizado(msg)) || (grupo && !grupoAutorizado(msg.from))) return true;
     if (pedido.intencao === 'ajuda') {
       await msg.reply(AJUDA_IA);
       return true;
@@ -26,7 +43,7 @@ function criarExecutorComandosIa({ llm, autorizado, obterContexto, sincronizar, 
     if (typeof acao !== 'function') return true;
     try {
       await sincronizar();
-      if (!(await autorizado(msg))) return true;
+      if (!llm.habilitada('mensagens') || !(await autorizado(msg)) || (grupo && !grupoAutorizado(msg.from))) return true;
       const atual = await obterContexto(msg);
       if (!CONSULTAS.has(pedido.intencao)
         && (atual.grupo !== contexto.grupo || atual.enqueteId !== contexto.enqueteId
@@ -48,4 +65,4 @@ function criarExecutorComandosIa({ llm, autorizado, obterContexto, sincronizar, 
   return { tratar };
 }
 
-module.exports = { criarExecutorComandosIa, AJUDA_IA };
+module.exports = { criarExecutorComandosIa, grupoPermitidoIa, AJUDA_IA };
