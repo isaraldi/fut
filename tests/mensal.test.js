@@ -71,6 +71,17 @@ try {
     responder(bia, 'nao', 50);
     assert.equal(papel(ana), 'mensalista');
     assert.equal(papel(bia), 'avulso');
+    // Mensalista da referência recupera a renovação mesmo após desistir.
+    responder(bia, 'sim', 51);
+    assert.equal(papel(bia), 'mensalista');
+    assert.ok(getResumoMensal().renovadas.some(j => j.jogador_id === bia));
+    assert.ok(!getResumoMensal().fila.some(j => j.jogador_id === bia));
+    responder(bia, 'nao', 52);
+    responder(bia, 'sim', 53);
+    assert.equal(papel(bia), 'mensalista');
+    responder(bia, 'nao', 54);
+    assert.equal(papel(bia), 'avulso');
+    assert.equal(dados.getConviteFechamentoMensal('chamada-1', bia).mensalista_referencia, 1);
     responder(clara, 'nao', 60);
     responder(clara, 'sim', 70);
     assert.deepEqual(getResumoMensal().fila.map(j => j.nome), ['Dora', 'Clara']);

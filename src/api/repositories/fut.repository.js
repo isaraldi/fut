@@ -186,7 +186,7 @@ function getMensalistasPagosConsulta39() {
 }
 
 function criarConviteFechamentoMensalConsulta40() {
-    return db.prepare('INSERT INTO fechamento_mensal_convites (jogador_id, message_id, mes_anterior) VALUES (?, ?, ?)');
+    return db.prepare('INSERT INTO fechamento_mensal_convites (jogador_id, message_id, mes_anterior, mensalista_referencia) VALUES (?, ?, ?, 1)');
 }
 
 function getConviteFechamentoMensalConsulta41() {

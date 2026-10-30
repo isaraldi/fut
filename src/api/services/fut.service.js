@@ -246,8 +246,8 @@ function responderChamadaMensal(messageId, jogadorId, resposta, agora = Date.now
             }
             return true; // repetição não muda posição/horário
         }
-        const prioridade = convite.prioridade === 1 &&
-            (convite.resposta === null || (recuperada && convite.expirada === 1)) && agora < ciclo.prazo_em;
+        // A referência do ciclo permanece mesmo após desistência ou mudança de papel.
+        const prioridade = convite.mensalista_referencia === 1 && agora < ciclo.prazo_em;
         const ordem = resposta === 'sim' && !prioridade
             ? consultas.responderChamadaMensalConsulta51().get().n : convite.ordem;
         consultas.responderChamadaMensalConsulta52().run(resposta, prioridade ? 1 : 0, ordem,

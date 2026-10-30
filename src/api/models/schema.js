@@ -152,6 +152,10 @@ db.transaction(() => {
     })) {
         if (!colunasConvites.some(c => c.name === nome)) db.exec(`ALTER TABLE fechamento_mensal_convites ADD COLUMN ${nome} ${definicao}`);
     }
+    if (!colunasConvites.some(c => c.name === 'mensalista_referencia')) {
+        db.exec('ALTER TABLE fechamento_mensal_convites ADD COLUMN mensalista_referencia INTEGER NOT NULL DEFAULT 0');
+        db.exec('UPDATE fechamento_mensal_convites SET mensalista_referencia = prioridade');
+    }
 }).immediate();
 
 const colunasVotosLista = db.prepare('PRAGMA table_info(votos)').all();
