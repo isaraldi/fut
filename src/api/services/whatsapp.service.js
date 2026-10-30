@@ -44,6 +44,7 @@ const { criarLlmLocal, mensagemPrivadaRecebida } = require('./llm-local');
 const { avaliarOcrComprovante } = require('../../utils/comprovantes-ocr');
 const llmLocal = criarLlmLocal({ getConfig });
 const { criarExecutorComandosIa, grupoPermitidoIa } = require('./comandos-ia');
+const { executarPedidoPresenca } = require('./presenca-ia.service');
 const {
   montarPlanoDeTimes, montarRodizio, acharPorNomes, montarTextoListaConfirmadas, montarTextoListaAtual, montarTextoListaEspera, montarTextoTimes,
   fechamentoMensalDoMes, mesReferenciaAtual, mesAnterior, montarTextoMensal,
@@ -938,7 +939,7 @@ const executorComandosIa = criarExecutorComandosIa({
   autorizado: remetenteAutorizado,
   obterContexto: obterContextoIa,
   sincronizar: () => sincronizadorWhatsApp.sincronizar(),
-  registrarErro: () => registrarLog('comando', 'erro', 'Falha ao executar pedido interpretado pela IA; conferir estado antes de repetir.'),
+  registrarErro: () => registrarLog('lista', 'erro', 'Falha ao executar pedido interpretado pela IA; conferir estado antes de repetir.'),
   acoes: {
     lista: msg => enviarListaAtual(msg),
     espera: msg => enviarListaDeEspera(msg),
@@ -951,6 +952,10 @@ const executorComandosIa = criarExecutorComandosIa({
       }
     },
     sincronizar: (msg, pedido, contexto) => sincronizarElencoDoGrupo(msg, contexto.grupo),
+    confirmarpresenca: (msg, pedido, contexto) => msg.reply(executarPedidoPresenca(pedido, contexto)),
+    retirarpresenca: (msg, pedido, contexto) => msg.reply(executarPedidoPresenca(pedido, contexto)),
+    vagas: (msg, pedido, contexto) => msg.reply(executarPedidoPresenca(pedido, contexto)),
+    pendentes: (msg, pedido, contexto) => msg.reply(executarPedidoPresenca(pedido, contexto)),
     faltam: registrarFaltasPorIa,
     limparfaltas: msg => registrarFaltas(msg, 'ninguém'),
     confirmarlista: (msg, pedido, contexto) => corrigirListaPorIa(msg, contexto, true),

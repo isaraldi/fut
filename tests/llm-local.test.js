@@ -51,6 +51,20 @@ async function main() {
   await assert.rejects(llm.interpretarPedido('ninguém está faltando'), /inválidos/);
   conteudo = { intencao: 'enquete', nomes: ['Ana'] };
   await assert.rejects(llm.interpretarPedido('Ana abre enquete'), /inválidos/);
+  for (const [intencao, texto] of [
+    ['retirarpresenca', '@bot a Bruna Fuchs não vai mais'],
+    ['confirmarpresenca', 'Coloca a Bruna Fuchs no próximo jogo'],
+  ]) {
+    conteudo = { intencao, nomes: ['Bruna Fuchs'] };
+    assert.deepEqual(await llm.interpretarPedido(texto), conteudo);
+    await assert.rejects(llm.interpretarPedido('retire a Carol'), /inválidos/);
+    conteudo.nomes = [];
+    await assert.rejects(llm.interpretarPedido(texto), /inválidos/);
+  }
+  for (const intencao of ['vagas', 'pendentes']) {
+    conteudo = { intencao, nomes: [] };
+    assert.equal((await llm.interpretarPedido('consulta')).intencao, intencao);
+  }
   conteudo = { estado: 'concluido', valor_centavos: 5000 };
   assert.deepEqual(await llm.interpretarComprovante('PIX realizado R$50,00', [50, 1000]), { confirmado: true, valor: 50 });
   assert.equal((await llm.interpretarComprovante('R$20,00', [20])).confirmado, false);

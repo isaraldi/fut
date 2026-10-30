@@ -25,7 +25,7 @@ async function main() {
   const executados = [];
   const respostas = [];
   const msg = { from: 'teste@c.us', body: 'pedido de teste', reply: async texto => respostas.push(texto) };
-  const nomes = ['lista', 'espera', 'mensal', 'times', 'fechar', 'enquete', 'sincronizar', 'faltam', 'limparfaltas', 'confirmarlista', 'cancelarlista'];
+  const nomes = ['confirmarpresenca', 'retirarpresenca', 'vagas', 'pendentes', 'lista', 'espera', 'mensal', 'times', 'fechar', 'enquete', 'sincronizar', 'faltam', 'limparfaltas', 'confirmarlista', 'cancelarlista'];
   const acoes = Object.fromEntries(nomes.map(nome => [nome, async (m, p, contexto) => {
     assert.equal(m, msg);
     assert.equal(contexto.grupo, grupo);

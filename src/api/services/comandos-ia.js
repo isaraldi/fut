@@ -1,7 +1,7 @@
 const { mensagemPrivadaRecebida } = require('./llm-local');
 
-const AJUDA_IA = 'Você pode pedir: lista do jogo, lista de espera, resumo do mensal, sortear times, fechar a lista, abrir enquete no grupo configurado, sincronizar elenco, consultar faltas ou definir quem está faltando. Para corrigir a presença, envie a lista completa editada e depois diga “confirmar a correção da lista” ou “cancelar a correção da lista”.';
-const CONSULTAS = new Set(['lista', 'espera', 'mensal', 'ajuda']);
+const AJUDA_IA = 'Você pode pedir: “coloca a Carol no próximo jogo”, “a Bruna Fuchs não vai mais”, “quantas vagas sobraram?”, “quem ainda não confirmou?”, lista do jogo, lista de espera, resumo do mensal, sortear times, fechar a lista, abrir enquete no grupo configurado, sincronizar elenco, consultar faltas ou definir quem está faltando. Para corrigir a presença, envie a lista completa editada e depois diga “confirmar a correção da lista” ou “cancelar a correção da lista”.';
+const CONSULTAS = new Set(['lista', 'espera', 'mensal', 'vagas', 'pendentes', 'ajuda']);
 const DO_GRUPO = new Set(['enquete', 'sincronizar', 'confirmarlista', 'cancelarlista']);
 
 function configuracaoGruposIa(getConfig) {

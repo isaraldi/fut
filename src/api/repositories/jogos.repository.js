@@ -109,7 +109,14 @@ function getVotacaoIdConsulta23() {
     return db.prepare('SELECT * FROM enquetes WHERE id = ?');
 }
 
+function jogadoresParaPresencaIa() {
+    return db.prepare(`SELECT j.id, j.nome, j.papel, j.ativo, v.papel AS papel_voto
+        FROM jogadores j LEFT JOIN votos v ON v.jogador_id = j.id AND v.enquete_id = ?
+        WHERE j.ativo = 1 OR v.papel IS NOT NULL ORDER BY j.nome`);
+}
+
 module.exports = {
+    jogadoresParaPresencaIa,
     getJogoAtualConsulta1,
     getJogoAtualConsulta2,
     postConfirmadosEnviarListaConsulta3,
