@@ -101,7 +101,8 @@ function criarSincronizadorWhatsApp({ client, resolverIdCanonico, limitar = prom
         if (!evento || evento < ciclo.criado_em - 1000 || evento > agora() + 60000) return false;
         const jogador = await jogadorPara(reacao.senderId, false);
         if (!jogador) return false;
-        const emoji = reacao.reaction || '';
+        // Tons de pele e seletores de apresentação mantêm o significado de 👍/👎.
+        const emoji = (reacao.reaction || '').replace(/[\u{1F3FB}-\u{1F3FF}\uFE0E\uFE0F]/gu, '');
         return db.transaction(() => {
             if (getCicloMensalAtual()?.message_id !== messageId) return false;
             const anterior = estado('mensal', messageId, jogador.id);

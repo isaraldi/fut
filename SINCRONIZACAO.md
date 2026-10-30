@@ -14,6 +14,11 @@ interessadas e para renovar dentro do prazo congelado da chamada. Uma pendência
 expirada pode ser corrigida quando o WhatsApp informa uma renovação feita a tempo.
 Aprovações continuam manuais; enquetes fechadas e chamadas antigas são ignoradas.
 
+Na renovação mensal, 👍 e 👎 são reconhecidos com qualquer tom de pele, tanto nos
+eventos ao vivo quanto na recuperação. Mudar apenas o tom mantém a resposta e não
+altera o horário da renovação nem a posição na fila. Reações recuperadas continuam
+usando o horário original do WhatsApp para verificar o prazo.
+
 O WhatsApp disponibiliza o estado que chegou ao cliente, não um histórico
 completo de todas as alterações. Votos com opções vazias e reações de retirada
 recebidas como evento são processados. A ausência de uma reação na consulta,
@@ -30,6 +35,7 @@ Verificação sem iniciar o bot nem acessar WhatsApp:
 
 ```
 node tests/sincronizacao-whatsapp.test.js
+node tests/reacoes-mensal.test.js
 node tests/mensal.test.js
 node tests/configuracoes.test.js
 node tests/jogo-atual.test.js
