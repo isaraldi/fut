@@ -1,5 +1,5 @@
 const consultas = require('../repositories/jogos.repository');
-const { db, getConfig, podeUsarComandos, getConfirmadosDaEnquete, getListaDeEsperaDaEnquete,
+const { db, getConfig, podeUsarComandos, getMensalistasSemConfirmacao, getConfirmadosDaEnquete, getListaDeEsperaDaEnquete,
     marcarVotoManual, getEnqueteOpcoes, getAusentesDaEnquete, setAusentesDaEnquete, registrarLog } = require('./fut.service');
 
 function normalizar(nome) {
@@ -22,6 +22,10 @@ function executarPedidoPresenca(pedido, contexto) {
         if (pedido.intencao === 'vagas') {
             const vagas = enquete.vagas_maximo ? Math.max(0, enquete.vagas_maximo - confirmadasAntes.length) : null;
             return `${referencia}\n${vagas === null ? 'Sem limite de vagas configurado' : `${vagas} vaga(s) disponível(is)`}. ${confirmadasAntes.length} confirmada(s) e ${esperaAntes.length} na espera.`;
+        }
+        if (pedido.intencao === 'pendentesmensalistas') {
+            const pendentes = getMensalistasSemConfirmacao(enquete.id);
+            return `${referencia}\n${pendentes.length ? 'Mensalistas que ainda não confirmaram presença:\n' + pendentes.map(j => `• ${j.nome}${j.resposta ? ` — respondeu: ${j.resposta}` : ''}`).join('\n') : 'Todas as mensalistas ativas já confirmaram presença.'}`;
         }
         if (pedido.intencao === 'pendentes') {
             const pendentes = jogadoras.filter(j => j.ativo && !j.papel_voto);

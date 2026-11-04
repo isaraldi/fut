@@ -17,12 +17,14 @@ async function main() {
   let modo = 'normal';
   let chamadas = 0;
   let imagemEnviada;
+  let prompt;
   const llm = criarLlmLocal({
     getConfig: chave => config[chave],
     fetchImpl: async (url, opcoes) => {
       chamadas++;
       assert.equal(url.pathname, '/api/chat');
       const corpo = JSON.parse(opcoes.body);
+      prompt = corpo.messages[0].content;
       const visual = !!corpo.messages[1].images;
       assert.equal(corpo.model, visual ? 'qwen3-vl:2b-instruct' : 'qwen3:4b-instruct');
       imagemEnviada = corpo.messages[1].images;
@@ -65,6 +67,13 @@ async function main() {
     conteudo = { intencao, nomes: [] };
     assert.equal((await llm.interpretarPedido('consulta')).intencao, intencao);
   }
+  conteudo = { intencao: 'pendentesmensalistas', nomes: [] };
+  assert.deepEqual(await llm.interpretarPedido('quem falta confirmar presença das mensalistas?'), conteudo);
+  assert.match(prompt, /quem falta confirmar presença das mensalistas\?/);
+  assert.match(prompt, /somente mensalistas ativas sem presença confirmada/);
+  assert.match(prompt, /renovação do vínculo mensal/);
+  conteudo = { intencao: 'pendentesmensalistas', nomes: ['Ana'] };
+  await assert.rejects(llm.interpretarPedido('Ana ainda não confirmou?'), /inválidos/);
   conteudo = { estado: 'concluido', valor_centavos: 5000 };
   assert.deepEqual(await llm.interpretarComprovante('PIX realizado R$50,00', [50, 1000]), { confirmado: true, valor: 50 });
   assert.equal((await llm.interpretarComprovante('R$20,00', [20])).confirmado, false);

@@ -63,6 +63,32 @@ async function main() {
         // Correções manuais continuam permitidas mesmo após o fechamento, como no painel.
         dados.fecharEnquete(enqueteId);
         assert.match(pedir('retirarpresenca', 'Carol'), /retirada/);
+        const diana = Number(inserir.run('Diana Teste', 'diana@c.us', 'mensalista', 0).lastInsertRowid);
+        const elisa = Number(inserir.run('Elisa Teste', 'elisa@c.us', 'mensalista', 0).lastInsertRowid);
+        const inativa = Number(inserir.run('Inativa Teste', 'inativa@c.us', 'mensalista', 0).lastInsertRowid);
+        db.prepare('UPDATE jogadores SET ativo = 0 WHERE id = ?').run(inativa);
+        // O papel atual define quem é mensalista, mesmo que tenha confirmado como avulsa.
+        db.prepare("UPDATE jogadores SET papel = 'mensalista' WHERE id = ?").run(carol);
+        const novoJogo = Number(db.prepare("INSERT INTO enquetes(message_id, group_id, titulo, vagas_maximo) VALUES ('novo-jogo-ia', ?, 'Novo jogo', 1)").run(grupo).lastInsertRowid);
+        const votar = db.prepare('INSERT INTO votos(enquete_id, jogador_id, opcao, papel) VALUES (?, ?, ?, ?)');
+        votar.run(novoJogo, bruna, 'Eu vou', 'mensalista');
+        votar.run(novoJogo, carol, 'Eu vou', 'avulso'); // confirmação na espera também conta
+        votar.run(novoJogo, elisa, 'Não vou', null);
+        votar.run(enqueteId, diana, 'Eu vou', 'mensalista'); // confirmação de outro jogo não conta
+        const consultar = intencao => executarPedidoPresenca({ intencao, nomes: [] }, { ...contexto, enqueteId: novoJogo });
+        const votosAntes = db.prepare('SELECT * FROM votos ORDER BY id').all();
+        const mensalistas = consultar('pendentesmensalistas');
+        assert.match(mensalistas, /Mensalistas que ainda não confirmaram presença/);
+        assert.match(mensalistas, /Diana Teste/);
+        assert.match(mensalistas, /Elisa Teste — respondeu: Não vou/);
+        for (const nome of ['Bruna Silva', 'Bruna Fuchs', 'Carol Lima', 'Inativa Teste', 'Bia Reis']) assert(!mensalistas.includes(nome), nome);
+        assert.match(consultar('pendentes'), /Bruna Silva/); // consulta geral continua incluindo avulsas
+        assert.deepEqual(db.prepare('SELECT * FROM votos ORDER BY id').all(), votosAntes);
+        assert.match(executarPedidoPresenca({ intencao: 'pendentesmensalistas' }, { ...contexto, enqueteId: novoJogo, autor: 'outra@c.us' }), /permissão/);
+        assert.match(pedir('pendentesmensalistas'), /jogo mudou/);
+        votar.run(novoJogo, diana, 'Eu vou', 'mensalista');
+        db.prepare("UPDATE votos SET papel = 'mensalista' WHERE enquete_id = ? AND jogador_id = ?").run(novoJogo, elisa);
+        assert.match(consultar('pendentesmensalistas'), /Todas as mensalistas ativas já confirmaram presença/);
         console.log('Presença por IA: permissões, ambiguidade, vagas, prioridade, repetição e sincronização OK');
     } finally {
         if (dados) dados.db.close();

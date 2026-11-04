@@ -956,6 +956,7 @@ const executorComandosIa = criarExecutorComandosIa({
     retirarpresenca: (msg, pedido, contexto) => msg.reply(executarPedidoPresenca(pedido, contexto)),
     vagas: (msg, pedido, contexto) => msg.reply(executarPedidoPresenca(pedido, contexto)),
     pendentes: (msg, pedido, contexto) => msg.reply(executarPedidoPresenca(pedido, contexto)),
+    pendentesmensalistas: (msg, pedido, contexto) => msg.reply(executarPedidoPresenca(pedido, contexto)),
     faltam: registrarFaltasPorIa,
     limparfaltas: msg => registrarFaltas(msg, 'ninguém'),
     confirmarlista: (msg, pedido, contexto) => corrigirListaPorIa(msg, contexto, true),

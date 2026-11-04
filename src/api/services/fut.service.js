@@ -374,6 +374,10 @@ function separarConfirmadosPorVagas(enqueteId) {
     };
 }
 
+function getMensalistasSemConfirmacao(enqueteId) {
+    return consultas.mensalistasSemConfirmacao().all(enqueteId);
+}
+
 function getConfirmadosDaEnquete(enqueteId) {
     return separarConfirmadosPorVagas(enqueteId).dentro;
 }
@@ -572,6 +576,7 @@ module.exports = {
     reativarJogador,
     registrarMudancaPapel,
     getPapelHistorico,
+    getMensalistasSemConfirmacao,
     getConfirmadosDaEnquete,
     getListaDeEsperaDaEnquete,
     getAvaliacoesDaEnquete,

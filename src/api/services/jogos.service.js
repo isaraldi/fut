@@ -1,4 +1,4 @@
-const { db, marcarVotoManual, getResumoMensal, getConfig, setAusentesDaEnquete, getConfirmadosDaEnquete, getListaDeEsperaDaEnquete, getAvaliacoesDaEnquete, registrarAvaliacao, criarEnvioImediato, fecharEnquete } = require('./fut.service');
+const { db, marcarVotoManual, getResumoMensal, getConfig, setAusentesDaEnquete, getMensalistasSemConfirmacao, getConfirmadosDaEnquete, getListaDeEsperaDaEnquete, getAvaliacoesDaEnquete, registrarAvaliacao, criarEnvioImediato, fecharEnquete } = require('./fut.service');
 const { montarRodizio, montarTextoListaConfirmadas, montarTextoTimes, mesReferenciaAtual } = require('../../utils/mensagens-prontas');
 
 const consultas = require('../repositories/jogos.repository');
@@ -14,10 +14,11 @@ function getJogoAtual(entrada) {
     const aba = ['presenca', 'espera', 'times'].includes(entrada.query.aba) ? entrada.query.aba : 'presenca';
     const confirmados = enquete ? getConfirmadosDaEnquete(enquete.id) : [];
     const listaDeEspera = enquete ? getListaDeEsperaDaEnquete(enquete.id) : [];
+    const mensalistasPendentes = enquete ? getMensalistasSemConfirmacao(enquete.id) : [];
     const { votos, grupos } = enquete ? carregarVotosAgrupados(enquete.id) : { votos: [], grupos: {} };
     const jogadores = consultas.getJogoAtualConsulta2().all();
     return ({ view: 'jogo-atual', dados: {
-        enquete, aba, confirmados, listaDeEspera, grupos, jogadores, totalVotos: votos.length,
+        enquete, aba, confirmados, listaDeEspera, mensalistasPendentes, grupos, jogadores, totalVotos: votos.length,
         ...(aba === 'times' ? dadosDosTimes(enquete, confirmados) : {}),
         ok: entrada.query.ok,
     }, status: 200 });

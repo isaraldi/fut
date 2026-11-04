@@ -307,6 +307,13 @@ function separarConfirmadosPorVagasConsulta67() {
     return db.prepare('SELECT vagas_maximo FROM enquetes WHERE id = ?');
 }
 
+function mensalistasSemConfirmacao() {
+    return db.prepare(`SELECT j.id, j.nome, v.opcao AS resposta
+        FROM jogadores j LEFT JOIN votos v ON v.jogador_id = j.id AND v.enquete_id = ?
+        WHERE j.ativo = 1 AND j.papel = 'mensalista' AND v.papel IS NULL
+        ORDER BY j.nome COLLATE NOCASE`);
+}
+
 function getAvaliacoesDaEnqueteConsulta68() {
     return db.prepare('SELECT jogador_id, avaliador_id, nota FROM avaliacoes WHERE enquete_id = ?');
 }
@@ -473,6 +480,7 @@ module.exports = {
     getPapelHistoricoConsulta65,
     separarConfirmadosPorVagasConsulta66,
     separarConfirmadosPorVagasConsulta67,
+    mensalistasSemConfirmacao,
     getAvaliacoesDaEnqueteConsulta68,
     recalcularNivelConsulta69,
     recalcularNivelConsulta70,

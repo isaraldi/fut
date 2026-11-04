@@ -123,6 +123,41 @@ async function main() {
         assert.match(await html(`/jogos/${proximo}?aba=avaliacoes`), /<strong>1,0<\/strong> \/ 5/);
         const historico = await html('/jogos');
         assert.match(historico, /2 com vaga · 1 na espera · 3 notas/);
+        const diana = Number(inserir.run('Diana <teste>', 'mensalista').lastInsertRowid);
+        const elisa = Number(inserir.run('Elisa de teste', 'mensalista').lastInsertRowid);
+        const dora = Number(inserir.run('Dora na espera', 'mensalista').lastInsertRowid);
+        const inativa = Number(inserir.run('Inativa de teste', 'mensalista').lastInsertRowid);
+        dados.db.prepare('UPDATE jogadores SET ativo = 0 WHERE id = ?').run(inativa);
+        const atual = Number(dados.db.prepare("INSERT INTO enquetes(message_id, group_id, titulo, vagas_maximo) VALUES ('pendentes-mensal', 'teste@g.us', 'Jogo com pendências', 1)").run().lastInsertRowid);
+        votar.run(jogo, diana, 'mensalista', '2026-10-01 10:00:03');
+        votar.run(atual, ana, 'mensalista', '2026-11-01 10:00:00');
+        votar.run(atual, dora, 'mensalista', '2026-11-01 10:00:01');
+        dados.db.prepare("INSERT INTO votos(enquete_id, jogador_id, opcao) VALUES (?, ?, 'Não vou')").run(atual, elisa);
+        const secaoPendentes = pagina => {
+            const secao = pagina.match(/<section[^>]*id="mensalistas-pendentes"[^>]*>([\s\S]*?)<\/section>/);
+            assert(secao, 'Seção de mensalistas sem confirmação deve estar visível');
+            return secao[1];
+        };
+        let presenca = await html('/jogo/atual');
+        assert.match(presenca, /href="\/jogo\/atual\?aba=presenca#mensalistas-pendentes"/);
+        let pendentes = secaoPendentes(presenca);
+        assert.match(pendentes, /Mensalistas sem presença confirmada \(2\)/);
+        assert.match(pendentes, /Diana &lt;teste&gt;/);
+        assert(!pendentes.includes('Diana <teste>'));
+        assert.match(pendentes, /Sem resposta/);
+        assert.match(pendentes, /Elisa de teste/);
+        assert.match(pendentes, /Respondeu: Não vou/);
+        for (const nome of ['Bia de teste', 'Clara de teste', 'Inativa de teste', 'Ana de teste', 'Dora na espera']) assert(!pendentes.includes(nome), nome);
+        assert(dados.getListaDeEsperaDaEnquete(atual).some(j => j.id === dora));
+        await post(`/jogos/${atual}/confirmar/${ana}/remover`, { _csrf: csrf, voltarAtual: '1' });
+        assert.match(secaoPendentes(await html('/jogo/atual')), /Ana de teste/);
+        for (const id of [ana, diana, elisa]) {
+            const confirmacao = await post(`/jogos/${atual}/confirmar`, { _csrf: csrf, voltarAtual: '1', jogador_id: String(id) });
+            assert.equal(confirmacao.status, 302);
+        }
+        pendentes = secaoPendentes(await html('/jogo/atual'));
+        assert.match(pendentes, /Mensalistas sem presença confirmada \(0\)/);
+        assert.match(pendentes, /Todas as mensalistas ativas já confirmaram presença/);
         console.log('OK: início, vagas/espera, abas, histórico, médias por jogo, confirmações, proteção contra enquete desatualizada e CSRF.');
     } finally {
         if (dados?.db.open) dados.db.close();

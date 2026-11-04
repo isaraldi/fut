@@ -743,8 +743,15 @@ code {
 .jogo-resumo, .inicio-jogo { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 20px; }
 .jogo-resumo h2, .inicio-jogo h2 { color: var(--text); font-size: 1.2rem; margin-bottom: 8px; }
 .jogo-numeros { display: flex; flex-wrap: wrap; gap: 20px; }
-.jogo-numeros span { display: flex; flex-direction: column; color: var(--muted); font-size: 0.85rem; }
+.jogo-numeros span, .jogo-numeros a { display: flex; flex-direction: column; color: var(--muted); font-size: 0.85rem; }
+.jogo-numeros a { text-decoration: none; }
+.jogo-numeros a:hover { color: var(--primary); }
 .jogo-numeros strong { color: var(--text); font-size: 1.5rem; }
+.mensalistas-pendentes { border-top: 3px solid var(--warning); scroll-margin-top: 20px; }
+.mensalistas-pendentes-lista { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: 8px 24px; }
+.mensalistas-pendentes-lista li { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+.mensalistas-pendentes-lista li > span:first-child { min-width: 0; overflow-wrap: anywhere; }
+.mensalistas-pendentes-lista .badge { flex-shrink: 0; max-width: 60%; white-space: normal; overflow-wrap: anywhere; }
 .jogo-abas { display: flex; gap: 8px; border-bottom: 1px solid var(--border); margin: 0 0 20px; }
 .jogo-abas a { padding: 12px 16px; text-decoration: none; color: var(--muted); border-bottom: 3px solid transparent; font-weight: 600; }
 .jogo-abas a[aria-current=page] { color: var(--primary); border-color: var(--primary); }

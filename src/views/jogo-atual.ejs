@@ -24,6 +24,7 @@
             <span><strong><%= confirmados.length %><%= enquete.vagas_maximo ? '/' + enquete.vagas_maximo : '' %></strong> com vaga</span>
             <span><strong><%= listaDeEspera.length %></strong> na espera</span>
             <span><strong><%= totalVotos %></strong> respostas</span>
+            <a href="/jogo/atual?aba=presenca#mensalistas-pendentes"><strong><%= mensalistasPendentes.length %></strong> mensalistas sem confirmar</a>
         </div>
     </div>
     <nav class="jogo-abas" aria-label="Seções do jogo atual">
@@ -44,6 +45,19 @@
             </div>
             <%- include('_jogo-participantes', { participantes: confirmados, mensagemVazia: 'Ainda não há jogadoras com vaga confirmada.' }) %>
         </div>
+        <section class="card mensalistas-pendentes" id="mensalistas-pendentes" aria-labelledby="mensalistas-pendentes-titulo">
+            <h2 id="mensalistas-pendentes-titulo">Mensalistas sem presença confirmada (<%= mensalistasPendentes.length %>)</h2>
+            <p class="hint">Mensalistas ativas que ainda não confirmaram presença neste jogo.</p>
+            <% if (mensalistasPendentes.length) { %>
+                <ul class="mensalistas-pendentes-lista">
+                    <% mensalistasPendentes.forEach(j => { %>
+                        <li><span><%= j.nome %></span><span class="badge aviso"><%= j.resposta ? 'Respondeu: ' + j.resposta : 'Sem resposta' %></span></li>
+                    <% }) %>
+                </ul>
+            <% } else { %>
+                <p class="empty">Todas as mensalistas ativas já confirmaram presença.</p>
+            <% } %>
+        </section>
         <details class="form-help">
             <summary>Confirmar presença manualmente</summary>
             <%- include('_confirmar-manual', { enquete, jogadores, voltarAtual: true }) %>
