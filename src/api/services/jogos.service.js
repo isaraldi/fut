@@ -1,6 +1,6 @@
 const historico = require('./enquete-historico.service');
 const { db, marcarVotoManual, getResumoMensal, getConfig, setAusentesDaEnquete, getMensalistasSemConfirmacao, getConfirmadosDaEnquete, getListaDeEsperaDaEnquete, getAvaliacoesDaEnquete, registrarAvaliacao, criarEnvioImediato, fecharEnquete } = require('./fut.service');
-const { montarRodizio, montarTextoListaConfirmadas, montarTextoTimes, mesReferenciaAtual } = require('../../utils/mensagens-prontas');
+const { montarRodizio, distribuirReservasPorTime, montarTextoListaConfirmadas, montarTextoTimes, mesReferenciaAtual } = require('../../utils/mensagens-prontas');
 
 const consultas = require('../repositories/jogos.repository');
 const { sucesso, carregarVotosAgrupados, textoOpcaoConfirmada, configDeTimes, dadosDosTimes, agruparPorDestino } = require('./painel-support.service');
@@ -165,12 +165,14 @@ function postTimesEnviar(entrada) {
     if (grupos.A.length === 0 && grupos.B.length === 0) return ({ destino: '/jogo/atual?aba=times' });
 
     const { minutos, duracao } = configDeTimes();
+    const reservasPorTime = distribuirReservasPorTime(times, grupos.reserva);
     const texto = montarTextoTimes(
         enquete.titulo,
         times.map((time) => time.map((j) => j.nome)),
         grupos.reserva.map((j) => j.nome),
-        montarRodizio(times, grupos.reserva, minutos, duracao),
+        montarRodizio(times, grupos.reserva, minutos, duracao, reservasPorTime),
         getConfig('times_mensagem'),
+        reservasPorTime.map((time) => time.map((j) => j.nome)),
     );
     criarEnvioImediato(grupoId, texto, 'times');
 

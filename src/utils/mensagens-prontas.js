@@ -134,67 +134,44 @@ function montarPlanoDeTimes(jogadores, porTime = 5) {
 const LETRAS_TIMES = ['A', 'B', 'C'];
 const BOLINHAS_TIMES = ['🔵', '🔴', '🟢']; // mesmas cores dos blocos de times na mensagem
 
-// ordem de rodízio, sorteada. 3 times: o que está esperando entra no lugar do que está há mais
-// rodadas seguidas em campo (empate é sorteado). 2 times + reservas: reservas entram no lugar de quem está há mais tempo
-// em campo (1 por intervalo; com 2+ reservas, 1 por time por intervalo ou mais). Goleiras ficam fora do rodízio (não trocam de lugar).
-function montarRodizio(times, reservas, minutos = 10, duracao = 60) {
+// Define o vínculo uma única vez, compartilhado pela escalação e pelo rodízio.
+function distribuirReservasPorTime(times, reservas) {
+    const bancos = times.map(() => []);
+    if (times.length !== 2) return bancos;
+    const ordem = embaralhar([0, 1]).filter((t) => times[t].some((j) => j.posicao !== 'goleira'));
+    if (ordem.length > 0) {
+        embaralhar(reservas.filter((j) => j.posicao !== 'goleira')).forEach((j, i) => {
+            bancos[ordem[i % ordem.length]].push(j);
+        });
+    }
+    return bancos;
+}
+
+// Com 2 times, cada reserva
+// pertence a um time durante todo o rodízio. Goleiras não participam das trocas.
+function montarRodizio(times, reservas, minutos = 10, duracao = 60, reservasPorTime = distribuirReservasPorTime(times, reservas)) {
     const passo = Number.isFinite(minutos) && minutos >= 1 ? minutos : 10;
     const total = Math.max(1, Math.floor((Number.isFinite(duracao) && duracao >= passo ? duracao : 60) / passo));
     const linhas = [];
 
-    if (times.length === 3) {
-        let [emCampo1, emCampo2, espera] = embaralhar([0, 1, 2]);
-        const seguidas = [0, 0, 0]; // rodadas seguidas em campo de cada time
-        for (let r = 0; r < total; r++) {
-            seguidas[emCampo1]++;
-            seguidas[emCampo2]++;
-            const time = (t) => `${BOLINHAS_TIMES[t]} Time ${LETRAS_TIMES[t]}`;
-            linhas.push(`*${r + 1}) ${r * passo}–${(r + 1) * passo} min*\n${time(emCampo1)} × ${time(emCampo2)}\n${time(espera)} espera ⏸️\n`);
-            // sai quem está há mais rodadas seguidas em campo; empate é sorteado
-            let sai;
-            if (seguidas[emCampo1] === seguidas[emCampo2]) sai = Math.random() < 0.5 ? emCampo1 : emCampo2;
-            else sai = seguidas[emCampo1] > seguidas[emCampo2] ? emCampo1 : emCampo2;
-            const fica = sai === emCampo1 ? emCampo2 : emCampo1;
-            seguidas[sai] = 0;
-            [emCampo1, emCampo2, espera] = [fica, espera, sai];
-        }
-    } else if (times.length === 2 && reservas.length > 0) {
-        let banco = embaralhar(reservas.filter((j) => j.posicao !== 'goleira'));
-        // posições em campo: { jogador, time, desde }
-        let emCampo = [];
-        times.forEach((time, t) => time.forEach((j) => {
-            if (j.posicao !== 'goleira') emCampo.push({ jogador: j, time: t, desde: 0 });
-        }));
-        // 1 reserva só: troca 1 por intervalo. 2+ (pelo menos 1 por time): troca 1 por time por
-        // intervalo, e com mais reservas ainda, mais trocas — sempre em número par, metade de cada time
-        const trocasPorIntervalo = banco.length >= 2 ? 2 * Math.floor(banco.length / 2) : 1;
-        for (let r = 1; r < total && banco.length > 0; r++) {
-            const trocas = [];
-            const saindoAgora = [];
-            let timeDaVez = Math.random() < 0.5 ? 0 : 1;
-            for (let k = 0; k < trocasPorIntervalo && banco.length > 0; k++) {
-                const disponiveis = emCampo.filter((e) => !saindoAgora.includes(e));
-                const doTime = disponiveis.filter((e) => e.time === timeDaVez);
-                const base = doTime.length > 0 ? doTime : disponiveis;
-                if (base.length === 0) break;
-                const menorDesde = Math.min(...base.map((e) => e.desde));
-                const saindo = embaralhar(base.filter((e) => e.desde === menorDesde))[0];
-                saindoAgora.push(saindo);
-                trocas.push({ saindo, entrando: banco.shift() });
-                timeDaVez = 1 - timeDaVez;
+    if (times.length === 2 && reservas.length > 0) {
+        const bancos = reservasPorTime.map((banco) => [...banco]);
+        const filas = times.map((time) => embaralhar(time.filter((j) => j.posicao !== 'goleira')));
+        if (!bancos.some((banco) => banco.length > 0) || total <= 1) return '';
+        bancos.forEach((banco, t) => {
+            if (banco.length === 0 || filas[t].length === 0) return;
+            const ordem = [...filas[t], ...banco];
+            const quantidade = Math.min(banco.length, filas[t].length);
+            const etapas = [];
+            for (let i = 0; i < ordem.length; i += quantidade) {
+                etapas.push(ordem.slice(i, i + quantidade).map((j) => j.nome).join(', '));
             }
-            if (trocas.length === 0) break;
-            linhas.push(`*${r * passo} min*\n` + trocas.map(({ saindo, entrando }) =>
-                `${BOLINHAS_TIMES[saindo.time]} ${entrando.nome} entra no lugar de ${saindo.jogador.nome}`).join('\n') + '\n');
-            trocas.forEach(({ saindo, entrando }) => {
-                banco.push(saindo.jogador);
-                emCampo = emCampo.map((e) => (e === saindo ? { jogador: entrando, time: saindo.time, desde: r } : e));
-            });
-        }
+            linhas.push(`${BOLINHAS_TIMES[t]} ${etapas.join(' → ')}`);
+        });
     }
 
     if (linhas.length === 0) return '';
-    return `🔁 *Rodízio (a cada ${passo} min)*\n\n${linhas.join('\n')}`;
+    return `🔁 *Quem sai, na ordem*\n\n${linhas.join('\n')}`;
 }
 
 // tira acento/maiúscula pra comparar nomes digitados à mão (!faltam ana, bia)
@@ -307,24 +284,24 @@ function montarTextoListaEspera(enquete, listaDeEspera, template = TEMPLATE_LIST
 
 // nomesPorTime: array de arrays de string (2 ou 3 times) — usado tanto com nomes de jogadores
 // quanto com nomes vindos de inputs do painel. reservas: array de string. rodizioTexto: bloco já
-// montado por montarRodizio ('' = sem rodízio). Blocos extras (Time C, reservas, rodízio) que o
+// montado por montarRodizio ('' = sem rodízio). Blocos extras (Time C e rodízio) que o
 // template salvo no painel não menciona são anexados no fim, pra não sumirem de templates antigos.
-function montarTextoTimes(tituloJogo, nomesPorTime, reservas = [], rodizioTexto = '', template = TEMPLATE_TIMES_PADRAO) {
+function montarTextoTimes(tituloJogo, nomesPorTime, reservas = [], rodizioTexto = '', template = TEMPLATE_TIMES_PADRAO, reservasPorTime = []) {
     const lista = (nomes) => nomes.map((nome) => `- ${nome}\n`).join('');
+    const listaTime = (t) => lista(nomesPorTime[t] || []) +
+        lista((reservasPorTime[t] || []).map((nome) => `${nome} 🪑`));
     const blocoTimeC = nomesPorTime[2] ? `\n🟢 *Time C:*\n${lista(nomesPorTime[2])}` : '';
-    const blocoReservas = reservas.length > 0 ? `\n🪑 *Reservas:*\n${lista(reservas)}` : '';
     const blocoRodizio = rodizioTexto ? `\n${rodizioTexto}` : '';
 
     let texto = aplicarTokens(template, {
         titulo: tituloJogo,
-        time_a: lista(nomesPorTime[0] || []),
-        time_b: lista(nomesPorTime[1] || []),
+        time_a: listaTime(0),
+        time_b: listaTime(1),
         time_c: blocoTimeC,
-        reservas: blocoReservas,
+        reservas: '',
         rodizio: blocoRodizio,
     });
     if (blocoTimeC && !template.includes('{time_c}')) texto += blocoTimeC;
-    if (blocoReservas && !template.includes('{reservas}')) texto += blocoReservas;
     if (blocoRodizio && !template.includes('{rodizio}')) texto += blocoRodizio;
     return texto;
 }
@@ -349,6 +326,7 @@ module.exports = {
     balancearTimes,
     montarPlanoDeTimes,
     montarRodizio,
+    distribuirReservasPorTime,
     acharPorNomes,
     montarTextoListaConfirmadas,
     montarTextoListaAtual,

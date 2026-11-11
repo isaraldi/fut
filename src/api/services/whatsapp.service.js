@@ -46,7 +46,7 @@ const llmLocal = criarLlmLocal({ getConfig });
 const { criarExecutorComandosIa, grupoPermitidoIa } = require('./comandos-ia');
 const { executarPedidoPresenca } = require('./presenca-ia.service');
 const {
-  montarPlanoDeTimes, montarRodizio, acharPorNomes, montarTextoListaConfirmadas, montarTextoListaAtual, montarTextoListaEspera, montarTextoTimes,
+  montarPlanoDeTimes, montarRodizio, distribuirReservasPorTime, acharPorNomes, montarTextoListaConfirmadas, montarTextoListaAtual, montarTextoListaEspera, montarTextoTimes,
   fechamentoMensalDoMes, mesReferenciaAtual, mesAnterior, montarTextoMensal,
 } = require('../../utils/mensagens-prontas');
 
@@ -681,12 +681,14 @@ async function enviarTimesSorteados(msg) {
   const minutos = parseInt(getConfig('jogo_rodizio_minutos'), 10);
   const duracao = parseInt(getConfig('jogo_duracao_minutos'), 10);
   const { times, reservas } = montarPlanoDeTimes(confirmados, parseInt(getConfig('jogo_jogadoras_por_time'), 10));
+  const reservasPorTime = distribuirReservasPorTime(times, reservas);
   const texto = montarTextoTimes(
     enquete.titulo,
     times.map((time) => time.map((j) => j.nome)),
     reservas.map((j) => j.nome),
-    montarRodizio(times, reservas, minutos, duracao),
+    montarRodizio(times, reservas, minutos, duracao, reservasPorTime),
     getConfig('times_mensagem'),
+    reservasPorTime.map((time) => time.map((j) => j.nome)),
   );
 
   await msg.reply(texto);
