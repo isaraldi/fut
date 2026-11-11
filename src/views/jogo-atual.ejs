@@ -79,4 +79,9 @@
 <% } %>
 <script src="/jogo-atual.js" defer></script>
 
-<% if (enquete) { %><%- include('_enquete-historico') %><% } %>
+<% if (enquete) { %>
+    <details class="form-help">
+        <summary>Ver histórico de respostas da enquete (<%= historicoRespostas.length %>)</summary>
+        <%- include('_enquete-historico') %>
+    </details>
+<% } %>
