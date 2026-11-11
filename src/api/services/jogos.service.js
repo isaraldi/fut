@@ -1,3 +1,4 @@
+const historico = require('./enquete-historico.service');
 const { db, marcarVotoManual, getResumoMensal, getConfig, setAusentesDaEnquete, getMensalistasSemConfirmacao, getConfirmadosDaEnquete, getListaDeEsperaDaEnquete, getAvaliacoesDaEnquete, registrarAvaliacao, criarEnvioImediato, fecharEnquete } = require('./fut.service');
 const { montarRodizio, montarTextoListaConfirmadas, montarTextoTimes, mesReferenciaAtual } = require('../../utils/mensagens-prontas');
 
@@ -18,7 +19,7 @@ function getJogoAtual(entrada) {
     const { votos, grupos } = enquete ? carregarVotosAgrupados(enquete.id) : { votos: [], grupos: {} };
     const jogadores = consultas.getJogoAtualConsulta2().all();
     return ({ view: 'jogo-atual', dados: {
-        enquete, aba, confirmados, listaDeEspera, mensalistasPendentes, grupos, jogadores, totalVotos: votos.length,
+        historicoRespostas: enquete ? historico.listar(enquete.id) : [], enquete, aba, confirmados, listaDeEspera, mensalistasPendentes, grupos, jogadores, totalVotos: votos.length,
         ...(aba === 'times' ? dadosDosTimes(enquete, confirmados) : {}),
         ok: entrada.query.ok,
     }, status: 200 });
@@ -50,7 +51,10 @@ function getHome(entrada) {
     const pagamentosMes = consultas.getConsulta5().get(mes);
     const avulsas = confirmados.filter(j => j.papel === 'avulso');
     const pagamentoAvulso = consultas.getConsulta6();
-    const avulsasPendentes = jogoAtual ? avulsas.filter(j => !pagamentoAvulso.get(j.id, jogoAtual.id)?.pago).length : 0;
+    const avulsasPendentes = jogoAtual ? avulsas.filter(j => {
+        const status = pagamentoAvulso.get(j.id, jogoAtual.id);
+        return !status?.pago && !status?.isento;
+    }).length : 0;
     const resumoMensal = getResumoMensal();
     const jogadoras = consultas.getConsulta7().get();
     const ultimosJogos = consultas.getConsulta8().all()
@@ -82,7 +86,7 @@ function getJogosId(entrada) {
     const avaliacoes = consultas.getJogosIdConsulta12().all(enquete.id);
     const resumoAvaliacoes = consultas.getJogosIdConsulta13().get(enquete.id);
     return ({ view: 'jogo-detalhe', dados: {
-        usuario: entrada.usuario, enquete, grupos, jogadores, confirmados, listaDeEspera,
+        historicoRespostas: historico.listar(enquete.id), usuario: entrada.usuario, enquete, grupos, jogadores, confirmados, listaDeEspera,
         totalVotos: votos.length, avaliacoes, resumoAvaliacoes,
         aba: entrada.query.aba === 'avaliacoes' ? 'avaliacoes' : 'participacao',
         jogoAtual: consultas.getJogosIdConsulta14().get().id === enquete.id,
@@ -109,6 +113,7 @@ function postJogosIdConfirmar(entrada) {
     const papel = jogador.papel === 'mensalista' ? 'mensalista' : 'avulso';
 
     db.transaction(() => {
+        historico.registrar(enqueteId, jogadorId, textoOpcaoConfirmada(), papel);
         consultas.postJogosIdConfirmarConsulta18().run(enqueteId, jogadorId, textoOpcaoConfirmada(), papel);
         marcarVotoManual(enqueteId, jogadorId);
     }).immediate();
@@ -121,6 +126,7 @@ function postJogosIdConfirmarJogadorIdRemover(entrada) {
     const jogadorId = Number(entrada.params.jogadorId);
 
     db.transaction(() => {
+        historico.registrar(enqueteId, jogadorId, '', null);
         consultas.postJogosIdConfirmarJogadorIdRemoverConsulta19().run(enqueteId, jogadorId);
         marcarVotoManual(enqueteId, jogadorId);
     }).immediate();
@@ -232,3 +238,5 @@ function postVotacaoIdAvaliar(entrada) {
 }
 
 module.exports = { getConfirmados, getJogoAtual, postConfirmadosEnviarLista, getHome, getJogos, getJogosId, postJogosIdExcluir, postJogosIdConfirmar, postJogosIdConfirmarJogadorIdRemover, getTimes, postTimesAusentes, postTimesEnviar, getVotacao, getVotacaoId, postVotacaoIdAvaliar };
+
+module.exports.postCobrarMulta = entrada => sucesso('/jogos/' + Number(entrada.params.id), historico.cobrar(Number(entrada.params.id), Number(entrada.params.historicoId)));

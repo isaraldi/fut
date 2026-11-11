@@ -1,3 +1,4 @@
+const historico = require('./enquete-historico.service');
 const consultas = require('../repositories/listas-whatsapp.repository');
 const crypto = require('crypto');
 class ErroLista extends Error {}
@@ -170,10 +171,12 @@ function confirmarLista({ grupo, autor, agora = Date.now() }) {
         const ids = new Set(entradas.map(j => j.id));
         const anteriores = consultas.confirmarListaConsulta13().all(enquete.id);
         for (const j of anteriores.filter(j => !ids.has(j.jogador_id))) {
+            historico.registrar(enquete.id, j.jogador_id, '', null, agora, 'administracao');
             consultas.confirmarListaConsulta14().run(enquete.id, j.jogador_id);
             marcarVotoManual(enquete.id, j.jogador_id, agora);
         }
         entradas.forEach((j, i) => {
+            historico.registrar(enquete.id, j.id, 'Confirmada por lista no WhatsApp', j.papel, agora, 'administracao');
             consultas.confirmarListaConsulta15()
                 .run(enquete.id, j.id, j.papel, i);
             marcarVotoManual(enquete.id, j.id, agora);

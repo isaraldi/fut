@@ -1,0 +1,25 @@
+<section class="card">
+    <h2>Histórico de respostas da enquete</h2>
+    <p class="hint">Mudanças registradas a partir da implantação deste recurso. Horários de Brasília. Após fechar a lista, as respostas são registradas sem alterar as vagas. Data prevista do jogo: <%= enquete.data_jogo ? enquete.data_jogo.split('-').reverse().join('/') : 'não definida' %>.</p>
+    <% if (!historicoRespostas.length) { %><p class="empty">Nenhuma mudança registrada.</p><% } else { %>
+    <div class="table-scroll"><table>
+        <thead><tr><th>Jogadora</th><th>Quando</th><th>Resposta anterior</th><th>Nova resposta</th><th>Cobrança</th></tr></thead>
+        <tbody><% historicoRespostas.forEach(h => { %>
+            <tr>
+                <td><%= h.nome %><small class="hint" style="display:block"><%= h.origem === 'whatsapp' ? 'WhatsApp' : 'Alteração administrativa' %></small></td>
+                <td><%= new Date(h.ocorrido_em).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }) %></td>
+                <td><%= h.anterior || 'Sem resposta' %></td>
+                <td><%= h.resposta || 'Retirou a resposta' %><% if (h.retirada) { %><span class="badge pendente">Desistência</span><% } %></td>
+                <td><% if (h.multavel) { %>
+                    <% if (h.cobrada) { %><span class="badge aviso">Cobrança enfileirada</span><% } else { %>
+                    <form method="post" action="/jogos/<%= enquete.id %>/historico/<%= h.id %>/multa" data-confirm="Enviar cobrança privada de R$ 20,00 por desistência no dia do jogo?">
+                        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                        <button type="submit">Cobrar multa · R$ 20,00</button>
+                    </form>
+                    <% } %>
+                <% } %></td>
+            </tr>
+        <% }) %></tbody>
+    </table></div>
+    <% } %>
+</section>

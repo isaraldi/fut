@@ -818,6 +818,7 @@ const MAX_TENTATIVAS_DESAFIXAR = 5; // ~5 minutos tentando antes de desistir
 async function checarEnquetesParaDesafixar() {
   const pendentes = getEnquetesFechadasNaoDesafixadas();
   for (const enquete of pendentes) {
+    if (enquete.tentativas_desafixar >= MAX_TENTATIVAS_DESAFIXAR) continue;
     try {
       const msgOriginal = await client.getMessageById(enquete.message_id);
       if (!msgOriginal) {
@@ -850,8 +851,12 @@ async function checarEnquetesParaDesafixar() {
         );
       }
     } catch (err) {
-      registrarLog('lista', 'erro', `Erro ao desafixar enquete #${enquete.id}: ${err.message}`, enquete.group_id);
-      console.error(`Erro ao desafixar enquete #${enquete.id}:`, err);
+      registrarTentativaDesafixar(enquete.id);
+      if (enquete.tentativas_desafixar + 1 >= MAX_TENTATIVAS_DESAFIXAR) {
+        registrarLog('lista', 'erro', `Não foi possível desafixar a enquete #${enquete.id} após ${MAX_TENTATIVAS_DESAFIXAR} tentativas. Desafixe manualmente no WhatsApp.`, enquete.group_id);
+      } else if (enquete.tentativas_desafixar === 0) {
+        registrarLog('lista', 'erro', `Erro ao desafixar enquete #${enquete.id}: ${err.message}. Vou tentar novamente, até ${MAX_TENTATIVAS_DESAFIXAR} tentativas.`, enquete.group_id);
+      }
     }
   }
 }

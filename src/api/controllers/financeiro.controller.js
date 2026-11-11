@@ -27,3 +27,9 @@ function postCaixaOperacao(req, res, next) {
 }
 
 module.exports = { getPagamentos, getPagamentosAvulsos, postPagamentosAvulsosJogadorIdToggle, getCaixa, postCaixaOperacao };
+
+function postIsencaoAvulsa(req, res, next) {
+    try { return apresentar(res, service.postIsencaoAvulsa({ body: req.body, params: req.params })); }
+    catch (erro) { return next(erro); }
+}
+module.exports.postIsencaoAvulsa = postIsencaoAvulsa;

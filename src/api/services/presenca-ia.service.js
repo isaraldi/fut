@@ -1,3 +1,4 @@
+const historico = require('./enquete-historico.service');
 const consultas = require('../repositories/jogos.repository');
 const { db, getConfig, podeUsarComandos, getMensalistasSemConfirmacao, getConfirmadosDaEnquete, getListaDeEsperaDaEnquete,
     marcarVotoManual, getEnqueteOpcoes, getAusentesDaEnquete, setAusentesDaEnquete, registrarLog } = require('./fut.service');
@@ -47,9 +48,11 @@ function executarPedidoPresenca(pedido, contexto) {
         if (!retirar && jogadora.papel_voto) return `${referencia}\n${jogadora.nome} já está ${esperaAntes.some(j => j.id === jogadora.id) ? 'na lista de espera' : 'confirmada'}.`;
         if (!retirar && !jogadora.ativo) return 'Essa jogadora está inativa. Reative o cadastro no painel antes de confirmar.';
         if (retirar) {
+            historico.registrar(enquete.id, jogadora.id, '', null, Date.now(), 'administracao');
             consultas.postJogosIdConfirmarJogadorIdRemoverConsulta19().run(enquete.id, jogadora.id);
         } else {
             const opcao = getEnqueteOpcoes().find(o => o.conta === 1)?.texto || 'Confirmada manualmente';
+            historico.registrar(enquete.id, jogadora.id, opcao, jogadora.papel, Date.now(), 'administracao');
             consultas.postJogosIdConfirmarConsulta18().run(enquete.id, jogadora.id, opcao, jogadora.papel);
         }
         marcarVotoManual(enquete.id, jogadora.id);

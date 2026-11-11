@@ -11,6 +11,7 @@ module.exports = function registrar(router) {
     router.post('/jogos/:id/excluir', requireLogin, controller.postJogosIdExcluir);
     router.post('/jogos/:id/confirmar', requireLogin, controller.postJogosIdConfirmar);
     router.post('/jogos/:id/confirmar/:jogadorId/remover', requireLogin, controller.postJogosIdConfirmarJogadorIdRemover);
+    router.post('/jogos/:id/historico/:historicoId/multa', requireLogin, controller.postCobrarMulta);
     router.get('/times', requireLogin, controller.getTimes);
     router.post('/times/ausentes', requireLogin, controller.postTimesAusentes);
     router.post('/times/enviar', requireLogin, controller.postTimesEnviar);

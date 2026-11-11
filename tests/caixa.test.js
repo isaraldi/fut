@@ -49,6 +49,28 @@ try {
     c.definirPagamentoCaixa('avulso', id, enquete, false);
     // Restaurar mantém o valor original, mesmo com preço alterado.
     c.marcarPagamentoAvulso(id, enquete);
+    // Isenção é por jogo, não movimenta caixa e bloqueia pagamento acidental.
+    const financeiro = require(path.join(pasta, 'src/api/services/financeiro.service'));
+    const outroJogo = db.prepare("INSERT INTO enquetes(message_id,group_id,titulo) VALUES ('isencao','teste','Isenção')").run().lastInsertRowid;
+    for (const jogo of [enquete, outroJogo]) db.prepare("INSERT INTO votos(enquete_id, jogador_id, opcao, papel) VALUES (?, ?, 'sim', 'avulso')").run(jogo, id);
+    const entradaIsencao = { params: { jogadorId: String(id) }, body: { enqueteId: String(outroJogo), isento: '1' } };
+    assert(financeiro.postIsencaoAvulsa(entradaIsencao).destino);
+    assert.equal(saldo(), 17575);
+    assert.deepEqual(db.prepare('SELECT pago, isento FROM pagamentos_avulsos WHERE jogador_id = ? AND enquete_id = ?').get(id, outroJogo), { pago: 0, isento: 1 });
+    assert.equal(db.prepare('SELECT isento FROM pagamentos_avulsos WHERE jogador_id = ? AND enquete_id = ?').get(id, enquete).isento, 0);
+    assert.throws(() => c.marcarPagamentoAvulso(id, outroJogo), /isenção/);
+    const nHistorico = db.prepare('SELECT COUNT(*) n FROM pagamentos_historico').get().n;
+    financeiro.postIsencaoAvulsa(entradaIsencao);
+    assert.equal(db.prepare('SELECT COUNT(*) n FROM pagamentos_historico').get().n, nHistorico);
+    assert.equal(financeiro.postIsencaoAvulsa({ params: { jogadorId: String(id) }, body: { enqueteId: String(enquete), isento: '1' } }).status, 400);
+    entradaIsencao.body.isento = '0';
+    financeiro.postIsencaoAvulsa(entradaIsencao);
+    assert.equal(db.prepare('SELECT isento FROM pagamentos_avulsos WHERE jogador_id = ? AND enquete_id = ?').get(id, outroJogo).isento, 0);
+    assert.equal(saldo(), 17575);
+    c.setConfig('valor_avulso', '15.50');
+    c.marcarPagamentoAvulso(id, outroJogo);
+    assert.equal(saldo(), 19125);
+    c.definirPagamentoCaixa('avulso', id, outroJogo, false);
     db.prepare('DELETE FROM jogadores WHERE id = ?').run(id);
     assert.equal(saldo(), 17575); // exclusão do cadastro não apaga movimentações
     assert(db.prepare('SELECT COUNT(*) n FROM pagamentos_historico').get().n > 4);

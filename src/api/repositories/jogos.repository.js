@@ -24,7 +24,7 @@ function getConsulta5() {
 }
 
 function getConsulta6() {
-    return db.prepare('SELECT pago FROM pagamentos_avulsos WHERE jogador_id = ? AND enquete_id = ?');
+    return db.prepare('SELECT pago, isento FROM pagamentos_avulsos WHERE jogador_id = ? AND enquete_id = ?');
 }
 
 function getConsulta7() {

@@ -22,7 +22,7 @@ const linkPagina = numero => '/pagamentos?' + new URLSearchParams({ aba:'histori
         <td><%= item.tipo === 'mensal' ? 'Mensalidade · ' + item.referencia.split('-').reverse().join('/') : (item.jogo || 'Jogo #' + item.referencia) %></td>
         <td style="white-space:nowrap"><%= item.valor_centavos === null ? 'Não disponível' : (item.valor_centavos / 100).toLocaleString('pt-BR', { style:'currency', currency:'BRL' }) %></td>
         <td><%= item.origem === 'comprovante' ? 'Comprovante · bot' : item.origem === 'manual' ? 'Manual · painel' : 'Origem não disponível' %></td>
-        <td><span class="badge <%= item.pago ? 'pago' : 'pendente' %>"><%= item.pago ? 'Marcado pago' : 'Marcado pendente' %></span><% if (item.origem === 'anterior') { %><small class="hint" style="display:block">Última situação anterior ao histórico</small><% } %></td>
+        <td><span class="badge <%= item.pago ? 'pago' : 'pendente' %>"><%= item.isento ? 'Isenta · sem cobrança' : item.pago ? 'Marcado pago' : 'Marcado pendente' %></span><% if (item.origem === 'anterior') { %><small class="hint" style="display:block">Última situação anterior ao histórico</small><% } %></td>
     </tr><% } %>
     </tbody></table></div>
     <p class="hint">Cada linha registra uma alteração, sem apagar as anteriores. Nos registros antigos, a data corresponde à última atualização disponível; origem e valor não foram recuperados.</p>

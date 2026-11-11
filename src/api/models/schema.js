@@ -379,6 +379,12 @@ db.exec(`CREATE TABLE IF NOT EXISTS pagamentos_historico (
 );
 CREATE INDEX IF NOT EXISTS pagamentos_historico_data ON pagamentos_historico(registrado_em, id);`);
 
+for (const tabela of ['pagamentos_avulsos', 'pagamentos_historico']) {
+    if (!db.prepare(`PRAGMA table_info(${tabela})`).all().some(c => c.name === 'isento')) {
+        db.exec(`ALTER TABLE ${tabela} ADD COLUMN isento INTEGER NOT NULL DEFAULT 0 CHECK(isento IN (0, 1))`);
+    }
+}
+
 db.transaction(() => {
     if (getConfig('pagamentos_historico_v1') === '1') return;
     db.prepare(`INSERT INTO pagamentos_historico
@@ -391,4 +397,42 @@ db.transaction(() => {
         FROM pagamentos_avulsos p JOIN jogadores j ON j.id = p.jogador_id JOIN enquetes e ON e.id = p.enquete_id`).run();
     setConfig('pagamentos_historico_v1', '1');
 }).immediate();
+// Histórico prospectivo: não inventa respostas ou retiradas anteriores à migração.
+if (!db.prepare('PRAGMA table_info(enquetes)').all().some(c => c.name === 'data_jogo')) {
+    db.exec('ALTER TABLE enquetes ADD COLUMN data_jogo TEXT');
+}
+db.exec(`
+CREATE TABLE IF NOT EXISTS enquete_respostas_historico (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    enquete_id INTEGER NOT NULL REFERENCES enquetes(id) ON DELETE CASCADE,
+    jogador_id INTEGER NOT NULL REFERENCES jogadores(id) ON DELETE CASCADE,
+    anterior TEXT NOT NULL,
+    resposta TEXT NOT NULL,
+    papel_anterior TEXT,
+    papel TEXT,
+    origem TEXT NOT NULL,
+    ocorrido_em TEXT NOT NULL,
+    multa_enfileirada_em TEXT,
+    UNIQUE(enquete_id, jogador_id, ocorrido_em, resposta)
+);
+CREATE INDEX IF NOT EXISTS enquete_historico_jogo ON enquete_respostas_historico(enquete_id, id);
+`);
+// Congela a data prevista conforme a configuração vigente na criação da enquete.
+const congelarData = db.prepare('UPDATE enquetes SET data_jogo = ? WHERE id = ?');
+for (const enquete of db.prepare('SELECT id, criada_em FROM enquetes WHERE data_jogo IS NULL').all()) {
+    const data = new Date(enquete.criada_em.replace(' ', 'T') + 'Z');
+    const dia = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf(new Intl.DateTimeFormat('en-US', { timeZone: 'America/Sao_Paulo', weekday: 'short' }).format(data));
+    const local = new Intl.DateTimeFormat('sv-SE', { timeZone: 'America/Sao_Paulo' }).format(data);
+    const alvo = new Date(local + 'T12:00:00Z');
+    alvo.setUTCDate(alvo.getUTCDate() + (Number(getConfig('enquete_dia_semana')) - dia + 7) % 7);
+    congelarData.run(alvo.toISOString().slice(0, 10), enquete.id);
+}
+db.exec(`CREATE TRIGGER IF NOT EXISTS enquete_data_jogo AFTER INSERT ON enquetes
+BEGIN
+    UPDATE enquetes SET data_jogo = date(NEW.criada_em, '-3 hours',
+        '+' || ((CAST(COALESCE((SELECT valor FROM configuracoes WHERE chave = 'enquete_dia_semana'), '4') AS INTEGER)
+        - CAST(strftime('%w', NEW.criada_em, '-3 hours') AS INTEGER) + 7) % 7) || ' days')
+    WHERE id = NEW.id AND data_jogo IS NULL;
+END;`);
+
 };

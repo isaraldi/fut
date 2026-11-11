@@ -4,6 +4,7 @@
     <% } else if (jogadores.length === 0) { %>
         <p class="empty">Nenhuma avulsa confirmada neste jogo.</p>
     <% } else { %>
+        <p class="hint">Jogadoras isentas não têm cobrança neste jogo e não geram entrada no caixa.</p>
         <table>
             <thead>
                 <tr><th>Nome</th><th>Status</th><th></th></tr>
@@ -13,11 +14,13 @@
                     <tr>
                         <td><%= j.nome %></td>
                         <td>
-                            <span class="badge <%= j.pago ? 'pago' : 'pendente' %>">
-                                <%= j.pago ? 'Pago' : 'Pendente' %>
+                            <span class="badge <%= j.isento || j.pago ? 'pago' : 'pendente' %>">
+                                <%= j.isento ? 'Isenta · sem cobrança' : j.pago ? 'Pago' : 'Pendente' %>
                             </span>
                         </td>
                         <td>
+                            <div class="avulsas-acoes">
+                            <% if (!j.isento) { %>
                             <form method="post" action="/pagamentos/avulsos/<%= j.id %>/toggle"><input type="hidden" name="_csrf" value="<%= csrfToken %>">
                                 <input type="hidden" name="enqueteId" value="<%= enquete.id %>">
                                 <button class="secondary btn-icon-label" type="submit">
@@ -30,6 +33,16 @@
                                     <% } %>
                                 </button>
                             </form>
+                            <% } %>
+                            <% if (!j.pago) { %>
+                            <form method="post" action="/pagamentos/avulsos/<%= j.id %>/isencao">
+                                <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                                <input type="hidden" name="enqueteId" value="<%= enquete.id %>">
+                                <input type="hidden" name="isento" value="<%= j.isento ? '0' : '1' %>">
+                                <button class="secondary" type="submit"><%= j.isento ? 'Voltar a cobrar' : 'Isentar neste jogo' %></button>
+                            </form>
+                            <% } %>
+                            </div>
                         </td>
                     </tr>
                 <% }) %>
@@ -37,3 +50,9 @@
         </table>
     <% } %>
 </div>
+
+<style>
+    .avulsas-acoes { display: flex; align-items: center; gap: 8px; }
+    .avulsas-acoes form { margin: 0; }
+    .avulsas-acoes button { white-space: nowrap; }
+</style>

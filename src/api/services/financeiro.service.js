@@ -1,4 +1,4 @@
-const { dataCaixaAtual, iniciarCaixa, lancarCaixa, cancelarLancamentoCaixa, definirPagamentoCaixa, getConfig, getConfirmadosDaEnquete } = require('./fut.service');
+const { db, dataCaixaAtual, iniciarCaixa, lancarCaixa, cancelarLancamentoCaixa, definirPagamentoCaixa, getConfig, getConfirmadosDaEnquete } = require('./fut.service');
 const { mesReferenciaAtual } = require('../../utils/mensagens-prontas');
 
 const consultas = require('../repositories/financeiro.repository');
@@ -28,6 +28,7 @@ function getPagamentos(entrada) {
                 id: j.id,
                 nome: j.nome,
                 pago: !!statusStmt.get(j.id, enquete.id)?.pago,
+                isento: !!statusStmt.get(j.id, enquete.id)?.isento,
             }));
         }
 
@@ -76,3 +77,25 @@ function postCaixaOperacao(entrada) {
     }
 
 module.exports = { getPagamentos, getPagamentosAvulsos, postPagamentosAvulsosJogadorIdToggle, getCaixa, postCaixaOperacao };
+
+function postIsencaoAvulsa(entrada) {
+    const jogadorId = Number(entrada.params.jogadorId);
+    const enqueteId = Number(entrada.body.enqueteId);
+    const isento = entrada.body.isento === '1';
+    if (!['0', '1'].includes(entrada.body.isento) || !Number.isSafeInteger(jogadorId) || !Number.isSafeInteger(enqueteId)) {
+        return { mensagem: 'Isenção inválida.', status: 400 };
+    }
+    return db.transaction(() => {
+        if (!getConfirmadosDaEnquete(enqueteId).some(j => j.id === jogadorId && j.papel === 'avulso')) {
+            return { mensagem: 'Avulsa não confirmada neste jogo.', status: 400 };
+        }
+        const atual = consultas.getPagamentosConsulta7().get(jogadorId, enqueteId);
+        if (atual?.pago) return { mensagem: 'Marque o pagamento como pendente antes de isentar.', status: 400 };
+        if (!!atual?.isento !== isento) {
+            consultas.salvarIsencaoAvulsa(jogadorId, enqueteId, isento);
+            consultas.registrarIsencaoAvulsa(jogadorId, enqueteId, isento);
+        }
+        return sucesso('/pagamentos?aba=avulsas&jogo=' + enqueteId, isento ? 'Jogadora isenta neste jogo.' : 'Cobrança restabelecida neste jogo.');
+    }).immediate();
+}
+module.exports.postIsencaoAvulsa = postIsencaoAvulsa;

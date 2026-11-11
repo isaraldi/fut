@@ -25,7 +25,7 @@ function getPagamentosConsulta6() {
 }
 
 function getPagamentosConsulta7() {
-    return db.prepare('SELECT pago FROM pagamentos_avulsos WHERE jogador_id = ? AND enquete_id = ?');
+    return db.prepare('SELECT pago, isento FROM pagamentos_avulsos WHERE jogador_id = ? AND enquete_id = ?');
 }
 
 function getPagamentosConsulta8() {
@@ -75,3 +75,17 @@ function listarHistoricoPagamentos({ busca, tipo, jogoId, pagina }) {
     };
 }
 module.exports.listarHistoricoPagamentos = listarHistoricoPagamentos;
+
+function salvarIsencaoAvulsa(jogadorId, enqueteId, isento) {
+    return db.prepare(`INSERT INTO pagamentos_avulsos (jogador_id, enquete_id, isento) VALUES (?, ?, ?)
+        ON CONFLICT(jogador_id, enquete_id) DO UPDATE SET isento = excluded.isento, atualizado_em = datetime('now')`).run(jogadorId, enqueteId, Number(isento));
+}
+
+function registrarIsencaoAvulsa(jogadorId, enqueteId, isento) {
+    return db.prepare(`INSERT INTO pagamentos_historico
+        (jogador_id, nome, tipo, referencia, jogo, pago, origem, valor_centavos, isento)
+        SELECT j.id, j.nome, 'avulso', CAST(e.id AS TEXT), e.titulo, 0, 'manual', 0, ?
+        FROM jogadores j CROSS JOIN enquetes e WHERE j.id = ? AND e.id = ?`).run(Number(isento), jogadorId, enqueteId);
+}
+module.exports.salvarIsencaoAvulsa = salvarIsencaoAvulsa;
+module.exports.registrarIsencaoAvulsa = registrarIsencaoAvulsa;

@@ -77,3 +77,8 @@ function postVotacaoIdAvaliar(req, res, next) {
 }
 
 module.exports = { getConfirmados, getJogoAtual, postConfirmadosEnviarLista, getHome, getJogos, getJogosId, postJogosIdExcluir, postJogosIdConfirmar, postJogosIdConfirmarJogadorIdRemover, getTimes, postTimesAusentes, postTimesEnviar, getVotacao, getVotacaoId, postVotacaoIdAvaliar };
+
+module.exports.postCobrarMulta = (req, res, next) => {
+    try { return apresentar(res, service.postCobrarMulta({ params: req.params })); }
+    catch (erro) { return next(erro); }
+};

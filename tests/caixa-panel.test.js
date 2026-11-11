@@ -50,6 +50,18 @@ async function main() {
         assert.equal((await post('/caixa/iniciar', { _csrf:csrf, saldo:'100' })).status, 302);
         const jogadora = dados.db.prepare("INSERT INTO jogadores(nome,papel) VALUES ('Teste caixa','mensalista')").run().lastInsertRowid;
         assert.equal((await post('/pagamentos/mensalistas/' + jogadora + '/toggle', { _csrf:csrf, mes:'2026-10' })).status, 302);
+        const avulsa = dados.db.prepare("INSERT INTO jogadores(nome,papel) VALUES ('Teste isenção','avulso')").run().lastInsertRowid;
+        const jogo = dados.db.prepare("INSERT INTO enquetes(message_id,group_id,titulo) VALUES ('isencao','teste','Jogo isenção')").run().lastInsertRowid;
+        dados.db.prepare("INSERT INTO votos(enquete_id,jogador_id,opcao,papel) VALUES (?,?,'sim','avulso')").run(jogo, avulsa);
+        const rotaIsencao = '/pagamentos/avulsos/' + avulsa + '/isencao';
+        assert.equal((await post(rotaIsencao, { enqueteId: jogo, isento:'1' })).status, 403);
+        assert.equal((await post(rotaIsencao, { _csrf:csrf, enqueteId: jogo, isento:'1' })).status, 302);
+        const avulsasHtml = await (await get('/pagamentos?aba=avulsas&jogo=' + jogo)).text();
+        assert(avulsasHtml.includes('Isenta · sem cobrança'));
+        assert(avulsasHtml.includes('Voltar a cobrar'));
+        assert((await (await get('/pagamentos?aba=historico')).text()).includes('Isenta · sem cobrança'));
+        assert.equal((await post(rotaIsencao, { _csrf:csrf, enqueteId: jogo, isento:'0' })).status, 302);
+        assert((await (await get('/pagamentos?aba=avulsas&jogo=' + jogo)).text()).includes('Isentar neste jogo'));
         const hoje = dados.dataCaixaAtual();
         assert.equal((await post('/caixa/lancamentos', { _csrf:csrf, tipo:'gasto', valor:'25', data:hoje, descricao:'Teste quadra', categoria:'Quadra' })).status, 302);
         const html = await (await get('/caixa')).text();

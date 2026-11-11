@@ -1,3 +1,4 @@
+const historico = require('../services/enquete-historico.service');
 const consultas = require('../repositories/sincronizacao-whatsapp.repository');
 // Recuperação consultiva: lê o estado do WhatsApp, sem enviar mensagens.
 const dados = require('../services/fut.service');
@@ -63,7 +64,7 @@ function criarSincronizadorWhatsApp({ client, resolverIdCanonico, limitar = prom
     async function processarVoto(voto, recuperado, recebidoEm) {
         const messageId = serializado(voto.parentMessage?.id) || serializado(voto.parentMsgKey);
         const enquete = consultas.processarVotoConsulta4().get(messageId);
-        if (!enquete || enquete.fechada_em || !Array.isArray(voto.selectedOptions)) return false;
+        if (!enquete || !Array.isArray(voto.selectedOptions)) return false;
         const evento = instante(voto.interractedAtTs) || (!recuperado ? recebidoEm : null);
         if (!evento || evento > agora() + 60000) return false;
         if (voto.selectedOptions.some(opcao => typeof opcao.name !== 'string')) return false;
@@ -72,21 +73,23 @@ function criarSincronizadorWhatsApp({ client, resolverIdCanonico, limitar = prom
         if (!jogador) return false;
         return db.transaction(() => {
             // O painel pode ter fechado a enquete enquanto a identidade era resolvida.
-            if (consultas.processarVotoConsulta5().get(enquete.id)?.fechada_em) return false;
+            const fechada = !!consultas.processarVotoConsulta5().get(enquete.id)?.fechada_em;
             const anterior = estado('voto', messageId, jogador.id);
             if (antigo(anterior, evento, texto, recuperado)) return false;
             const votoAtual = consultas.processarVotoConsulta6().get(enquete.id, jogador.id);
             const manual = anterior?.manual_em || (!anterior && votoAtual ? Date.parse(votoAtual.votado_em.replace(' ', 'T') + 'Z') : 0);
             salvarEstado('voto', messageId, jogador.id, texto, evento);
             if (evento <= manual) return false;
+            const confirma = getEnqueteOpcoes().some(opcao => opcao.texto === texto && opcao.conta);
+            const papelAtual = consultas.processarVotoConsulta8().get(jogador.id).papel;
+            historico.registrar(enquete.id, jogador.id, texto, confirma ? papelAtual : null, evento, 'whatsapp', fechada);
+            if (fechada) return true;
             if (!texto) {
                 consultas.processarVotoConsulta7().run(enquete.id, jogador.id);
                 return true;
             }
             // Repetir a consulta não altera vínculo, confirmação manual nem posição na fila.
             if (!anterior && votoAtual?.opcao === texto) return false;
-            const confirma = getEnqueteOpcoes().some(opcao => opcao.texto === texto && opcao.conta);
-            const papelAtual = consultas.processarVotoConsulta8().get(jogador.id).papel;
             consultas.processarVotoConsulta9()
                 .run(enquete.id, jogador.id, texto, confirma ? papelAtual : null,
                     new Date(evento).toISOString().replace('T', ' ').replace('Z', ''));
@@ -136,7 +139,7 @@ function criarSincronizadorWhatsApp({ client, resolverIdCanonico, limitar = prom
         const versao = geracao;
         let alteracoes = 0;
         const enquete = consultas.consultarConsulta10().get();
-        if (enquete && !enquete.fechada_em) {
+        if (enquete) {
             try {
                 const mensagem = await limitar(client.getMessageById(enquete.message_id));
                 if (!mensagem || mensagem.type !== 'poll_creation') throw new Error('Enquete indisponível');

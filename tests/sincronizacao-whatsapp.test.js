@@ -141,7 +141,8 @@ async function main() {
         const segundaConexao = sync.conectar();
         liberarConsulta();
         await Promise.all([primeiraConexao, segundaConexao]);
-        assert.equal(leituras - totalAntes, 2);
+        // A enquete fechada também é consultada para registrar desistências no histórico.
+        assert.equal(leituras - totalAntes, 3);
         client.getMessageById = obter;
         const contagem = leituras;
         await Promise.all([sync.sincronizar(), sync.sincronizar()]);

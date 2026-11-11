@@ -490,6 +490,7 @@ function definirPagamentoCaixa(tipo, jogadorId, referencia, pago, origemRegistro
         const tabela = tipo === 'mensal' ? 'pagamentos' : 'pagamentos_avulsos';
         const coluna = tipo === 'mensal' ? 'mes_referencia' : 'enquete_id';
         const atual = consultas.definirPagamentoCaixaConsulta78(tabela, coluna).get(jogadorId, referencia);
+        if (tipo === 'avulso' && atual?.isento) throw new Error('Remova a isenção deste jogo antes de registrar um pagamento.');
         const novoPago = pago === undefined ? !atual?.pago : !!pago;
         if (!!atual?.pago === novoPago) return;
         let id = atual?.id;

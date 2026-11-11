@@ -1,11 +1,10 @@
 diff --git a/node_modules/whatsapp-web.js/src/Client.js b/node_modules/whatsapp-web.js/src/Client.js
-index 800109e..709de7c 100644
 --- a/node_modules/whatsapp-web.js/src/Client.js
 +++ b/node_modules/whatsapp-web.js/src/Client.js
-@@ -1207,12 +1207,14 @@ class Client extends EventEmitter {
+@@ -1207,12 +1207,14 @@
                              const sender = vote.author ?? vote.from;
                              const senderUserJid = sender._serialized;
- 
+
 -                            let parentMessage = Msg.get(
 -                                parentMsgKey._serialized,
 -                            );
@@ -25,7 +24,7 @@ index 800109e..709de7c 100644
 diff --git a/node_modules/whatsapp-web.js/src/structures/Message.js b/node_modules/whatsapp-web.js/src/structures/Message.js
 --- a/node_modules/whatsapp-web.js/src/structures/Message.js
 +++ b/node_modules/whatsapp-web.js/src/structures/Message.js
-@@ -566,6 +566,7 @@ class Message extends Base {
+@@ -566,6 +566,7 @@
                          mediaKey: msg.mediaKey,
                          mediaKeyTimestamp: msg.mediaKeyTimestamp,
                          type: msg.type,
@@ -34,19 +33,18 @@ diff --git a/node_modules/whatsapp-web.js/src/structures/Message.js b/node_modul
                          downloadQpl: mockQpl,
                      });
 diff --git a/node_modules/whatsapp-web.js/src/util/Injected/Utils.js b/node_modules/whatsapp-web.js/src/util/Injected/Utils.js
-index 540078a..049d724 100644
 --- a/node_modules/whatsapp-web.js/src/util/Injected/Utils.js
 +++ b/node_modules/whatsapp-web.js/src/util/Injected/Utils.js
-@@ -582,7 +582,7 @@ exports.LoadUtils = () => {
- 
+@@ -582,7 +582,7 @@
+
          return window
              .require('WAWebCollections')
 -            .Msg.get(newMsgKey._serialized);
 +            .Msg.get(window.WWebJS.getMsgKeyId(newMsgKey));
      };
- 
+
      window.WWebJS.editMessage = async (msg, content, options = {}) => {
-@@ -625,7 +625,9 @@ exports.LoadUtils = () => {
+@@ -625,7 +625,9 @@
          await window
              .require('WAWebSendMessageEditAction')
              .sendMessageEdit(msg, content, internalOptions);
@@ -55,12 +53,14 @@ index 540078a..049d724 100644
 +            .require('WAWebCollections')
 +            .Msg.get(window.WWebJS.getMsgKeyId(msg.id));
      };
- 
+
      window.WWebJS.toStickerData = async (mediaInfo) => {
-@@ -834,6 +836,15 @@ exports.LoadUtils = () => {
+@@ -832,6 +834,15 @@
+             msg.id = Object.assign({}, msg.id, {
+                 remote: msg.id.remote._serialized,
              });
-         }
- 
++        }
++
 +        if (typeof msg.id === 'object' && msg.id._serialized == null) {
 +            const serializedId = window.WWebJS.getMsgKeyId(msg.id);
 +            if (serializedId) {
@@ -68,15 +68,13 @@ index 540078a..049d724 100644
 +                    _serialized: serializedId,
 +                });
 +            }
-+        }
-+
+         }
+
          delete msg.pendingAckUpdate;
- 
-         return msg;
-@@ -917,6 +928,15 @@ exports.LoadUtils = () => {
+@@ -917,6 +928,15 @@
          };
      };
- 
+
 +    /**
 +     * The serialized id of a message key, tolerating WhatsApp Web having renamed the key's
 +     * `_serialized` property to `$1`.
@@ -89,8 +87,8 @@ index 540078a..049d724 100644
      window.WWebJS.getChats = async () => {
          const chats = window.require('WAWebCollections').Chat.getModelsArray();
          const chatPromises = chats.map((chat) =>
-@@ -981,16 +1001,17 @@ exports.LoadUtils = () => {
- 
+@@ -981,16 +1001,17 @@
+
          model.lastMessage = null;
          if (model.msgs && model.msgs.length) {
 -            const lastMessage = chat.lastReceivedKey
@@ -112,3 +110,38 @@ index 540078a..049d724 100644
                    )?.messages?.[0]
                  : null;
              lastMessage &&
+@@ -1668,14 +1689,26 @@
+         window.require('WAWebPinMsgConstants').getPinExpiryDuration = () =>
+             duration;
+
+-        const response = await window
+-            .require('WAWebSendPinMessageAction')
+-            .sendPinInChatMsg(message, action, duration);
+-
+-        window.require('WAWebPinMsgConstants').getPinExpiryDuration =
+-            originalFunction;
+-
+-        return response.messageSendResult === 'OK';
++        try {
++            const { sendPinInChatMsg } = window.require(
++                'WAWebSendPinMessageAction',
++            );
++            // New WhatsApp Web versions accept an options object.
++            const constants = window.require('WAWebPinMsgConstants');
++            const response = sendPinInChatMsg.length === 1
++                ? await sendPinInChatMsg({
++                    msg: message,
++                    pinType: action,
++                    pinExpiryDurationOption: action === 1
++                        ? constants.getPinExpiryOption(duration)
++                        : undefined,
++                })
++                : await sendPinInChatMsg(message, action, duration);
++            return response?.messageSendResult === 'OK';
++        } finally {
++            window.require('WAWebPinMsgConstants').getPinExpiryDuration =
++                originalFunction;
++        }
+     };
+
+     window.WWebJS.getStatusModel = (status) => {

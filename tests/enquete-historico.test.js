@@ -1,0 +1,47 @@
+process.env.TZ = 'America/Sao_Paulo';
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+const pasta = fs.mkdtempSync(path.join(os.tmpdir(), 'fut-historico-'));
+(async () => {
+    try {
+        fs.mkdirSync(path.join(pasta, 'data'));
+        fs.cpSync(path.join(__dirname, '../src'), path.join(pasta, 'src'), { recursive: true });
+        fs.symlinkSync(path.resolve(__dirname, '../node_modules'), path.join(pasta, 'node_modules'));
+        const c = require(path.join(pasta, 'src/api/services/fut.service'));
+        const h = require(path.join(pasta, 'src/api/services/enquete-historico.service'));
+        const { criarSincronizadorWhatsApp } = require(path.join(pasta, 'src/api/subscribers/sincronizacao-whatsapp'));
+        const { db } = c;
+        c.setConfig('enquete_dia_semana', '4');
+        const jogador = db.prepare("INSERT INTO jogadores(nome, whatsapp_id, papel) VALUES ('Teste', 'teste@lid', 'mensalista')").run().lastInsertRowid;
+        const enquete = db.prepare("INSERT INTO enquetes(message_id,group_id,titulo,criada_em) VALUES ('teste','teste','Teste','2026-11-05 01:00:00')").run().lastInsertRowid;
+        assert.equal(db.prepare('SELECT data_jogo FROM enquetes WHERE id = ?').get(enquete).data_jogo, '2026-11-05');
+        const opcao = c.getEnqueteOpcoes().find(o => o.conta).texto;
+        let agora = Date.parse('2026-11-05T03:01:00Z');
+        const sincronizador = criarSincronizadorWhatsApp({ client: {}, resolverIdCanonico: async id => id, agora: () => agora });
+        const voto = texto => ({ parentMsgKey: 'teste', voter: 'teste@lid', selectedOptions: texto ? [{ name: texto }] : [], interractedAtTs: agora });
+        await sincronizador.receberVoto(voto(opcao));
+        assert.equal(h.listar(enquete).length, 1);
+        await sincronizador.receberVoto(voto(opcao));
+        assert.equal(h.listar(enquete).length, 1);
+        db.prepare("UPDATE enquetes SET fechada_em = datetime('now') WHERE id = ?").run(enquete);
+        agora += 60000;
+        await sincronizador.receberVoto(voto(''));
+        assert.equal(h.listar(enquete)[0].multavel, true);
+        assert.equal(db.prepare('SELECT COUNT(*) n FROM votos').get().n, 1, 'lista fechada preservada');
+        h.cobrar(enquete, h.listar(enquete)[0].id);
+        h.cobrar(enquete, h.listar(enquete)[0].id);
+        assert.equal(db.prepare('SELECT COUNT(*) n FROM mensagens_jogadoras_pendentes').get().n, 1);
+        assert.match(db.prepare('SELECT texto FROM mensagens_jogadoras_pendentes').get().texto, /R\$ 20,00/);
+        agora += 60000;
+        await sincronizador.receberVoto(voto(''));
+        assert.equal(h.listar(enquete).length, 2, 'retirada repetida não duplica');
+        h.registrar(enquete, jogador, '', null, Date.parse('2026-11-06T03:00:00Z'));
+        assert.equal(h.listar(enquete)[0].multavel, false, 'outro dia não gera multa');
+        const ejs = require('ejs');
+        ejs.render(fs.readFileSync(path.join(__dirname, '../src/views/_enquete-historico.ejs'), 'utf8'), { enquete: { id: enquete, data_jogo: '2026-11-05' }, historicoRespostas: h.listar(enquete), csrfToken: 'teste' });
+        db.close();
+        console.log('Histórico, retirada após fechamento, multa, duplicidade e view: OK');
+    } finally { fs.rmSync(pasta, { recursive: true, force: true }); }
+})().catch(erro => { console.error(erro); process.exitCode = 1; });
